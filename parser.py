@@ -16,12 +16,12 @@ class Token(Tag):
     def __repr__(self):
         return 'Token({!r})'.format(self.kind)
 
-    @classmethod
-    def get(self, kind):
-        if kind in self._cache:
-            token = self._cache[kind]
+    @staticmethod
+    def get(kind):
+        if kind in Token._cache:
+            token = Token._cache[kind]
         else:
-            token = self._cache[kind] = Token(kind)
+            token = Token._cache[kind] = Token(kind)
         return token
 
 Token.ERROR = Token.get('ERROR')
@@ -47,13 +47,13 @@ class Word(Tag):
     def __repr__(self):
         return 'Word({!r}, {!r})'.format(self.kind, self.value)
 
-    @classmethod
-    def get(self, kind, value):
+    @staticmethod
+    def get(kind, value):
         key = kind, value
-        if key in self._cache:
-            word = self._cache[key]
+        if key in Word._cache:
+            word = Word._cache[key]
         else:
-            word = self._cache[key] = Word(kind, value)
+            word = Word._cache[key] = Word(kind, value)
         return word
 
 
@@ -233,13 +233,13 @@ class Column:
         success = False
         if token in previous.wants:
             item = self.add(previous.index, token, previous.wants[token])
-            item.value = value
+            item.value = Leaf(value)
             success = True
         if value:
             word = Word.get(token.kind, value)
             if word in previous.wants:
                 item = self.add(previous.index, token, previous.wants[word])
-                item.value = value
+                item.value = Leaf(value)
                 success = True
         return success
 
@@ -262,26 +262,51 @@ class Column:
                 self.complete(item)
 
 
+class BaseNode:
+    def __repr__(self):
+        return "BaseNode"
+
+class Node(BaseNode):
+    def __init__(self, label, children):
+        self.label = label
+        self.children = children
+
+    def __repr__(self):
+        return "Node({!r}, {!r})".format(self.label, self.children)
+
+    def sexpr(self):
+        return "(" + self.label + " " + " ".join([x.sexpr() for x in self.children]) + ")"
+
+class Leaf(BaseNode):
+    def __init__(self, token):
+        self.token = token
+
+    def __repr__(self):
+        return "Leaf(" + repr(self.token) + ")"
+
+    def sexpr(self):
+        return self.token
+
+
+
 def comp(item):
-    print 'comp', item
     if item.value is not None:
         return item.value
 
     rule = item.rule
-    if not rule:
+    if not rule: # token
         return item.value
 
     children = []
     if True: #not rule.is_nullable:
         children = cute(item)
         children = list(children) # copy
-    value = item.value = [rule.target] + children # rule.process(children)
+    value = item.value = Node(rule.target.name, children) # rule.process(children)
     return value
 
 def cute(item):
-    print 'cute', item
-    if item.value is not None:
-        return item.value
+    #if item.value is not None:
+    #    return item.value
 
     if isinstance(item.tag, LR0) and item.tag.dot == 0:
         return []
@@ -290,7 +315,7 @@ def cute(item):
 
     children = left
     children.append(right)
-    item.value = children
+    #item.value = children
     return children
 
 
@@ -311,7 +336,7 @@ def parse(source):
     tok = lexer.lex()
     index = 0
     while tok[0] != Token.EOF:
-        print index, column.items
+        #print index, column.items
         previous, column = column, Column(index + 1)
         token, value = tok
         if not column.scan(token, value, previous):
@@ -320,9 +345,9 @@ def parse(source):
         tok = lexer.lex()
         index += 1
 
-    print index, column.items
+    #print index, column.items
     start = column.unique[0, Symbol.START]
     value = comp(start)
 
-    return repr(value) #"yay"
+    return value.sexpr() #"yay"
 
