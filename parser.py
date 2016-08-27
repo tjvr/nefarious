@@ -159,7 +159,7 @@ class Rule:
             lr0 = LR0(self, dot)
             previous.advance = lr0
             previous = lr0
-        lr0.advance = target
+        previous.advance = target
 
         Rule.highest_priority += 1
         self.priority = Rule.highest_priority
@@ -175,7 +175,7 @@ class LR0(Tag):
         self.dot = dot # for debugging
 
     def __repr__(self):
-        symbols = self.rule.symbols
+        symbols = list(self.rule.symbols)
         symbols.insert(self.dot, ".")
         return "<{} -> {}>".format(self.rule.target, " ".join(map(str, symbols)))
 
@@ -232,12 +232,14 @@ class Column:
     def scan(self, token, value, previous):
         success = False
         if token in previous.wants:
-            self.add(previous.index, token, previous.wants[token])
+            item = self.add(previous.index, token, previous.wants[token])
+            item.value = value
             success = True
         if value:
             word = Word.get(token.kind, value)
             if word in previous.wants:
-                self.add(previous.index, token, previous.wants[word])
+                item = self.add(previous.index, token, previous.wants[word])
+                item.value = value
                 success = True
         return success
 
@@ -260,7 +262,43 @@ class Column:
                 self.complete(item)
 
 
-Symbol.START.add_rule([Word.get("WORD", "1"), Word.get("PUNC", "+"), Word.get("WORD", "2")])
+def comp(item):
+    print 'comp', item
+    if item.value is not None:
+        return item.value
+
+    rule = item.rule
+    if not rule:
+        return item.value
+
+    children = []
+    if True: #not rule.is_nullable:
+        children = cute(item)
+        children = list(children) # copy
+    value = item.value = [rule.target] + children # rule.process(children)
+    return value
+
+def cute(item):
+    print 'cute', item
+    if item.value is not None:
+        return item.value
+
+    if isinstance(item.tag, LR0) and item.tag.dot == 0:
+        return []
+    left = cute(item.left)
+    right = comp(item.right)
+
+    children = left
+    children.append(right)
+    item.value = children
+    return children
+
+
+
+Symbol.START.add_rule([Symbol.get("n")])
+Symbol.get('n').add_rule([Word.get("WORD", "1")])
+Symbol.get('n').add_rule([Word.get("WORD", "2")])
+Symbol.get('n').add_rule([Symbol.get("n"), Word.get("PUNC", "+"), Symbol.get("n")])
 
 def parse(source):
     lexer = Lexer(source)
@@ -273,16 +311,18 @@ def parse(source):
     tok = lexer.lex()
     index = 0
     while tok[0] != Token.EOF:
+        print index, column.items
         previous, column = column, Column(index + 1)
         token, value = tok
         if not column.scan(token, value, previous):
             return "Unexpected " + token.kind + " @ " + str(index) + ": " + value
         column.process()
-        print index, column.items
         tok = lexer.lex()
         index += 1
 
-    column.unique[0, Symbol.START]
+    print index, column.items
+    start = column.unique[0, Symbol.START]
+    value = comp(start)
 
-    return "yay"
+    return repr(value) #"yay"
 
