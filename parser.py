@@ -320,10 +320,13 @@ def cute(item):
 
 
 
-Symbol.START.add_rule([Symbol.get("n")])
+Symbol.START.add_rule([Symbol.get("m")])
 Symbol.get('n').add_rule([Word.get("WORD", "1")])
 Symbol.get('n').add_rule([Word.get("WORD", "2")])
-Symbol.get('n').add_rule([Symbol.get("n"), Word.get("PUNC", "+"), Symbol.get("n")])
+Symbol.get('n').add_rule([Word.get("WORD", "3")])
+Symbol.get('m').add_rule([Symbol.get("m"), Word.get("PUNC", "+"), Symbol.get("n")])
+Symbol.get('m').add_rule([Symbol.get("n")])
+Symbol.get('n').add_rule([Word.get("PUNC", "("), Symbol.get("m"), Word.get("PUNC", ")")])
 
 def parse(source):
     lexer = Lexer(source)
