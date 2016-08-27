@@ -1,68 +1,70 @@
 
-def tokenize(source):
-    index = 0
-    tok = source[0]
+class Lexer:
+    def __init__(self, source):
+        self.source = source
+        self.length = len(source)
+        self.index = 0
+        self.tok = source[0]
 
-    def next():
-        index += 1
-        if index < len(source):
-            tok = source[index]
+    def next(self):
+        self.index += 1
+        if self.index < self.length:
+            self.tok = self.source[self.index]
         else:
-            tok = ''
+            self.tok = ''
 
-    def lex():
-        if tok == '':
+    def lex(self):
+        if self.tok == '':
             return 'EOF', ''
 
-        elif tok == '\n':
-            next()
-            while tok == ' ':
-                next()
+        elif self.tok == '\n':
+            self.next()
+            while self.tok == ' ':
+                self.next()
             return 'NEWLINE', '\n'
 
-        elif tok == ' ':
-            next()
-            while tok == ' ':
-                next()
-            if tok == '\n':
-                next()
-                while tok == ' ':
-                    next()
+        elif self.tok == ' ':
+            self.next()
+            while self.tok == ' ':
+                self.next()
+            if self.tok == '\n':
+                self.next()
+                while self.tok == ' ':
+                    self.next()
                 return 'NEWLINE', '\n'
             return 'WHITESPACE', ' '
 
-        elif tok in '\t\u000b\f\r':
-            c = tok
-            next()
+        elif self.tok in '\t\u000b\f\r':
+            c = self.tok
+            self.next()
             # error
             return 'ERROR', c
 
-        elif tok in ":{}":
-            c = tok
-            next()
+        elif self.tok in ":{}":
+            c = self.tok
+            self.next()
             return 'SPECIAL', c
 
-        elif tok in "-!\"#$%&\\'()*+,./;<=>?@[]^_`|~":
-            c = tok
-            next()
+        elif self.tok in "-!\"#$%&\\'()*+,./;<=>?@[]^_`|~":
+            c = self.tok
+            self.next()
             return 'PUNC', c
 
         else:
-            s = tok
-            next()
-            while tok not in " \n\t\u000b\f\r:{}-!\"#$%&\\'()*+,./;<=>?@[]^_`|~":
-                s += tok
-                next()
-            return s
+            s = self.tok
+            self.next()
+            while self.tok not in " \n\t\u000b\f\r:{}-!\"#$%&\\'()*+,./;<=>?@[]^_`|~":
+                s += self.tok
+                self.next()
+            return 'WORD', s
 
-    return lex
 
 def parse(source):
-    lex = tokenize(source)
-    tok = lex()
+    lexer = Lexer(source)
+    tok = lexer.lex()
     tokens = []
-    while tok:
-        tokens.push(tok)
-        tok = lex()
+    while tok[0] != 'EOF':
+        tokens.append(tok)
+        tok = lexer.lex()
     return tokens
 

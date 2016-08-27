@@ -46,9 +46,11 @@ def run(fp):
     os.close(fp)
     tokens = parse(source)
     for tok in tokens:
-        os.write(tok[0])
-        os.write(tok[1])
-        os.write('\n')
+        os.write(1, tok[0])
+        os.write(1, ': ')
+        if tok[0] != 'NEWLINE':
+            os.write(1, tok[1])
+        os.write(1, '\n')
     #mainloop(program)
 
 def entry_point(argv):
