@@ -46,6 +46,7 @@ def run(fp):
     os.close(fp)
     msg = parse(source)
     os.write(1, msg)
+    os.write(1, '\n')
     #mainloop(program)
 
 def entry_point(argv):

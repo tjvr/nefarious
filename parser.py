@@ -1,3 +1,5 @@
+#import sys
+#sys.setrecursionlimit(2000)
 
 class Tag:
     rule_set = []
@@ -304,20 +306,26 @@ def comp(item):
     value = item.value = Node(rule.target.name, children) # rule.process(children)
     return value
 
-def cute(item):
+def cute(complete):
     #if item.value is not None:
     #    return item.value
 
+    item = complete
     if isinstance(item.tag, LR0) and item.tag.dot == 0:
         return []
-    left = cute(item.left)
-    right = comp(item.right)
 
-    children = left
-    children.append(right)
+    stack = []
+    while item.left:
+        stack.append(item)
+        item = item.left
+
+    children = []
+    for item in reversed(stack):
+        child = comp(item.right)
+        children.append(child)
+
     #item.value = children
     return children
-
 
 
 Symbol.START.add_rule([Symbol.get("m")])
@@ -325,6 +333,7 @@ Symbol.get('n').add_rule([Word.get("WORD", "1")])
 Symbol.get('n').add_rule([Word.get("WORD", "2")])
 Symbol.get('n').add_rule([Word.get("WORD", "3")])
 Symbol.get('m').add_rule([Symbol.get("m"), Word.get("PUNC", "+"), Symbol.get("n")])
+Symbol.get('m').add_rule([Symbol.get("m"), Word.get("PUNC", "-"), Symbol.get("n")])
 Symbol.get('m').add_rule([Symbol.get("n")])
 Symbol.get('n').add_rule([Word.get("PUNC", "("), Symbol.get("m"), Word.get("PUNC", ")")])
 
@@ -349,7 +358,10 @@ def parse(source):
         index += 1
 
     #print index, column.items
-    start = column.unique[0, Symbol.START]
+    key = 0, Symbol.START
+    if key not in column.unique:
+        return "Unexpected EOF"
+    start = column.unique[key]
     value = comp(start)
 
     return value.sexpr() #"yay"
