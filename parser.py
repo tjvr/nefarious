@@ -241,7 +241,9 @@ class Item:
         if True: #not rule.is_nullable:
             children = self.evaluate_children()
             children = list(children) # copy
-        if rule.factory:
+        if rule.target == Symbol.START:
+            value = children[0]
+        elif rule.factory:
             value = rule.factory.build(children)
         else:
             value = Node(rule.target.name, children)
@@ -373,7 +375,7 @@ def define(named_words, output_type, body, label=None):
     process = NodeFactory()
     Symbol.get()
 
-def define_builtin(label, spec, output_type):
+def define_builtin(output_type, spec, label=None):
     words = Lexer.tokenize(spec)
 
     symbols = []
@@ -386,9 +388,11 @@ def define_builtin(label, spec, output_type):
         else:
             symbols.append(word)
 
+    if label is None:
+        label = ''.join(('_' if w.value == ' ' else w.value) for w in words)
     factory = NodeFactory(label, arg_indexes)
     rule = Symbol.get(output_type).add_rule(symbols, factory)
-    print rule
+    return rule
 
 
 class NodeFactory:
@@ -400,24 +404,34 @@ class NodeFactory:
         args = []
         for index in self.arg_indexes:
             args.append(symbols[index])
+        if self.label == 'IDENTITY':
+            return args[0]
         return Node(self.label, args)
 
-
-# TODO nullables
 
 # nullable whitespace derivation -- whitespace is always optional.
 # note however that whitespace has to be explicitly allowed, eg. "Int +- Int"
 # would not allow a space between + and -.
+# ie. whitespace is only permitted if it appears in the definition. 
+
 #define_builtin(None, '', 'WHITESPACE') # TODO
 
-define_builtin('+', 'Int + Int', 'Int')
-define_builtin('+', 'Int - Int', 'Int')
-define_builtin('identity', '( Int )', 'Int')
+# TODO nullables
+
+define_builtin('Int', 'Int * Int').priority = define_builtin('Int', 'Int / Int').priority
+define_builtin('Int', 'Int + Int').priority = define_builtin('Int', 'Int - Int').priority
+define_builtin('Int', 'distance to x: Int y: Int')
+define_builtin('Int', '( Int )', 'IDENTITY')
+
+# later definitions will override earlier ones.
+# However, earlier definitions bind tighter than later ones!
 
 Symbol.START.add_rule([Symbol.get("Int")])
 Symbol.get('Int').add_rule([Word.get("WORD", "1")])
 Symbol.get('Int').add_rule([Word.get("WORD", "2")])
 Symbol.get('Int').add_rule([Word.get("WORD", "3")])
+Symbol.get('Int').add_rule([Word.get("WORD", "4")])
+Symbol.get('Int').add_rule([Word.get("WORD", "5")])
 
 def parse(source):
     lexer = Lexer(source)
