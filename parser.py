@@ -118,6 +118,21 @@ class Lexer:
                 self.next()
             return Token.WORD, s
 
+    @staticmethod
+    def tokenize(text):
+        if not text: # TODO we shouldn't have to special-case this
+            return []
+        tokens = []
+        lexer = Lexer(text)
+        tok = lexer.lex()
+        while tok[0] != Token.EOF:
+            token, value = tok
+            if value:
+                token = Word.get(token.kind, value)
+            tokens.append(token)
+            tok = lexer.lex()
+        return tokens
+
 
 class Symbol(Tag):
     """A non-terminal."""
@@ -135,14 +150,17 @@ class Symbol(Tag):
 
     @classmethod
     def get(self, name):
+        assert isinstance(name, str)
         if name in self._cache:
             symbol = self._cache[name]
         else:
             symbol = self._cache[name] = Symbol(name)
         return symbol
 
-    def add_rule(self, symbols, process=None):
-        self.rule_set.append(Rule(self, symbols, process))
+    def add_rule(self, symbols, factory=None):
+        rule = Rule(self, symbols, factory)
+        self.rule_set.append(rule)
+        return rule
 
 Symbol.START = Symbol.get('start')
 
@@ -150,23 +168,27 @@ Symbol.START = Symbol.get('start')
 class Rule:
     highest_priority = 0
 
-    def __init__(self, target, symbols, process=None):
+    def __init__(self, target, symbols, factory=None):
         assert isinstance(symbols, list)
         assert all(isinstance(s, Tag) for s in symbols)
         self.symbols = symbols
         self.target = target
 
-        self.first = previous = LR0(self, 0)
-        for dot in range(1, len(symbols)):
-            lr0 = LR0(self, dot)
-            previous.advance = lr0
-            previous = lr0
-        previous.advance = target
+        self.first = None
+        if symbols:
+            self.first = previous = LR0(self, 0)
+            for dot in range(1, len(symbols)):
+                lr0 = LR0(self, dot)
+                previous.advance = lr0
+                previous = lr0
+            previous.advance = target
 
         Rule.highest_priority += 1
         self.priority = Rule.highest_priority
-        self.process = process
+        self.factory = factory
 
+    def __repr__(self):
+        return "<{} -> {}>".format(self.target, " ".join(map(str, self.symbols)))
 
 class LR0(Tag):
     def __init__(self, rule, dot):
@@ -219,7 +241,11 @@ class Item:
         if True: #not rule.is_nullable:
             children = self.evaluate_children()
             children = list(children) # copy
-        value = self.value = Node(rule.target.name, children) # rule.process(children)
+        if rule.factory:
+            value = rule.factory.build(children)
+        else:
+            value = Node(rule.target.name, children)
+        self.value = value
         return value
 
     def evaluate_children(self):
@@ -326,15 +352,72 @@ class Leaf(BaseNode):
         return self.token
 
 
+def define(named_words, output_type, body, label=None):
+    target = Symbol.get(output_type)
+    arg_indexes = []
+    arg_names = []
+    symbols = []
+    label_parts = []
+    for index, (name, word) in enumerate(named_words):
+        if name is None:
+            assert isinstance(word, Word)
+            symbols.append(word)
+            label_parts.append(word.value)
+        else:
+            assert isinstance(word, Symbol)
+            symbols.append(your_mother)
+            arg_indexes.append(index)
+            arg_indexes.append(name)
+    if label is None:
+        label = " ".join(label_parts)
+    process = NodeFactory()
+    Symbol.get()
 
-Symbol.START.add_rule([Symbol.get("m")])
-Symbol.get('n').add_rule([Word.get("WORD", "1")])
-Symbol.get('n').add_rule([Word.get("WORD", "2")])
-Symbol.get('n').add_rule([Word.get("WORD", "3")])
-Symbol.get('m').add_rule([Symbol.get("m"), Word.get("PUNC", "+"), Symbol.get("n")])
-Symbol.get('m').add_rule([Symbol.get("m"), Word.get("PUNC", "-"), Symbol.get("n")])
-Symbol.get('m').add_rule([Symbol.get("n")])
-Symbol.get('n').add_rule([Word.get("PUNC", "("), Symbol.get("m"), Word.get("PUNC", ")")])
+def define_builtin(label, spec, output_type):
+    words = Lexer.tokenize(spec)
+
+    symbols = []
+    arg_indexes = []
+    for index, word in enumerate(words):
+        value = word.value if isinstance(word, Word) else None
+        if value and value[0].isupper():
+            symbols.append(Symbol.get(word.value))
+            arg_indexes.append(index)
+        else:
+            symbols.append(word)
+
+    factory = NodeFactory(label, arg_indexes)
+    rule = Symbol.get(output_type).add_rule(symbols, factory)
+    print rule
+
+
+class NodeFactory:
+    def __init__(self, label, arg_indexes):
+        self.label = label
+        self.arg_indexes = arg_indexes
+
+    def build(self, symbols):
+        args = []
+        for index in self.arg_indexes:
+            args.append(symbols[index])
+        return Node(self.label, args)
+
+
+# TODO nullables
+
+# nullable whitespace derivation -- whitespace is always optional.
+# note however that whitespace has to be explicitly allowed, eg. "Int +- Int"
+# would not allow a space between + and -.
+#define_builtin(None, '', 'WHITESPACE') # TODO
+
+define_builtin('+', 'Int + Int', 'Int')
+define_builtin('+', 'Int - Int', 'Int')
+define_builtin('identity', '( Int )', 'Int')
+
+Symbol.START.add_rule([Symbol.get("Int")])
+Symbol.get('Int').add_rule([Word.get("WORD", "1")])
+Symbol.get('Int').add_rule([Word.get("WORD", "2")])
+Symbol.get('Int').add_rule([Word.get("WORD", "3")])
 
 def parse(source):
     lexer = Lexer(source)
