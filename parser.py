@@ -207,6 +207,42 @@ class Item:
     def __repr__(self):
         return "Item({!r}, {!r})".format(self.start, self.tag)
 
+    def evaluate(self):
+        if self.value is not None:
+            return self.value
+
+        rule = self.rule
+        if not rule: # token
+            return self.value
+
+        children = []
+        if True: #not rule.is_nullable:
+            children = self.evaluate_children()
+            children = list(children) # copy
+        value = self.value = Node(rule.target.name, children) # rule.process(children)
+        return value
+
+    def evaluate_children(self):
+        # nb. We don't cache children for intermediate nodes; we only cache the
+        # value of completed nodes. So we-ll re-do building the list. This is
+        # fine, because otherwise we'd end up copying the list anyway.
+        if isinstance(self.tag, LR0) and self.tag.dot == 0:
+            return []
+
+        item = self
+        stack = []
+        while item.left:
+            stack.append(item)
+            item = item.left
+
+        children = []
+        for item in reversed(stack):
+            child = item.right.evaluate()
+            children.append(child)
+
+        return children
+
+
 
 class Column:
     def __init__(self, index):
@@ -291,43 +327,6 @@ class Leaf(BaseNode):
 
 
 
-def comp(item):
-    if item.value is not None:
-        return item.value
-
-    rule = item.rule
-    if not rule: # token
-        return item.value
-
-    children = []
-    if True: #not rule.is_nullable:
-        children = cute(item)
-        children = list(children) # copy
-    value = item.value = Node(rule.target.name, children) # rule.process(children)
-    return value
-
-def cute(complete):
-    #if item.value is not None:
-    #    return item.value
-
-    item = complete
-    if isinstance(item.tag, LR0) and item.tag.dot == 0:
-        return []
-
-    stack = []
-    while item.left:
-        stack.append(item)
-        item = item.left
-
-    children = []
-    for item in reversed(stack):
-        child = comp(item.right)
-        children.append(child)
-
-    #item.value = children
-    return children
-
-
 Symbol.START.add_rule([Symbol.get("m")])
 Symbol.get('n').add_rule([Word.get("WORD", "1")])
 Symbol.get('n').add_rule([Word.get("WORD", "2")])
@@ -362,7 +361,7 @@ def parse(source):
     if key not in column.unique:
         return "Unexpected EOF"
     start = column.unique[key]
-    value = comp(start)
+    value = start.evaluate()
 
     return value.sexpr() #"yay"
 
