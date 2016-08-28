@@ -14,7 +14,7 @@ except ImportError:
         def jit_merge_point(self,**kw): pass
         def can_enter_jit(self,**kw): pass
     def purefunction(f): return f
- 
+
 def jitpolicy(driver):
     from rpython.jit.codewriter.policy import JitPolicy
     return JitPolicy()
@@ -25,7 +25,7 @@ def jitpolicy(driver):
 #     return "%s_%s_%s" % (
 #             program[:pc], program[pc], program[pc+1:]
 #             )
-# 
+#
 # jitdriver = JitDriver(
 #     greens=['pc', 'program', 'bracket_map'],
 #     reds=['tape'],
@@ -55,7 +55,7 @@ def entry_point(argv):
     except IndexError:
         print "You must supply a filename"
         return 1
-    
+
     run(os.open(filename, os.O_RDONLY, 0777))
     return 0
 

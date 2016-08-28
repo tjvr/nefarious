@@ -51,6 +51,7 @@ class Word(Tag):
 
     @staticmethod
     def get(kind, value):
+        assert kind in ('RESERVED', 'PUNC', 'WORD', 'ERROR'), kind
         key = kind, value
         if key in Word._cache:
             word = Word._cache[key]
@@ -75,13 +76,13 @@ class Lexer:
 
     def lex(self):
         if self.tok == '':
-            return Token.EOF, ''
+            return Token.EOF
 
         elif self.tok == '\n':
             self.next()
             while self.tok == ' ':
                 self.next()
-            return Token.NEWLINE, '\n'
+            return Token.NEWLINE
 
         elif self.tok == ' ':
             self.next()
@@ -91,24 +92,24 @@ class Lexer:
                 self.next()
                 while self.tok == ' ':
                     self.next()
-                return Token.NEWLINE, '\n'
-            return Token.WHITESPACE, ' '
+                return Token.NEWLINE
+            return Token.WHITESPACE
 
         elif self.tok in '\t\u000b\f\r':
             c = self.tok
             self.next()
             # error
-            return Token.ERROR, c
+            return Word.get('ERROR', c)
 
         elif self.tok in ":{}":
             c = self.tok
             self.next()
-            return Token.RESERVED, c
+            return Word.get('RESERVED', c)
 
         elif self.tok in "-!\"#$%&\\'()*+,./;<=>?@[]^_`|~":
             c = self.tok
             self.next()
-            return Token.PUNC, c
+            return Word.get('PUNC', c)
 
         else:
             s = self.tok
@@ -116,7 +117,7 @@ class Lexer:
             while self.tok not in " \n\t\u000b\f\r:{}-!\"#$%&\\'()*+,./;<=>?@[]^_`|~":
                 s += self.tok
                 self.next()
-            return Token.WORD, s
+            return Word.get('WORD', s)
 
     @staticmethod
     def tokenize(text):
@@ -124,13 +125,10 @@ class Lexer:
             return []
         tokens = []
         lexer = Lexer(text)
-        tok = lexer.lex()
-        while tok[0] != Token.EOF:
-            token, value = tok
-            if value:
-                token = Word.get(token.kind, value)
+        token = lexer.lex()
+        while token != Token.EOF:
             tokens.append(token)
-            tok = lexer.lex()
+            token = lexer.lex()
         return tokens
 
 
@@ -174,7 +172,6 @@ class Rule:
         self.symbols = symbols
         self.target = target
 
-        self.first = None
         if symbols:
             self.first = previous = LR0(self, 0)
             for dot in range(1, len(symbols)):
@@ -182,6 +179,8 @@ class Rule:
                 previous.advance = lr0
                 previous = lr0
             previous.advance = target
+        else:
+            self.first = target
 
         Rule.highest_priority += 1
         self.priority = Rule.highest_priority
@@ -295,19 +294,19 @@ class Column:
                 self.wants[tag.wants] = [item]
         return item
 
-    def scan(self, token, value, previous):
-        success = False
+    def scan(self, word, previous):
+        assert len(self.items) == 0
+        if isinstance(word, Word):
+            if word in previous.wants:
+                item = self.add(previous.index, word, previous.wants[word])
+                item.value = Leaf(word.value)
+            token = Token.get(word.kind)
+        else:
+            token = word
         if token in previous.wants:
             item = self.add(previous.index, token, previous.wants[token])
-            item.value = Leaf(value)
-            success = True
-        if value:
-            word = Word.get(token.kind, value)
-            if word in previous.wants:
-                item = self.add(previous.index, token, previous.wants[word])
-                item.value = Leaf(value)
-                success = True
-        return success
+            item.value = Leaf(token.kind)
+        return len(self.items) > 0
 
     def predict(self, tag):
         wanted_by = self.wants[tag]
@@ -389,7 +388,7 @@ def define_builtin(output_type, spec, label=None):
             symbols.append(word)
 
     if label is None:
-        label = ''.join(('_' if w.value == ' ' else w.value) for w in words)
+        label = ''.join(('_' if w == Token.WHITESPACE else w.value) for w in words)
     factory = NodeFactory(label, arg_indexes)
     rule = Symbol.get(output_type).add_rule(symbols, factory)
     return rule
@@ -412,11 +411,9 @@ class NodeFactory:
 # nullable whitespace derivation -- whitespace is always optional.
 # note however that whitespace has to be explicitly allowed, eg. "Int +- Int"
 # would not allow a space between + and -.
-# ie. whitespace is only permitted if it appears in the definition. 
+# ie. whitespace is only permitted if it appears in the definition.
 
-#define_builtin(None, '', 'WHITESPACE') # TODO
-
-# TODO nullables
+Token.WHITESPACE.rule_set = [Rule(Token.WHITESPACE, [])]
 
 define_builtin('Int', 'Int * Int').priority = define_builtin('Int', 'Int / Int').priority
 define_builtin('Int', 'Int + Int').priority = define_builtin('Int', 'Int - Int').priority
@@ -441,16 +438,18 @@ def parse(source):
     column.predict(Symbol.START)
     column.process()
 
-    tok = lexer.lex()
+    token = lexer.lex()
     index = 0
-    while tok[0] != Token.EOF:
+    while token != Token.EOF:
         #print index, column.items
         previous, column = column, Column(index + 1)
-        token, value = tok
-        if not column.scan(token, value, previous):
-            return "Unexpected " + token.kind + " @ " + str(index) + ": " + value
+        if not column.scan(token, previous):
+            msg = "Unexpected " + token.kind + " @ " + str(index)
+            if isinstance(token, Word):
+                msg += ": " + token.value
+            return msg
         column.process()
-        tok = lexer.lex()
+        token = lexer.lex()
         index += 1
 
     #print index, column.items
