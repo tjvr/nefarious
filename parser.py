@@ -2,7 +2,7 @@
 #sys.setrecursionlimit(2000)
 
 class Tag:
-    rule_set = []
+    pass
 
 
 class Token(Tag):
@@ -138,7 +138,6 @@ class Symbol(Tag):
 
     def __init__(self, name):
         self.name = name
-        self.rule_set = []
 
     def __repr__(self):
         return 'Symbol({!r})'.format(self.name)
@@ -154,11 +153,6 @@ class Symbol(Tag):
         else:
             symbol = self._cache[name] = Symbol(name)
         return symbol
-
-    def add_rule(self, symbols, factory=None):
-        rule = Rule(self, symbols, factory)
-        self.rule_set.append(rule)
-        return rule
 
 Symbol.START = Symbol.get('start')
 
@@ -272,7 +266,8 @@ class Item:
 
 
 class Column:
-    def __init__(self, index):
+    def __init__(self, grammar, index):
+        self.grammar = grammar
         self.index = index
         self.items = []
         self.unique = {}
@@ -310,7 +305,7 @@ class Column:
 
     def predict(self, tag):
         wanted_by = self.wants[tag]
-        for rule in tag.rule_set:
+        for rule in self.grammar.get(tag):
             self.add(self.index, rule.first, wanted_by)
 
     def complete(self, right):
@@ -325,6 +320,64 @@ class Column:
                 self.predict(item.tag.wants)
             else:
                 self.complete(item)
+
+
+class Grammar:
+    def __init__(self):
+        self.rule_sets = {}
+        self.stack = [self.rule_sets]
+
+    def add(self, target, symbols, factory=None):
+        rule = Rule(target, symbols, factory)
+        if target not in self.rule_sets:
+            self.rule_sets[target] = [rule]
+        else:
+            self.rule_sets[target].append(rule)
+        return rule
+
+    def remove(self, rule):
+        for rule_sets in reversed(self.stack):
+            rules = rule_sets[target]
+            if rule in rules:
+                rules.remove(rule)
+                return
+
+    def get(self, target):
+        rule_sets = self.rule_sets
+        for rule_sets in reversed(self.stack):
+            if target in rule_sets:
+                return rule_sets[target]
+        return []
+
+    def save(self):
+        self.rule_sets = {}
+        self.stack.append(self.rule_sets)
+
+    def restore(self):
+        self.rule_sets = self.stack.pop()
+
+    def define(self, name, symbols, factory=None):
+        return self.add(Symbol.get(name), symbols, factory)
+
+    def define_builtin(self, output_type, spec, label=None):
+        words = Lexer.tokenize(spec)
+
+        symbols = []
+        arg_indexes = []
+        for index, word in enumerate(words):
+            value = word.value if isinstance(word, Word) else None
+            if value and value[0].isupper():
+                symbols.append(Symbol.get(word.value))
+                arg_indexes.append(index)
+            else:
+                symbols.append(word)
+
+        if label is None:
+            label = ''.join(('_' if w == Token.WHITESPACE else w.value) for w in words)
+        factory = NodeFactory(label, arg_indexes)
+        return self.define(output_type, symbols, factory)
+
+    def define_list(): pass # TODO
 
 
 class BaseNode:
@@ -353,45 +406,26 @@ class Leaf(BaseNode):
         return self.token
 
 
-def define(named_words, output_type, body, label=None):
-    target = Symbol.get(output_type)
-    arg_indexes = []
-    arg_names = []
-    symbols = []
-    label_parts = []
-    for index, (name, word) in enumerate(named_words):
-        if name is None:
-            assert isinstance(word, Word)
-            symbols.append(word)
-            label_parts.append(word.value)
-        else:
-            assert isinstance(word, Symbol)
-            symbols.append(your_mother)
-            arg_indexes.append(index)
-            arg_indexes.append(name)
-    if label is None:
-        label = " ".join(label_parts)
-    process = NodeFactory()
-    Symbol.get()
-
-def define_builtin(output_type, spec, label=None):
-    words = Lexer.tokenize(spec)
-
-    symbols = []
-    arg_indexes = []
-    for index, word in enumerate(words):
-        value = word.value if isinstance(word, Word) else None
-        if value and value[0].isupper():
-            symbols.append(Symbol.get(word.value))
-            arg_indexes.append(index)
-        else:
-            symbols.append(word)
-
-    if label is None:
-        label = ''.join(('_' if w == Token.WHITESPACE else w.value) for w in words)
-    factory = NodeFactory(label, arg_indexes)
-    rule = Symbol.get(output_type).add_rule(symbols, factory)
-    return rule
+# def define(named_words, output_type, body, label=None):
+#     target = Symbol.get(output_type)
+#     arg_indexes = []
+#     arg_names = []
+#     symbols = []
+#     label_parts = []
+#     for index, (name, word) in enumerate(named_words):
+#         if name is None:
+#             assert isinstance(word, Word)
+#             symbols.append(word)
+#             label_parts.append(word.value)
+#         else:
+#             assert isinstance(word, Symbol)
+#             symbols.append(your_mother)
+#             arg_indexes.append(index)
+#             arg_indexes.append(name)
+#     if label is None:
+#         label = " ".join(label_parts)
+#     process = NodeFactory()
+#     Symbol.get()
 
 
 class Factory:
@@ -421,14 +455,15 @@ class NodeFactory(Factory):
 # would not allow a space between + and -.
 # ie. whitespace is only permitted if it appears in the definition.
 
-Token.WHITESPACE.rule_set = [Rule(Token.WHITESPACE, [])]
+grammar = Grammar()
+grammar.add(Token.WHITESPACE, [])
 
-define_rule('Spec', [Token.WORD])
-define_rule('Spec', [Token.PUNC])
-define_rule('Spec', [Symbol.get('Type')])
-define_rule('Spec', [Word.get('PUNC', '*'), Symbol.get('Type')])
+grammar.define('Spec', [Token.WORD])
+grammar.define('Spec', [Token.PUNC])
+grammar.define('Spec', [Symbol.get('Type')])
+grammar.define('Spec', [Word.get('PUNC', '*'), Symbol.get('Type')])
 
-define_list('SpecList', Symbol.get('Spec'))
+#grammar.define_list('SpecList', Symbol.get('Spec'))
 
 def predef(symbols):
     define, _ws, spec_list, _ = symbols
@@ -440,39 +475,41 @@ def postdef(symbols):
     # TODO
     return body
 
-define_rule('PreDef', [Symbol.get('define'), Token.WHITESPACE, Symbol.get('SpecList'), Word.get('RESERVED', '{')])
-define_rule('PostDef', [Symbol.get('PreDef'), Symbol.get('Body'), Word.get('RESERVED', '}')])
+grammar.define('PreDef', [Symbol.get('define'), Token.WHITESPACE, Symbol.get('SpecList'), Word.get('RESERVED', '{')])
+grammar.define('PostDef', [Symbol.get('PreDef'), Symbol.get('Body'), Word.get('RESERVED', '}')])
 
-define_rule('Type', [Word.get('WORD', 'Int')])
+grammar.define('Type', [Word.get('WORD', 'Int')])
 
-define_builtin('Int', 'Int * Int').priority = define_builtin('Int', 'Int / Int').priority
-define_builtin('Int', 'Int + Int').priority = define_builtin('Int', 'Int - Int').priority
-define_builtin('Int', 'distance to x: Int y: Int')
-define_builtin('Int', '( Int )', 'IDENTITY')
+grammar.define_builtin('Int', 'Int * Int').priority = grammar.define_builtin('Int', 'Int / Int').priority
+grammar.define_builtin('Int', 'Int + Int').priority = grammar.define_builtin('Int', 'Int - Int').priority
+grammar.define_builtin('Int', 'distance to x: Int y: Int')
+grammar.define_builtin('Int', '( Int )', 'IDENTITY')
 
 # later definitions will override earlier ones.
 # However, earlier definitions bind tighter than later ones!
 
-Symbol.START.add_rule([Symbol.get("Int")])
-Symbol.get('Int').add_rule([Word.get("WORD", "1")])
-Symbol.get('Int').add_rule([Word.get("WORD", "2")])
-Symbol.get('Int').add_rule([Word.get("WORD", "3")])
-Symbol.get('Int').add_rule([Word.get("WORD", "4")])
-Symbol.get('Int').add_rule([Word.get("WORD", "5")])
+grammar.add(Symbol.START, [Symbol.get("Int")])
+grammar.define("Int", [Word.get("WORD", "1")])
+grammar.define("Int", [Word.get("WORD", "2")])
+grammar.define("Int", [Word.get("WORD", "3")])
+grammar.define("Int", [Word.get("WORD", "4")])
+grammar.define("Int", [Word.get("WORD", "5")])
 
 def parse(source):
     lexer = Lexer(source)
 
-    column = Column(0)
+    column = Column(grammar, 0)
     column.wants[Symbol.START] = []
     column.predict(Symbol.START)
     column.process()
+
+    grammar.save()
 
     token = lexer.lex()
     index = 0
     while token != Token.EOF:
         #print index, column.items
-        previous, column = column, Column(index + 1)
+        previous, column = column, Column(grammar, index + 1)
         if not column.scan(token, previous):
             msg = "Unexpected " + token.kind + " @ " + str(index)
             if isinstance(token, Word):
