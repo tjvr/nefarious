@@ -394,7 +394,15 @@ def define_builtin(output_type, spec, label=None):
     return rule
 
 
-class NodeFactory:
+class Factory:
+    def __init__(self, process):
+        self.process = process
+
+    def build(self, symbols):
+        return self.process(symbols)
+
+
+class NodeFactory(Factory):
     def __init__(self, label, arg_indexes):
         self.label = label
         self.arg_indexes = arg_indexes
@@ -414,6 +422,28 @@ class NodeFactory:
 # ie. whitespace is only permitted if it appears in the definition.
 
 Token.WHITESPACE.rule_set = [Rule(Token.WHITESPACE, [])]
+
+define_rule('Spec', [Token.WORD])
+define_rule('Spec', [Token.PUNC])
+define_rule('Spec', [Symbol.get('Type')])
+define_rule('Spec', [Word.get('PUNC', '*'), Symbol.get('Type')])
+
+define_list('SpecList', Symbol.get('Spec'))
+
+def predef(symbols):
+    define, _ws, spec_list, _ = symbols
+    # TODO
+    return label, names
+
+def postdef(symbols):
+    predef, body, _ = symbols
+    # TODO
+    return body
+
+define_rule('PreDef', [Symbol.get('define'), Token.WHITESPACE, Symbol.get('SpecList'), Word.get('RESERVED', '{')])
+define_rule('PostDef', [Symbol.get('PreDef'), Symbol.get('Body'), Word.get('RESERVED', '}')])
+
+define_rule('Type', [Word.get('WORD', 'Int')])
 
 define_builtin('Int', 'Int * Int').priority = define_builtin('Int', 'Int / Int').priority
 define_builtin('Int', 'Int + Int').priority = define_builtin('Int', 'Int - Int').priority
