@@ -578,6 +578,7 @@ def predef(values):
 def postdef(values):
     predef, body, _ = values
     label, arguments = predef.children
+
     grammar.restore()
 
     names = [arg.children[0] for arg in arguments.children]
@@ -649,6 +650,8 @@ def parse(source):
         column.process()
 
         if token == Token.word('{'):
+            column.evaluate()
+        elif token == Token.word('}'):
             column.evaluate()
 
         token = lexer.lex()

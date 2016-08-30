@@ -8,3 +8,5 @@ define fib n:Int {
 
 fib 5
 
+fib n
+
