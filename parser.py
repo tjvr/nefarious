@@ -95,7 +95,7 @@ class Lexer:
                 return Token.NEWLINE
             return Token.WHITESPACE
 
-        elif self.tok in '\t\u000b\f\r':
+        elif self.tok in '\t\f\r':
             c = self.tok
             self.next()
             # error
@@ -114,7 +114,7 @@ class Lexer:
         else:
             s = self.tok
             self.next()
-            while self.tok not in " \n\t\u000b\f\r:{}-!\"#$%&\\'()*+,./;<=>?@[]^_`|~":
+            while self.tok not in " \n\t\f\r:{}-!\"#$%&\\'()*+,./;<=>?@[]^_`|~":
                 s += self.tok
                 self.next()
             return Word.get('WORD', s)
@@ -211,6 +211,7 @@ class Item:
 
         # evaluation
         self.value = None
+        self.children = None
 
     def add_derivation(self, left, right, rule):
         if self.rule and self.rule.priority >= rule.priority:
@@ -222,17 +223,20 @@ class Item:
     def __repr__(self):
         return "Item({!r}, {!r})".format(self.start, self.tag)
 
-    def evaluate(self):
+    def evaluate(self, stack=None):
         if self.value is not None:
             return self.value
 
+        if stack is None:
+            stack = []
+        stack.append(self)
         rule = self.rule
         if not rule: # token
             return self.value
 
         children = []
         if True: #not rule.is_nullable:
-            children = self.evaluate_children()
+            children = self.evaluate_children(stack)
             children = list(children) # copy
         if rule.target == Symbol.START:
             value = children[0]
@@ -241,14 +245,18 @@ class Item:
         else:
             value = Node(rule.target.name, children)
         self.value = value
+        assert stack.pop() == self
         return value
 
-    def evaluate_children(self):
+    def evaluate_children(self, stack):
         # nb. We don't cache children for intermediate nodes; we only cache the
         # value of completed nodes. So we-ll re-do building the list. This is
         # fine, because otherwise we'd end up copying the list anyway.
         if isinstance(self.tag, LR0) and self.tag.dot == 0:
             return []
+
+        if self.children is not None:
+            return list(self.children)
 
         item = self
         stack = []
@@ -256,9 +264,9 @@ class Item:
             stack.append(item)
             item = item.left
 
-        children = []
+        self.children = children = []
         for item in reversed(stack):
-            child = item.right.evaluate()
+            child = item.right.evaluate(stack)
             children.append(child)
 
         return children
@@ -300,13 +308,18 @@ class Column:
             token = word
         if token in previous.wants:
             item = self.add(previous.index, token, previous.wants[token])
-            item.value = Leaf(token.kind)
+            if isinstance(word, Word):
+                item.value = Leaf(word.value)
         return len(self.items) > 0
 
     def predict(self, tag):
         wanted_by = self.wants[tag]
         for rule in self.grammar.get(tag):
-            self.add(self.index, rule.first, wanted_by)
+            item = self.add(self.index, rule.first, wanted_by)
+            # nullables need a value!
+            if not isinstance(rule.first, LR0) and rule.factory: # is nullable
+                item.rule = rule
+
 
     def complete(self, right):
         for left in right.wanted_by:
@@ -377,8 +390,9 @@ class Grammar:
         factory = NodeFactory(label, arg_indexes)
         return self.define(output_type, symbols, factory)
 
-    def define_list(): pass # TODO
-
+    def define_list(self, name, symbol):
+        self.define(name, [symbol], BoxFactory(name))
+        self.define(name, [Symbol.get(name), symbol], ListFactory(name))
 
 class BaseNode:
     def __repr__(self):
@@ -393,7 +407,10 @@ class Node(BaseNode):
         return "Node({!r}, {!r})".format(self.label, self.children)
 
     def sexpr(self):
-        return "(" + self.label + " " + " ".join([x.sexpr() for x in self.children]) + ")"
+        sep = " "
+        if self.label == "LineList":
+            sep = "\n"
+        return "(" + self.label + " " + sep.join([x.sexpr() for x in self.children]) + ")"
 
 class Leaf(BaseNode):
     def __init__(self, token):
@@ -432,8 +449,27 @@ class Factory:
     def __init__(self, process):
         self.process = process
 
+    def build(self, values):
+        return self.process(values)
+
+
+class ListFactory(Factory):
+    def __init__(self, label):
+        self.label = label
+
+    def build(self, values):
+        node, child = values
+        list_ = node.children
+        list_.append(child)
+        return Node(self.label, list_)
+
+class BoxFactory(ListFactory):
     def build(self, symbols):
-        return self.process(symbols)
+        return Node(self.label, [symbols[0]])
+
+class EmptyListFactory(ListFactory):
+    def build(self, symbols):
+        return Node(self.label, [])
 
 
 class NodeFactory(Factory):
@@ -441,10 +477,10 @@ class NodeFactory(Factory):
         self.label = label
         self.arg_indexes = arg_indexes
 
-    def build(self, symbols):
+    def build(self, values):
         args = []
         for index in self.arg_indexes:
-            args.append(symbols[index])
+            args.append(values[index])
         if self.label == 'IDENTITY':
             return args[0]
         return Node(self.label, args)
@@ -458,25 +494,72 @@ class NodeFactory(Factory):
 grammar = Grammar()
 grammar.add(Token.WHITESPACE, [])
 
+STAR = Word.get('PUNC', '*')
+COLON = Word.get('PUNC', ':')
+TYPE = Symbol.get('Type')
+grammar.define('Spec', [Token.WHITESPACE])
 grammar.define('Spec', [Token.WORD])
 grammar.define('Spec', [Token.PUNC])
-grammar.define('Spec', [Symbol.get('Type')])
-grammar.define('Spec', [Word.get('PUNC', '*'), Symbol.get('Type')])
+#grammar.define('Spec', [TYPE])
+grammar.define('Spec', [STAR, TYPE])
+grammar.define('Spec', [Token.WORD, COLON, TYPE])
+grammar.define('Spec', [Token.WORD, COLON, STAR, TYPE])
 
-#grammar.define_list('SpecList', Symbol.get('Spec'))
+grammar.define_list('SpecList', Symbol.get('Spec'))
 
-def predef(symbols):
-    define, _ws, spec_list, _ = symbols
+def predef(values):
+    _define, _ws, spec_list, _ = values
+
+    label_parts = []
+    symbols = []
+    arg_indexes = []
+    arguments = []
+    for index, spec in enumerate(spec_list.children, 1):
+        spec = spec.children
+        is_list = False
+        if len(spec) == 4:
+            name, _, _, type_ = spec
+            is_list = True
+        
+        elif len(spec) == 3:
+            name, _, type_ = spec
+
+        elif len(spec) == 2:
+            is_list = True
+            _, type_ = spec
+            name = "_" + index
+
+        else:
+            symbols.append(spec[0])
+            label_parts.append(spec[0])
+            break
+
+        arg_indexes.append(index)
+        symbols.append(Symbol.get(type_))
+        arguments.append((name, type_))
+
+    #grammar.add_rule()
+    #grammar.save()
+
     # TODO
+    return Node('predef', [label, arg_indexes, arguments])
+    return Node('four', [])
     return label, names
 
-def postdef(symbols):
-    predef, body, _ = symbols
+def postdef(values):
+    predef, body, _ = values
+    label, names = predef.children
     # TODO
-    return body
+    names = []
+    return Node('def', [names]) #[label, names, body])
 
-grammar.define('PreDef', [Symbol.get('define'), Token.WHITESPACE, Symbol.get('SpecList'), Word.get('RESERVED', '{')])
-grammar.define('PostDef', [Symbol.get('PreDef'), Symbol.get('Body'), Word.get('RESERVED', '}')])
+def body(values):
+    _, lines, _ = values
+    return lines
+
+grammar.define('PreDef', [Word.get('WORD', 'define'), Token.WHITESPACE, Symbol.get('SpecList'), Word.get('RESERVED', '{')], Factory(predef))
+grammar.define('Line', [Symbol.get('PreDef'), Symbol.get('Body'), Word.get('RESERVED', '}')], Factory(postdef))
+grammar.define('Body', [Token.WHITESPACE, Symbol.get('LineList'), Token.WHITESPACE], Factory(body))
 
 grammar.define('Type', [Word.get('WORD', 'Int')])
 
@@ -488,7 +571,11 @@ grammar.define_builtin('Int', '( Int )', 'IDENTITY')
 # later definitions will override earlier ones.
 # However, earlier definitions bind tighter than later ones!
 
-grammar.add(Symbol.START, [Symbol.get("Int")])
+grammar.add(Symbol.START, [Symbol.get("LineList")])
+grammar.define_list("LineList", Symbol.get("Line"))
+grammar.define("Line", [Symbol.get("Int"), Token.NEWLINE], NodeFactory('IDENTITY', [0]))
+grammar.define("Line", [Token.NEWLINE], NodeFactory('Empty', []))
+
 grammar.define("Int", [Word.get("WORD", "1")])
 grammar.define("Int", [Word.get("WORD", "2")])
 grammar.define("Int", [Word.get("WORD", "3")])
@@ -514,6 +601,11 @@ def parse(source):
             msg = "Unexpected " + token.kind + " @ " + str(index)
             if isinstance(token, Word):
                 msg += ": " + token.value
+            for token in previous.wants:
+                if isinstance(token, Token):
+                    msg += "\nExpected: " + token.kind;
+                elif isinstance(token, Word):
+                    msg += "\nExpected: " + token.value;
             return msg
         column.process()
         token = lexer.lex()
