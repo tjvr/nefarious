@@ -34,7 +34,13 @@ class Token(Tag):
 
     @staticmethod
     def word(value):
-        if all(c.isalpha() or c.isdigit() for c in value ):
+        for c in value:
+            if not (c.isalpha() or c.isdigit()):
+                is_word = False
+                break
+        else:
+            is_word = True
+        if is_word:
             return Token.get('WORD', value)
         elif value in ":{}":
             return Token.get('RESERVED', value)
@@ -55,6 +61,8 @@ Token.PUNC = Token.get('PUNC')
 Token.WORD = Token.get('WORD')
 Token.ERROR = Token.get('ERROR')
 
+# Null whitespace
+Token.NULL = Token.get('NULL')
 
 class Lexer:
     def __init__(self, source):
@@ -141,13 +149,13 @@ class Symbol(Tag):
     def __str__(self):
         return self.name
 
-    @classmethod
-    def get(self, name):
+    @staticmethod
+    def get(name):
         assert isinstance(name, str), name
-        if name in self._cache:
-            symbol = self._cache[name]
+        if name in Symbol._cache:
+            symbol = Symbol._cache[name]
         else:
-            symbol = self._cache[name] = Symbol(name)
+            symbol = Symbol._cache[name] = Symbol(name)
         return symbol
 
 Symbol.START = Symbol.get('start')
@@ -261,6 +269,7 @@ class Item:
         self.children = children = []
         for item in reversed(stack):
             child = item.right.evaluate(stack)
+            assert child is not None, item
             children.append(child)
 
         return children
@@ -402,6 +411,8 @@ class BaseNode:
 
 class Node(BaseNode):
     def __init__(self, label, children):
+        for c in children:
+            assert isinstance(c, BaseNode), c
         self.label = label
         self.children = children
 
@@ -416,6 +427,7 @@ class Node(BaseNode):
 
 class Leaf(BaseNode):
     def __init__(self, token):
+        assert isinstance(token, Token), token
         self.token = token
 
     def __repr__(self):
@@ -473,8 +485,11 @@ class NodeFactory(Factory):
 # would not allow a space between + and -.
 # ie. whitespace is only permitted if it appears in the definition.
 
+def whitespace(null):
+    return Leaf(Token.NULL)
+
 grammar = Grammar()
-grammar.add(Token.WS, [])
+grammar.add(Token.WS, [], Factory(whitespace))
 
 STAR = Token.word('*')
 COLON = Token.word(':')
@@ -496,7 +511,7 @@ def predef(values):
     symbols = []
     arg_indexes = []
     arguments = []
-    for index, spec in enumerate(spec_list.children, 1):
+    for spec in spec_list.children:
         kind = spec.label
         spec = spec.children
         is_list = False
@@ -514,13 +529,14 @@ def predef(values):
 
         else:
             leaf = spec[0]
-            if leaf == None:
-                token = Token.WS
-            else:
-                token = leaf.token
+            token = leaf.token
+            if token == Token.NULL:
+                continue
+
             if token == Token.WS:
                 label_parts.append('_')
             else:
+                assert token.value, token
                 label_parts.append(token.value)
             symbols.append(token)
             continue
@@ -529,18 +545,13 @@ def predef(values):
         assert name.token.kind == 'WORD'
         name = name.token.value
 
+        index = len(symbols)
         arg_indexes.append(index)
         symbols.append(Symbol.get(type_))
-        arguments.append((name, type_))
+        arguments.append(Node('arg', [Leaf(Token.word(name)), Leaf(Token.word(type_))]))
         label_parts.append(type_)
 
     label = ''.join(label_parts)
-
-    # hack
-    symbols.pop(0)
-    symbols.pop()
-    arg_indexes = [i - 2 for i in arg_indexes]
-    print arg_indexes
 
     output_type = 'Int' # TODO type checking? [need body first!]
 
@@ -549,21 +560,23 @@ def predef(values):
 
     grammar.save()
 
-    for name, type_ in arguments:
-        q = grammar.define(type_, [Token.word(name)], NodeFactory('GetVar', [0]))
+    for arg in arguments:
+        name, type_ = arg.children
+        type_ = type_.token.value
+        q = grammar.define(type_, [name.token], NodeFactory('GetVar', [0]))
         print q
         print grammar.rule_sets[Symbol.get(type_)]
 
-    return Node('predef', [label, Node('args', arguments)])
+    return Node('predef', [Leaf(Token.get('WORD', label)), Node('args', arguments)])
 
 def postdef(values):
     predef, body, _ = values
     label, arguments = predef.children
     grammar.restore()
 
-    names = [Leaf(name) for name, type_ in arguments.children]
+    names = [arg.children[0] for arg in arguments.children]
 
-    return Node('def', [Leaf(label), Node('args', names), body]) #, Node('body', body)])
+    return Node('def', [label, Node('args', names), body]) #, Node('body', body)])
 
 def body(values):
     _, lines, _ = values
