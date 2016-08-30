@@ -162,7 +162,7 @@ class Rule:
 
     def __init__(self, target, symbols, factory=None):
         assert isinstance(symbols, list)
-        assert all(isinstance(s, Tag) for s in symbols)
+        assert all(isinstance(s, Tag) for s in symbols), symbols
         self.symbols = symbols
         self.target = target
 
@@ -234,10 +234,8 @@ class Item:
         if not rule: # token
             return self.value
 
-        children = []
-        if True: #not rule.is_nullable:
-            children = self.evaluate_children(stack)
-            children = list(children) # copy
+        children = self.evaluate_children(stack)
+
         if rule.target == Symbol.START:
             value = children[0]
         elif rule.factory:
@@ -256,7 +254,7 @@ class Item:
             return []
 
         if self.children is not None:
-            return list(self.children)
+            return list(self.children) # copy
 
         item = self
         stack = []
@@ -333,6 +331,11 @@ class Column:
                 self.predict(item.tag.wants)
             else:
                 self.complete(item)
+
+    def evaluate(self):
+        for item in self.items:
+            if not isinstance(item.tag, LR0):
+                item.evaluate()
 
 
 class Grammar:
@@ -495,12 +498,12 @@ grammar = Grammar()
 grammar.add(Token.WHITESPACE, [])
 
 STAR = Word.get('PUNC', '*')
-COLON = Word.get('PUNC', ':')
+COLON = Word.get('RESERVED', ':')
 TYPE = Symbol.get('Type')
 grammar.define('Spec', [Token.WHITESPACE])
-grammar.define('Spec', [Token.WORD])
-grammar.define('Spec', [Token.PUNC])
-#grammar.define('Spec', [TYPE])
+grammar.define('Spec', [Token.WORD], NodeFactory('WORD', [0]))
+grammar.define('Spec', [Token.PUNC], NodeFactory('PUNC', [0]))
+#grammar.define('Spec', [TYPE], NodeFactory('TYPE', [0])))
 grammar.define('Spec', [STAR, TYPE])
 grammar.define('Spec', [Token.WORD, COLON, TYPE])
 grammar.define('Spec', [Token.WORD, COLON, STAR, TYPE])
@@ -515,6 +518,7 @@ def predef(values):
     arg_indexes = []
     arguments = []
     for index, spec in enumerate(spec_list.children, 1):
+        kind = spec.label
         spec = spec.children
         is_list = False
         if len(spec) == 4:
@@ -530,28 +534,48 @@ def predef(values):
             name = "_" + index
 
         else:
-            symbols.append(spec[0])
-            label_parts.append(spec[0])
-            break
+            if spec[0] == None: # whitespace I think
+                token = Token.WHITESPACE
+                label_parts.append('_')
+            else:
+                assert kind != 'Spec'
+                leaf = spec[0]
+                token = Word(kind, leaf.token)
+                label_parts.append(leaf.token)
+            symbols.append(token)
+            continue
 
+        type_ = type_.children[0].token
         arg_indexes.append(index)
+        print type_
         symbols.append(Symbol.get(type_))
         arguments.append((name, type_))
+        label_parts.append(type_)
 
-    #grammar.add_rule()
-    #grammar.save()
+    label = ''.join(label_parts)
 
-    # TODO
-    return Node('predef', [label, arg_indexes, arguments])
-    return Node('four', [])
-    return label, names
+    symbols.pop(0)
+    symbols.pop()
+
+    output_type = 'Int' # TODO type checking? [need body first!]
+    rule = grammar.define(output_type, symbols, NodeFactory(label, arg_indexes))
+    print rule
+
+    grammar.save()
+    for name, type_ in arguments:
+        grammar.define(type_, [Word.get('WORD', name)], NodeFactory('GetVar', [0]))
+
+    return Node('predef', [label, Node('args', arguments)])
 
 def postdef(values):
     predef, body, _ = values
-    label, names = predef.children
-    # TODO
-    names = []
-    return Node('def', [names]) #[label, names, body])
+    label, arguments = predef.children
+    grammar.restore()
+
+    print arguments.children
+    names = [name for name, type_ in arguments.children]
+
+    return Node('def', [Leaf(label), Node('args', names)]) #, Node('body', body)])
 
 def body(values):
     _, lines, _ = values
@@ -561,7 +585,12 @@ grammar.define('PreDef', [Word.get('WORD', 'define'), Token.WHITESPACE, Symbol.g
 grammar.define('Line', [Symbol.get('PreDef'), Symbol.get('Body'), Word.get('RESERVED', '}')], Factory(postdef))
 grammar.define('Body', [Token.WHITESPACE, Symbol.get('LineList'), Token.WHITESPACE], Factory(body))
 
+# Type -- a slot which wants a type name
 grammar.define('Type', [Word.get('WORD', 'Int')])
+# Any -- a slot which accepts any expression
+grammar.define('Any', [Symbol.get('Int')])
+# Expr -- a value which can fit into any slot
+grammar.define('Int', [Symbol.get('Expr')])
 
 grammar.define_builtin('Int', 'Int * Int').priority = grammar.define_builtin('Int', 'Int / Int').priority
 grammar.define_builtin('Int', 'Int + Int').priority = grammar.define_builtin('Int', 'Int - Int').priority
@@ -605,9 +634,18 @@ def parse(source):
                 if isinstance(token, Token):
                     msg += "\nExpected: " + token.kind;
                 elif isinstance(token, Word):
+                    # TODO sometimes this is a Leaf!
+                    if isinstance(token.value, Leaf):
+                        continue
                     msg += "\nExpected: " + token.value;
             return msg
         column.process()
+
+        #if token == Word.get('RESERVED', '{'):
+        #    column.evaluate()
+        #elif token == Word.get('RESERVED', '}'):
+        #    column.evaluate()
+
         token = lexer.lex()
         index += 1
 
