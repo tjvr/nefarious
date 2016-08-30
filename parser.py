@@ -8,7 +8,7 @@ class Tag:
 class Token(Tag):
     _cache = {}
 
-    def __init__(self, kind, value=None):
+    def __init__(self, kind, value=""):
         self.kind = kind
         self.value = value
 
@@ -22,8 +22,10 @@ class Token(Tag):
             return 'Token.{}'.format(self.kind)
 
     @staticmethod
-    def get(kind, value=None):
-        if value is not None:
+    def get(kind, value=""):
+        assert isinstance(kind, str)
+        assert isinstance(value, str)
+        if value:
             assert kind in ('RESERVED', 'PUNC', 'WORD', 'ERROR'), value
         key = kind, value
         if key in Token._cache:
@@ -162,11 +164,10 @@ Symbol.START = Symbol.get('start')
 
 
 class Rule:
-    highest_priority = 0
-
     def __init__(self, target, symbols, factory=None):
         assert isinstance(symbols, list)
-        assert all(isinstance(s, Tag) for s in symbols), symbols
+        for s in symbols:
+            assert isinstance(s, Tag)
         self.symbols = symbols
         self.target = target
 
@@ -180,8 +181,7 @@ class Rule:
         else:
             self.first = target
 
-        Rule.highest_priority += 1
-        self.priority = Rule.highest_priority
+        self.priority = 0
         self.factory = factory
 
     def __repr__(self):
@@ -346,9 +346,13 @@ class Grammar:
     def __init__(self):
         self.rule_sets = {}
         self.stack = [self.rule_sets]
+        self.highest_priority = 0
 
     def add(self, target, symbols, factory=None):
         rule = Rule(target, symbols, factory)
+        self.highest_priority += 1
+        rule.priority = self.highest_priority
+
         if target not in self.rule_sets:
             self.rule_sets[target] = []
         self.rule_sets[target].append(rule)
@@ -370,16 +374,16 @@ class Grammar:
         return matches
 
     def save(self):
-        assert self.stack[-1] == self.rule_sets, 'precond fail'
+        assert self.stack[-1] is self.rule_sets
         self.rule_sets = {}
         self.stack.append(self.rule_sets)
-        assert self.stack[-1] == self.rule_sets, 'postcond fail'
+        assert self.stack[-1] is self.rule_sets
 
     def restore(self):
-        assert self.stack[-1] == self.rule_sets, 'precond fail'
+        assert self.stack[-1] is self.rule_sets
         self.stack.pop()
         self.rule_sets = self.stack[-1]
-        assert self.stack[-1] == self.rule_sets, 'postcond fail'
+        assert self.stack[-1] is self.rule_sets
 
     def define(self, name, symbols, factory=None):
         return self.add(Symbol.get(name), symbols, factory)
@@ -427,7 +431,7 @@ class Node(BaseNode):
 
 class Leaf(BaseNode):
     def __init__(self, token):
-        assert isinstance(token, Token), token
+        assert isinstance(token, Token)
         self.token = token
 
     def __repr__(self):
@@ -512,20 +516,25 @@ def predef(values):
     arg_indexes = []
     arguments = []
     for spec in spec_list.children:
+        index = len(symbols)
         kind = spec.label
         spec = spec.children
         is_list = False
         if len(spec) == 4:
             name, _, _, type_ = spec
             is_list = True
+            assert name.token.kind == 'WORD'
+            name = name.token.value
         
         elif len(spec) == 3:
             name, _, type_ = spec
+            assert name.token.kind == 'WORD'
+            name = name.token.value
 
         elif len(spec) == 2:
             is_list = True
             _, type_ = spec
-            name = "_" + index
+            name = "_" + str(index)
 
         else:
             leaf = spec[0]
@@ -542,10 +551,7 @@ def predef(values):
             continue
 
         type_ = type_.children[0].token.value
-        assert name.token.kind == 'WORD'
-        name = name.token.value
 
-        index = len(symbols)
         arg_indexes.append(index)
         symbols.append(Symbol.get(type_))
         arguments.append(Node('arg', [Leaf(Token.word(name)), Leaf(Token.word(type_))]))
