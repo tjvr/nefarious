@@ -13,7 +13,7 @@ class Token(Tag):
         self.value = value
 
     def __str__(self):
-        return self.kind
+        return self.value or self.kind
 
     def __repr__(self):
         if self.value:
@@ -341,12 +341,12 @@ class Grammar:
     def add(self, target, symbols, factory=None):
         rule = Rule(target, symbols, factory)
         if target not in self.rule_sets:
-            self.rule_sets[target] = [rule]
-        else:
-            self.rule_sets[target].append(rule)
+            self.rule_sets[target] = []
+        self.rule_sets[target].append(rule)
         return rule
 
     def remove(self, rule):
+        # TODO should this traverse the stack?
         for rule_sets in reversed(self.stack):
             rules = rule_sets[target]
             if rule in rules:
@@ -354,18 +354,23 @@ class Grammar:
                 return
 
     def get(self, target):
-        rule_sets = self.rule_sets
+        matches = []
         for rule_sets in reversed(self.stack):
             if target in rule_sets:
-                return rule_sets[target]
-        return []
+                matches += rule_sets[target]
+        return matches
 
     def save(self):
+        assert self.stack[-1] == self.rule_sets, 'precond fail'
         self.rule_sets = {}
         self.stack.append(self.rule_sets)
+        assert self.stack[-1] == self.rule_sets, 'postcond fail'
 
     def restore(self):
-        self.rule_sets = self.stack.pop()
+        assert self.stack[-1] == self.rule_sets, 'precond fail'
+        self.stack.pop()
+        self.rule_sets = self.stack[-1]
+        assert self.stack[-1] == self.rule_sets, 'postcond fail'
 
     def define(self, name, symbols, factory=None):
         return self.add(Symbol.get(name), symbols, factory)
@@ -407,7 +412,6 @@ class Node(BaseNode):
         sep = " "
         if self.label == "LineList":
             sep = "\n"
-        print self.children
         return "(" + self.label + " " + sep.join([x.sexpr() for x in self.children]) + ")"
 
 class Leaf(BaseNode):
@@ -488,7 +492,6 @@ grammar.define_list('SpecList', Symbol.get('Spec'))
 def predef(values):
     _define, _ws, spec_list, _ = values
 
-    print spec_list
     label_parts = []
     symbols = []
     arg_indexes = []
@@ -533,15 +536,23 @@ def predef(values):
 
     label = ''.join(label_parts)
 
+    # hack
     symbols.pop(0)
     symbols.pop()
+    arg_indexes = [i - 2 for i in arg_indexes]
+    print arg_indexes
 
     output_type = 'Int' # TODO type checking? [need body first!]
+
     rule = grammar.define(output_type, symbols, NodeFactory(label, arg_indexes))
+    print rule
 
     grammar.save()
+
     for name, type_ in arguments:
-        grammar.define(type_, [Token.word(name)], NodeFactory('GetVar', [0]))
+        q = grammar.define(type_, [Token.word(name)], NodeFactory('GetVar', [0]))
+        print q
+        print grammar.rule_sets[Symbol.get(type_)]
 
     return Node('predef', [label, Node('args', arguments)])
 
@@ -552,7 +563,7 @@ def postdef(values):
 
     names = [Leaf(name) for name, type_ in arguments.children]
 
-    return Node('def', [Leaf(label), Node('args', names)]) #, Node('body', body)])
+    return Node('def', [Leaf(label), Node('args', names), body]) #, Node('body', body)])
 
 def body(values):
     _, lines, _ = values
@@ -597,6 +608,7 @@ def parse(source):
     column.process()
 
     grammar.save()
+    grammar.restore()
 
     token = lexer.lex()
     index = 0
@@ -608,18 +620,17 @@ def parse(source):
             if token.value:
                 msg += ": " + token.value
             for token in previous.wants:
-                if token.value:
-                    assert not isinstance(token.value, Leaf) # TODO remove
-                    msg += "\nExpected: " + token.value
-                else:
-                    msg += "\nExpected: " + token.kind
+                if isinstance(token, Token):
+                    if token.value:
+                        assert not isinstance(token.value, Leaf) # TODO remove
+                        msg += "\nExpected: " + token.value
+                    else:
+                        msg += "\nExpected: " + token.kind
             return msg
         column.process()
 
-        #if token == Token.word('{'):
-        #    column.evaluate()
-        #elif token == Token.word('}'):
-        #    column.evaluate()
+        if token == Token.word('{'):
+            column.evaluate()
 
         token = lexer.lex()
         index += 1

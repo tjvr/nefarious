@@ -1,0 +1,10 @@
+distance to x:2 + 3 * 4 y:(1 + 2) * 3
+
+1 + 2
+
+define fib n:Int {
+    (fib n - 1) + (fib n - 2)
+}
+
+fib 5
+
