@@ -6,58 +6,54 @@ class Tag:
 
 
 class Token(Tag):
-    """Match token kind, eg. NEWLINE"""
     _cache = {}
 
-    def __init__(self, kind):
+    def __init__(self, kind, value=None):
         self.kind = kind
+        self.value = value
 
     def __str__(self):
         return self.kind
 
     def __repr__(self):
-        return 'Token({!r})'.format(self.kind)
+        if self.value:
+            return 'Token.word({!r})'.format(self.value)
+        else:
+            return 'Token.{}'.format(self.kind)
 
     @staticmethod
-    def get(kind):
-        if kind in Token._cache:
-            token = Token._cache[kind]
+    def get(kind, value=None):
+        if value is not None:
+            assert kind in ('RESERVED', 'PUNC', 'WORD', 'ERROR'), value
+        key = kind, value
+        if key in Token._cache:
+            word = Token._cache[key]
         else:
-            token = Token._cache[kind] = Token(kind)
-        return token
+            word = Token._cache[key] = Token(kind, value)
+        return word
 
-Token.ERROR = Token.get('ERROR')
+    @staticmethod
+    def word(value):
+        if all(c.isalpha() or c.isdigit() for c in value ):
+            return Token.get('WORD', value)
+        elif value in ":{}":
+            return Token.get('RESERVED', value)
+        elif value in "-!\"#$%&\\'()*+,./;<=>?@[]^_`|~":
+            return Token.get('PUNC', value)
+        raise ValueError(value)
+
+
+# Match token kind, eg. NL
 Token.EOF = Token.get('EOF')
-Token.NEWLINE = Token.get('NEWLINE')
-Token.WHITESPACE = Token.get('WHITESPACE')
+Token.NL = Token.get('NL')
+Token.WS = Token.get('WS')
+
+# Match token value, eg. `+` or `while`
+# nb. can *also* match on kind.
 Token.RESERVED = Token.get('RESERVED')
 Token.PUNC = Token.get('PUNC')
 Token.WORD = Token.get('WORD')
-
-
-class Word(Tag):
-    """Match token value, eg. `+` or `while` """
-    _cache = {}
-
-    def __init__(self, kind, value):
-        self.kind = kind
-        self.value = value
-
-    def __str__(self):
-        return repr(self.value)
-
-    def __repr__(self):
-        return 'Word({!r}, {!r})'.format(self.kind, self.value)
-
-    @staticmethod
-    def get(kind, value):
-        assert kind in ('RESERVED', 'PUNC', 'WORD', 'ERROR'), kind
-        key = kind, value
-        if key in Word._cache:
-            word = Word._cache[key]
-        else:
-            word = Word._cache[key] = Word(kind, value)
-        return word
+Token.ERROR = Token.get('ERROR')
 
 
 class Lexer:
@@ -82,7 +78,7 @@ class Lexer:
             self.next()
             while self.tok == ' ':
                 self.next()
-            return Token.NEWLINE
+            return Token.NL
 
         elif self.tok == ' ':
             self.next()
@@ -92,24 +88,24 @@ class Lexer:
                 self.next()
                 while self.tok == ' ':
                     self.next()
-                return Token.NEWLINE
-            return Token.WHITESPACE
+                return Token.NL
+            return Token.WS
 
         elif self.tok in '\t\f\r':
             c = self.tok
             self.next()
             # error
-            return Word.get('ERROR', c)
+            return Token.get('ERROR', c)
 
         elif self.tok in ":{}":
             c = self.tok
             self.next()
-            return Word.get('RESERVED', c)
+            return Token.get('RESERVED', c)
 
         elif self.tok in "-!\"#$%&\\'()*+,./;<=>?@[]^_`|~":
             c = self.tok
             self.next()
-            return Word.get('PUNC', c)
+            return Token.get('PUNC', c)
 
         else:
             s = self.tok
@@ -117,7 +113,7 @@ class Lexer:
             while self.tok not in " \n\t\f\r:{}-!\"#$%&\\'()*+,./;<=>?@[]^_`|~":
                 s += self.tok
                 self.next()
-            return Word.get('WORD', s)
+            return Token.get('WORD', s)
 
     @staticmethod
     def tokenize(text):
@@ -147,7 +143,7 @@ class Symbol(Tag):
 
     @classmethod
     def get(self, name):
-        assert isinstance(name, str)
+        assert isinstance(name, str), name
         if name in self._cache:
             symbol = self._cache[name]
         else:
@@ -297,17 +293,16 @@ class Column:
 
     def scan(self, word, previous):
         assert len(self.items) == 0
-        if isinstance(word, Word):
+        if word.value:
             if word in previous.wants:
                 item = self.add(previous.index, word, previous.wants[word])
-                item.value = Leaf(word.value)
+                item.value = Leaf(word)
             token = Token.get(word.kind)
         else:
             token = word
         if token in previous.wants:
             item = self.add(previous.index, token, previous.wants[token])
-            if isinstance(word, Word):
-                item.value = Leaf(word.value)
+            item.value = Leaf(word)
         return len(self.items) > 0
 
     def predict(self, tag):
@@ -381,15 +376,14 @@ class Grammar:
         symbols = []
         arg_indexes = []
         for index, word in enumerate(words):
-            value = word.value if isinstance(word, Word) else None
-            if value and value[0].isupper():
+            if word.value and word.value[0].isupper():
                 symbols.append(Symbol.get(word.value))
                 arg_indexes.append(index)
             else:
                 symbols.append(word)
 
         if label is None:
-            label = ''.join(('_' if w == Token.WHITESPACE else w.value) for w in words)
+            label = ''.join(('_' if w == Token.WS else w.value) for w in words)
         factory = NodeFactory(label, arg_indexes)
         return self.define(output_type, symbols, factory)
 
@@ -413,6 +407,7 @@ class Node(BaseNode):
         sep = " "
         if self.label == "LineList":
             sep = "\n"
+        print self.children
         return "(" + self.label + " " + sep.join([x.sexpr() for x in self.children]) + ")"
 
 class Leaf(BaseNode):
@@ -423,29 +418,9 @@ class Leaf(BaseNode):
         return "Leaf(" + repr(self.token) + ")"
 
     def sexpr(self):
+        if isinstance(self.token, Token):
+            return self.token.value
         return self.token
-
-
-# def define(named_words, output_type, body, label=None):
-#     target = Symbol.get(output_type)
-#     arg_indexes = []
-#     arg_names = []
-#     symbols = []
-#     label_parts = []
-#     for index, (name, word) in enumerate(named_words):
-#         if name is None:
-#             assert isinstance(word, Word)
-#             symbols.append(word)
-#             label_parts.append(word.value)
-#         else:
-#             assert isinstance(word, Symbol)
-#             symbols.append(your_mother)
-#             arg_indexes.append(index)
-#             arg_indexes.append(name)
-#     if label is None:
-#         label = " ".join(label_parts)
-#     process = NodeFactory()
-#     Symbol.get()
 
 
 class Factory:
@@ -495,12 +470,12 @@ class NodeFactory(Factory):
 # ie. whitespace is only permitted if it appears in the definition.
 
 grammar = Grammar()
-grammar.add(Token.WHITESPACE, [])
+grammar.add(Token.WS, [])
 
-STAR = Word.get('PUNC', '*')
-COLON = Word.get('RESERVED', ':')
+STAR = Token.word('*')
+COLON = Token.word(':')
 TYPE = Symbol.get('Type')
-grammar.define('Spec', [Token.WHITESPACE])
+grammar.define('Spec', [Token.WS])
 grammar.define('Spec', [Token.WORD], NodeFactory('WORD', [0]))
 grammar.define('Spec', [Token.PUNC], NodeFactory('PUNC', [0]))
 #grammar.define('Spec', [TYPE], NodeFactory('TYPE', [0])))
@@ -513,6 +488,7 @@ grammar.define_list('SpecList', Symbol.get('Spec'))
 def predef(values):
     _define, _ws, spec_list, _ = values
 
+    print spec_list
     label_parts = []
     symbols = []
     arg_indexes = []
@@ -534,20 +510,23 @@ def predef(values):
             name = "_" + index
 
         else:
-            if spec[0] == None: # whitespace I think
-                token = Token.WHITESPACE
+            leaf = spec[0]
+            if leaf == None:
+                token = Token.WS
+            else:
+                token = leaf.token
+            if token == Token.WS:
                 label_parts.append('_')
             else:
-                assert kind != 'Spec'
-                leaf = spec[0]
-                token = Word(kind, leaf.token)
-                label_parts.append(leaf.token)
+                label_parts.append(token.value)
             symbols.append(token)
             continue
 
-        type_ = type_.children[0].token
+        type_ = type_.children[0].token.value
+        assert name.token.kind == 'WORD'
+        name = name.token.value
+
         arg_indexes.append(index)
-        print type_
         symbols.append(Symbol.get(type_))
         arguments.append((name, type_))
         label_parts.append(type_)
@@ -559,11 +538,10 @@ def predef(values):
 
     output_type = 'Int' # TODO type checking? [need body first!]
     rule = grammar.define(output_type, symbols, NodeFactory(label, arg_indexes))
-    print rule
 
     grammar.save()
     for name, type_ in arguments:
-        grammar.define(type_, [Word.get('WORD', name)], NodeFactory('GetVar', [0]))
+        grammar.define(type_, [Token.word(name)], NodeFactory('GetVar', [0]))
 
     return Node('predef', [label, Node('args', arguments)])
 
@@ -572,8 +550,7 @@ def postdef(values):
     label, arguments = predef.children
     grammar.restore()
 
-    print arguments.children
-    names = [name for name, type_ in arguments.children]
+    names = [Leaf(name) for name, type_ in arguments.children]
 
     return Node('def', [Leaf(label), Node('args', names)]) #, Node('body', body)])
 
@@ -581,12 +558,12 @@ def body(values):
     _, lines, _ = values
     return lines
 
-grammar.define('PreDef', [Word.get('WORD', 'define'), Token.WHITESPACE, Symbol.get('SpecList'), Word.get('RESERVED', '{')], Factory(predef))
-grammar.define('Line', [Symbol.get('PreDef'), Symbol.get('Body'), Word.get('RESERVED', '}')], Factory(postdef))
-grammar.define('Body', [Token.WHITESPACE, Symbol.get('LineList'), Token.WHITESPACE], Factory(body))
+grammar.define('PreDef', [Token.word('define'), Token.WS, Symbol.get('SpecList'), Token.word( '{')], Factory(predef))
+grammar.define('Line', [Symbol.get('PreDef'), Symbol.get('Body'), Token.word('}')], Factory(postdef))
+grammar.define('Body', [Token.WS, Symbol.get('LineList'), Token.WS], Factory(body))
 
 # Type -- a slot which wants a type name
-grammar.define('Type', [Word.get('WORD', 'Int')])
+grammar.define('Type', [Token.word('Int')])
 # Any -- a slot which accepts any expression
 grammar.define('Any', [Symbol.get('Int')])
 # Expr -- a value which can fit into any slot
@@ -602,14 +579,14 @@ grammar.define_builtin('Int', '( Int )', 'IDENTITY')
 
 grammar.add(Symbol.START, [Symbol.get("LineList")])
 grammar.define_list("LineList", Symbol.get("Line"))
-grammar.define("Line", [Symbol.get("Int"), Token.NEWLINE], NodeFactory('IDENTITY', [0]))
-grammar.define("Line", [Token.NEWLINE], NodeFactory('Empty', []))
+grammar.define("Line", [Symbol.get("Int"), Token.NL], NodeFactory('IDENTITY', [0]))
+grammar.define("Line", [Token.NL], NodeFactory('Empty', []))
 
-grammar.define("Int", [Word.get("WORD", "1")])
-grammar.define("Int", [Word.get("WORD", "2")])
-grammar.define("Int", [Word.get("WORD", "3")])
-grammar.define("Int", [Word.get("WORD", "4")])
-grammar.define("Int", [Word.get("WORD", "5")])
+grammar.define("Int", [Token.word("1")])
+grammar.define("Int", [Token.word("2")])
+grammar.define("Int", [Token.word("3")])
+grammar.define("Int", [Token.word("4")])
+grammar.define("Int", [Token.word("5")])
 
 def parse(source):
     lexer = Lexer(source)
@@ -628,22 +605,20 @@ def parse(source):
         previous, column = column, Column(grammar, index + 1)
         if not column.scan(token, previous):
             msg = "Unexpected " + token.kind + " @ " + str(index)
-            if isinstance(token, Word):
+            if token.value:
                 msg += ": " + token.value
             for token in previous.wants:
-                if isinstance(token, Token):
-                    msg += "\nExpected: " + token.kind;
-                elif isinstance(token, Word):
-                    # TODO sometimes this is a Leaf!
-                    if isinstance(token.value, Leaf):
-                        continue
-                    msg += "\nExpected: " + token.value;
+                if token.value:
+                    assert not isinstance(token.value, Leaf) # TODO remove
+                    msg += "\nExpected: " + token.value
+                else:
+                    msg += "\nExpected: " + token.kind
             return msg
         column.process()
 
-        #if token == Word.get('RESERVED', '{'):
+        #if token == Token.word('{'):
         #    column.evaluate()
-        #elif token == Word.get('RESERVED', '}'):
+        #elif token == Token.word('}'):
         #    column.evaluate()
 
         token = lexer.lex()
