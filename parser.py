@@ -561,8 +561,8 @@ def predef(values):
 
     output_type = 'Int' # TODO type checking? [need body first!]
 
+    assert symbols.pop() == Token.WS
     rule = grammar.define(output_type, symbols, NodeFactory(label, arg_indexes))
-    print rule
 
     grammar.save()
 
@@ -570,8 +570,6 @@ def predef(values):
         name, type_ = arg.children
         type_ = type_.token.value
         q = grammar.define(type_, [name.token], NodeFactory('GetVar', [0]))
-        print q
-        print grammar.rule_sets[Symbol.get(type_)]
 
     return Node('predef', [Leaf(Token.get('WORD', label)), Node('args', arguments)])
 
@@ -599,11 +597,13 @@ grammar.define('Type', [Token.word('Int')])
 grammar.define('Any', [Symbol.get('Int')])
 # Expr -- a value which can fit into any slot
 grammar.define('Int', [Symbol.get('Expr')])
+# Parens -- need a rule for each type!
+grammar.define_builtin('Int', '( Int )', 'IDENTITY')
 
 grammar.define_builtin('Int', 'Int * Int').priority = grammar.define_builtin('Int', 'Int / Int').priority
 grammar.define_builtin('Int', 'Int + Int').priority = grammar.define_builtin('Int', 'Int - Int').priority
 grammar.define_builtin('Int', 'distance to x: Int y: Int')
-grammar.define_builtin('Int', '( Int )', 'IDENTITY')
+grammar.define_builtin('Line', 'print Int')
 
 # later definitions will override earlier ones.
 # However, earlier definitions bind tighter than later ones!
