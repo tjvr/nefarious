@@ -405,9 +405,20 @@ class Grammar:
         factory = NodeFactory(label, arg_indexes)
         return self.define(output_type, symbols, factory)
 
-    def define_list(self, name, symbol):
+    def define_seq(self, name, symbol):
         self.define(name, [symbol], BoxFactory(name))
         self.define(name, [Symbol.get(name), symbol], ListFactory(name))
+
+    def define_type(self, name):
+        # Type -- a slot which wants a type name
+        grammar.define('Type', [Token.word(name)])
+        # Any -- a slot which accepts any expression
+        grammar.define('Any', [Symbol.get(name)])
+        # Expr -- a value which can fit into any slot
+        grammar.define(name, [Symbol.get('Expr')])
+        # Parens -- need a rule for each type!
+        grammar.define_builtin(name, '( ' + name + ' )', 'IDENTITY')
+
 
 class BaseNode:
     def __repr__(self):
@@ -506,7 +517,7 @@ grammar.define('Spec', [STAR, TYPE])
 grammar.define('Spec', [Token.WORD, COLON, TYPE])
 grammar.define('Spec', [Token.WORD, COLON, STAR, TYPE])
 
-grammar.define_list('SpecList', Symbol.get('Spec'))
+grammar.define_seq('SpecList', Symbol.get('Spec'))
 
 def predef(values):
     _define, _ws, spec_list, _ = values
@@ -591,25 +602,22 @@ grammar.define('PreDef', [Token.word('define'), Token.WS, Symbol.get('SpecList')
 grammar.define('Line', [Symbol.get('PreDef'), Symbol.get('Body'), Token.word('}')], Factory(postdef))
 grammar.define('Body', [Token.WS, Symbol.get('LineList'), Token.WS], Factory(body))
 
-# Type -- a slot which wants a type name
-grammar.define('Type', [Token.word('Int')])
-# Any -- a slot which accepts any expression
-grammar.define('Any', [Symbol.get('Int')])
-# Expr -- a value which can fit into any slot
-grammar.define('Int', [Symbol.get('Expr')])
-# Parens -- need a rule for each type!
-grammar.define_builtin('Int', '( Int )', 'IDENTITY')
+grammar.define_type('Int')
+grammar.define_type('List')
 
 grammar.define_builtin('Int', 'Int * Int').priority = grammar.define_builtin('Int', 'Int / Int').priority
 grammar.define_builtin('Int', 'Int + Int').priority = grammar.define_builtin('Int', 'Int - Int').priority
 grammar.define_builtin('Int', 'distance to x: Int y: Int')
 grammar.define_builtin('Line', 'print Int')
 
+#grammar.define_builtin('Line', 'PUSH Expr')
+#grammar.define_builtin('Line', 'RET')
+
 # later definitions will override earlier ones.
 # However, earlier definitions bind tighter than later ones!
 
 grammar.add(Symbol.START, [Symbol.get("LineList")])
-grammar.define_list("LineList", Symbol.get("Line"))
+grammar.define_seq("LineList", Symbol.get("Line"))
 grammar.define("Line", [Symbol.get("Int"), Token.NL], NodeFactory('IDENTITY', [0]))
 grammar.define("Line", [Token.NL], NodeFactory('Empty', []))
 
@@ -618,6 +626,7 @@ grammar.define("Int", [Token.word("2")])
 grammar.define("Int", [Token.word("3")])
 grammar.define("Int", [Token.word("4")])
 grammar.define("Int", [Token.word("5")])
+
 
 def parse(source):
     lexer = Lexer(source)
