@@ -4,6 +4,31 @@
 class Tag:
     pass
 
+class Symbol(Tag):
+    """A non-terminal / type name."""
+    _cache = {}
+
+    def __init__(self, name):
+        self.name = name
+
+    def __repr__(self):
+        return 'Symbol({!r})'.format(self.name)
+
+    def __str__(self):
+        return self.name
+
+    @staticmethod
+    def get(name):
+        assert isinstance(name, str), name
+        if name in Symbol._cache:
+            symbol = Symbol._cache[name]
+        else:
+            symbol = Symbol._cache[name] = Symbol(name)
+        return symbol
+
+Symbol.PROGRAM = Symbol.get('start')
+
+
 
 class Token(Tag):
     _cache = {}
@@ -37,7 +62,7 @@ class Token(Tag):
     @staticmethod
     def word(value):
         for c in value:
-            if not (c.isalpha() or c.isdigit()):
+            if not (c.isalpha() or c.isdigit() or c == "_"):
                 is_word = False
                 break
         else:
@@ -46,7 +71,7 @@ class Token(Tag):
             return Token.get('WORD', value)
         elif value in ":{}":
             return Token.get('RESERVED', value)
-        elif value in "-!\"#$%&\\'()*+,./;<=>?@[]^_`|~":
+        elif value in "-!\"#$%&\\'()*+,./;<=>?@[]^`|~":
             return Token.get('PUNC', value)
         raise ValueError(value)
 
@@ -62,9 +87,6 @@ Token.RESERVED = Token.get('RESERVED')
 Token.PUNC = Token.get('PUNC')
 Token.WORD = Token.get('WORD')
 Token.ERROR = Token.get('ERROR')
-
-# Null whitespace
-Token.NULL = Token.get('NULL')
 
 class Lexer:
     def __init__(self, source):
@@ -112,15 +134,16 @@ class Lexer:
             self.next()
             return Token.get('RESERVED', c)
 
-        elif self.tok in "-!\"#$%&\\'()*+,./;<=>?@[]^_`|~":
+        elif self.tok in "-!\"#$%&\\'()*+,./;<=>?@[]^`|~":
             c = self.tok
             self.next()
             return Token.get('PUNC', c)
 
+        # TODO _
         else:
             s = self.tok
             self.next()
-            while self.tok not in " \n\t\f\r:{}-!\"#$%&\\'()*+,./;<=>?@[]^_`|~":
+            while self.tok not in " \n\t\f\r:{}-!\"#$%&\\'()*+,./;<=>?@[]^`|~":
                 s += self.tok
                 self.next()
             return Token.get('WORD', s)
@@ -136,31 +159,6 @@ class Lexer:
             tokens.append(token)
             token = lexer.lex()
         return tokens
-
-
-class Symbol(Tag):
-    """A non-terminal."""
-    _cache = {}
-
-    def __init__(self, name):
-        self.name = name
-
-    def __repr__(self):
-        return 'Symbol({!r})'.format(self.name)
-
-    def __str__(self):
-        return self.name
-
-    @staticmethod
-    def get(name):
-        assert isinstance(name, str), name
-        if name in Symbol._cache:
-            symbol = Symbol._cache[name]
-        else:
-            symbol = Symbol._cache[name] = Symbol(name)
-        return symbol
-
-Symbol.START = Symbol.get('start')
 
 
 class Rule:
@@ -240,7 +238,7 @@ class Item:
 
         children = self.evaluate_children(stack)
 
-        if rule.target == Symbol.START:
+        if rule.target == Symbol.PROGRAM:
             value = children[0]
         elif rule.factory:
             value = rule.factory.build(children)
@@ -406,28 +404,30 @@ class Grammar:
         return self.define(output_type, symbols, factory)
 
     def define_seq(self, name, symbol):
-        self.define(name, [symbol], BoxFactory(name))
-        self.define(name, [Symbol.get(name), symbol], ListFactory(name))
+        self.add(Symbol.get(name), [symbol], BoxFactory(name))
+        self.add(Symbol.get(name), [Symbol.get(name), symbol], ListFactory(name))
 
     def define_type(self, name):
         # Type -- a slot which wants a type name
-        grammar.define('Type', [Token.word(name)])
+        self.define('Type', [Token.word(name)]) #ConstantFactory(w_Type(name)))
         # Any -- a slot which accepts any expression
-        grammar.define('Any', [Symbol.get(name)])
+        self.define('Any', [Symbol.get(name)], NodeFactory(':'+name, [0]))
         # Expr -- a value which can fit into any slot
-        grammar.define(name, [Symbol.get('Expr')])
+        self.define(name, [Symbol.get('Expr')], NodeFactory(':'+name, [0]))
         # Parens -- need a rule for each type!
-        grammar.define_builtin(name, '( ' + name + ' )', 'IDENTITY')
+        self.define(name, [
+            Token.word('('), Token.WS, Symbol.get(name), Token.WS, Token.word(')')
+        ], IdentityFactory(2))
 
 
-class BaseNode:
+class Tree:
     def __repr__(self):
-        return "BaseNode"
+        return "Tree"
 
-class Node(BaseNode):
+class Node(Tree):
     def __init__(self, label, children):
         for c in children:
-            assert isinstance(c, BaseNode), c
+            assert isinstance(c, Tree), c
         self.label = label
         self.children = children
 
@@ -440,7 +440,7 @@ class Node(BaseNode):
             sep = "\n"
         return "(" + self.label + " " + sep.join([x.sexpr() for x in self.children]) + ")"
 
-class Leaf(BaseNode):
+class Leaf(Tree):
     def __init__(self, token):
         assert isinstance(token, Token)
         self.token = token
@@ -449,9 +449,18 @@ class Leaf(BaseNode):
         return "Leaf(" + repr(self.token) + ")"
 
     def sexpr(self):
-        if isinstance(self.token, Token):
-            return self.token.value
-        return self.token
+        return self.token.value
+
+class Literal(Tree):
+    def __init__(self, value):
+        assert isinstance(value, str)
+        self.value = value
+
+    def __repr__(self):
+        return "Literal(" + repr(self.token) + ")"
+
+    def sexpr(self):
+        return self.value
 
 
 class Factory:
@@ -461,6 +470,12 @@ class Factory:
     def build(self, values):
         return self.process(values)
 
+class IdentityFactory(Factory):
+    def __init__(self, index):
+        self.index = index
+
+    def build(self, values):
+        return values[self.index]
 
 class ListFactory(Factory):
     def __init__(self, label):
@@ -480,7 +495,6 @@ class EmptyListFactory(ListFactory):
     def build(self, symbols):
         return Node(self.label, [])
 
-
 class NodeFactory(Factory):
     def __init__(self, label, arg_indexes):
         self.label = label
@@ -490,8 +504,6 @@ class NodeFactory(Factory):
         args = []
         for index in self.arg_indexes:
             args.append(values[index])
-        if self.label == 'IDENTITY':
-            return args[0]
         return Node(self.label, args)
 
 
@@ -501,7 +513,7 @@ class NodeFactory(Factory):
 # ie. whitespace is only permitted if it appears in the definition.
 
 def whitespace(null):
-    return Leaf(Token.NULL)
+    return Literal("")
 
 grammar = Grammar()
 grammar.add(Token.WS, [], Factory(whitespace))
@@ -512,8 +524,8 @@ TYPE = Symbol.get('Type')
 grammar.define('Spec', [Token.WS])
 grammar.define('Spec', [Token.WORD], NodeFactory('WORD', [0]))
 grammar.define('Spec', [Token.PUNC], NodeFactory('PUNC', [0]))
-#grammar.define('Spec', [TYPE], NodeFactory('TYPE', [0])))
-grammar.define('Spec', [STAR, TYPE])
+grammar.define('Spec', [COLON, TYPE])
+grammar.define('Spec', [COLON, STAR, TYPE])
 grammar.define('Spec', [Token.WORD, COLON, TYPE])
 grammar.define('Spec', [Token.WORD, COLON, STAR, TYPE])
 
@@ -545,13 +557,15 @@ def predef(values):
         elif len(spec) == 2:
             is_list = True
             _, type_ = spec
-            name = "_" + str(index)
+            name = "_" + str(len(arguments) + 1)
 
         else:
             leaf = spec[0]
+            if isinstance(leaf, Literal):
+                if leaf.value == "": # null whitespace
+                    continue
+                assert False
             token = leaf.token
-            if token == Token.NULL:
-                continue
 
             if token == Token.WS:
                 label_parts.append('_')
@@ -565,24 +579,27 @@ def predef(values):
 
         arg_indexes.append(index)
         symbols.append(Symbol.get(type_))
-        arguments.append(Node('arg', [Leaf(Token.word(name)), Leaf(Token.word(type_))]))
+        arguments.append(Node('arg', [Literal(name), Literal(type_)]))
         label_parts.append(type_)
 
+    assert symbols.pop() == Token.WS
+    assert label_parts.pop() == "_"
     label = ''.join(label_parts)
 
     output_type = 'Int' # TODO type checking? [need body first!]
 
-    assert symbols.pop() == Token.WS
     rule = grammar.define(output_type, symbols, NodeFactory(label, arg_indexes))
 
     grammar.save()
 
     for arg in arguments:
         name, type_ = arg.children
-        type_ = type_.token.value
-        q = grammar.define(type_, [name.token], NodeFactory('GetVar', [0]))
+        assert isinstance(type_, Literal)
+        assert isinstance(type_, Literal)
+        type_ = type_.value
+        q = grammar.define(type_, [Token.word(name.value)], NodeFactory('GetVar', [0]))
 
-    return Node('predef', [Leaf(Token.get('WORD', label)), Node('args', arguments)])
+    return Node('predef', [Literal(label), Node('args', arguments)])
 
 def postdef(values):
     predef, body, _ = values
@@ -598,28 +615,49 @@ def body(values):
     _, lines, _ = values
     return lines
 
-grammar.define('PreDef', [Token.word('define'), Token.WS, Symbol.get('SpecList'), Token.word( '{')], Factory(predef))
+def empty_body(values):
+    return Node('LineList', [])
+
+def deftype(values):
+    token = values[2].token
+    grammar.define_type(token.value)
+    return Node('deftype', [Literal(token.value)])
+
+grammar.define('PreDef', [Token.word('define'), Token.WS, Symbol.get('SpecList'), Token.word('{')], Factory(predef))
 grammar.define('Line', [Symbol.get('PreDef'), Symbol.get('Body'), Token.word('}')], Factory(postdef))
 grammar.define('Body', [Token.WS, Symbol.get('LineList'), Token.WS], Factory(body))
+grammar.define('Body', [Token.WS], Factory(empty_body))
+
+grammar.define('Line', [Token.word('deftype'), Token.WS, Token.WORD], Factory(deftype))
+
+grammar.add(Symbol.PROGRAM, [Symbol.get("LineList")])
+grammar.define_seq("LineList", Symbol.get("Line"))
+grammar.define("Line", [Symbol.get("Int"), Token.NL], IdentityFactory(0))
+grammar.define("Line", [Token.NL], NodeFactory('Empty', []))
 
 grammar.define_type('Int')
 grammar.define_type('List')
 
-grammar.define_builtin('Int', 'Int * Int').priority = grammar.define_builtin('Int', 'Int / Int').priority
-grammar.define_builtin('Int', 'Int + Int').priority = grammar.define_builtin('Int', 'Int - Int').priority
-grammar.define_builtin('Int', 'distance to x: Int y: Int')
-grammar.define_builtin('Line', 'print Int')
-
-#grammar.define_builtin('Line', 'PUSH Expr')
-#grammar.define_builtin('Line', 'RET')
+grammar.define_builtin('Line', 'Opcode')
+grammar.define_builtin('Opcode', 'PRINT')
+grammar.define_builtin('Opcode', 'PUSH Any')
+grammar.define_builtin('Opcode', 'INT_ADD')
+grammar.define_builtin('Opcode', 'INT_TO_STR')
 
 # later definitions will override earlier ones.
 # However, earlier definitions bind tighter than later ones!
 
-grammar.add(Symbol.START, [Symbol.get("LineList")])
-grammar.define_seq("LineList", Symbol.get("Line"))
-grammar.define("Line", [Symbol.get("Int"), Token.NL], NodeFactory('IDENTITY', [0]))
-grammar.define("Line", [Token.NL], NodeFactory('Empty', []))
+grammar.define_builtin('Int', 'Int * Int').priority = grammar.define_builtin('Int', 'Int / Int').priority
+grammar.define_builtin('Int', 'Int + Int').priority = grammar.define_builtin('Int', 'Int - Int').priority
+grammar.define_builtin('Bool', 'Int < Int')
+grammar.define_builtin('Int', 'distance to x: Int y: Int')
+grammar.define_builtin('Line', 'print Int')
+grammar.define_builtin('Line', 'return Any')
+grammar.define_builtin('Line', 'if Bool then Block')
+#grammar.define_builtin('Line', 'if Bool then Block else Line')
+#grammar.define_builtin('Line', 'Block')
+
+grammar.define('Block', [Token.word('{'), Symbol.get('Body'), Token.word('}')], IdentityFactory(1))
 
 grammar.define("Int", [Token.word("1")])
 grammar.define("Int", [Token.word("2")])
@@ -632,8 +670,8 @@ def parse(source):
     lexer = Lexer(source)
 
     column = Column(grammar, 0)
-    column.wants[Symbol.START] = []
-    column.predict(Symbol.START)
+    column.wants[Symbol.PROGRAM] = []
+    column.predict(Symbol.PROGRAM)
     column.process()
 
     grammar.save()
@@ -641,7 +679,14 @@ def parse(source):
 
     token = lexer.lex()
     index = 0
+    line = ""
     while token != Token.EOF:
+        if token != Token.NL:
+            if token == Token.WS:
+                line += " "
+            else:
+                line += token.value
+
         #print index, column.items
         previous, column = column, Column(grammar, index + 1)
         if not column.scan(token, previous):
@@ -655,6 +700,7 @@ def parse(source):
                         msg += "\nExpected: " + token.value
                     else:
                         msg += "\nExpected: " + token.kind
+            msg += "\n>> " + line
             return msg
         column.process()
 
@@ -663,11 +709,14 @@ def parse(source):
         elif token == Token.word('}'):
             column.evaluate()
 
+        if token == Token.NL:
+            line = ""
+
         token = lexer.lex()
         index += 1
 
     #print index, column.items
-    key = 0, Symbol.START
+    key = 0, Symbol.PROGRAM
     if key not in column.unique:
         return "Unexpected EOF"
     start = column.unique[key]
