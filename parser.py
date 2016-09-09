@@ -50,7 +50,9 @@ class Token(Tag):
     def get(kind, value=""):
         assert isinstance(kind, str)
         assert isinstance(value, str)
-        if value:
+        if kind == 'WS':
+            value = ' '
+        elif value:
             assert kind in ('RESERVED', 'PUNC', 'WORD', 'ERROR'), value
         key = kind, value
         if key in Token._cache:
@@ -73,13 +75,15 @@ class Token(Tag):
             return Token.get('RESERVED', value)
         elif value in "-!\"#$%&\\'()*+,./;<=>?@[]^`|~":
             return Token.get('PUNC', value)
+        elif value == ' ':
+            return Token.WS
         raise ValueError(value)
 
 
 # Match token kind, eg. NL
 Token.EOF = Token.get('EOF')
 Token.NL = Token.get('NL')
-Token.WS = Token.get('WS')
+Token.WS = Token.get('WS', ' ')
 
 # Match token value, eg. `+` or `while`
 # nb. can *also* match on kind.
@@ -243,7 +247,7 @@ class Item:
         elif rule.factory:
             value = rule.factory.build(children)
         else:
-            value = Node(rule.target.name, children)
+            value = Temp(rule.target.name, children)
         self.value = value
         assert stack.pop() == self
         return value
@@ -303,13 +307,13 @@ class Column:
         if word.value:
             if word in previous.wants:
                 item = self.add(previous.index, word, previous.wants[word])
-                item.value = Leaf(word)
+                item.value = Leaf(word.value)
             token = Token.get(word.kind)
         else:
             token = word
         if token in previous.wants:
             item = self.add(previous.index, token, previous.wants[token])
-            item.value = Leaf(word)
+            item.value = Leaf(word.value)
         return len(self.items) > 0
 
     def predict(self, tag):
@@ -400,7 +404,8 @@ class Grammar:
 
         if label is None:
             label = ''.join(('_' if w == Token.WS else w.value) for w in words)
-        factory = NodeFactory(label, arg_indexes)
+        func = Function(label)
+        factory = CallFactory(func, output_type, arg_indexes)
         return self.define(output_type, symbols, factory)
 
     def define_seq(self, name, symbol):
@@ -411,57 +416,79 @@ class Grammar:
         # Type -- a slot which wants a type name
         self.define('Type', [Token.word(name)]) #ConstantFactory(w_Type(name)))
         # Any -- a slot which accepts any expression
-        self.define('Any', [Symbol.get(name)], NodeFactory(':'+name, [0]))
+        self.define('Any', [Symbol.get(name)], CallFactory(Function('any'), name, [0]))
         # Expr -- a value which can fit into any slot
-        self.define(name, [Symbol.get('Expr')], NodeFactory(':'+name, [0]))
+        self.define(name, [Symbol.get('Expr')], CallFactory(Function('expr'), name, [0]))
         # Parens -- need a rule for each type!
         self.define(name, [
             Token.word('('), Token.WS, Symbol.get(name), Token.WS, Token.word(')')
         ], IdentityFactory(2))
 
 
+class Function:
+    def __init__(self, name, block=None):
+        self.name = name
+        self.set_block(block)
+
+    def set_block(self, block):
+        if block is not None:
+            self.block = block
+            assert isinstance(block, Block)
+
 class Tree:
     def __repr__(self):
         return "Tree"
 
-class Node(Tree):
-    def __init__(self, label, children):
-        for c in children:
-            assert isinstance(c, Tree), c
-        self.label = label
-        self.children = children
+class Block(Tree):
+    def __init__(self, lines):
+        for line in lines:
+            assert isinstance(line, Tree)
+        self.lines = lines
 
     def __repr__(self):
-        return "Node({!r}, {!r})".format(self.label, self.children)
+        return "Block({!r})".format(self.lines)
 
     def sexpr(self):
-        sep = " "
-        if self.label == "LineList":
-            sep = "\n"
-        return "(" + self.label + " " + sep.join([x.sexpr() for x in self.children]) + ")"
+        return "{\n" + "\n".join(x.sexpr() for x in self.lines) + "\n}"
+
+class Call(Tree):
+    def __init__(self, func, type_, args):
+        assert isinstance(func, Function)
+        self.func = func
+        assert isinstance(type_, Symbol)
+        self.type = type_
+        for arg in args:
+            assert isinstance(arg, Tree)
+        self.args = args
+
+    def __repr__(self):
+        return "Call({!r}, {!r}, {!r})".format(self.func, self.type, self.args)
+
+    def sexpr(self):
+        return "(" + self.func.name + " " + " ".join([x.sexpr() for x in self.args]) + ")" + ":" + self.type.name
 
 class Leaf(Tree):
-    def __init__(self, token):
-        assert isinstance(token, Token)
-        self.token = token
-
-    def __repr__(self):
-        return "Leaf(" + repr(self.token) + ")"
-
-    def sexpr(self):
-        return self.token.value
-
-class Literal(Tree):
     def __init__(self, value):
         assert isinstance(value, str)
         self.value = value
 
     def __repr__(self):
-        return "Literal(" + repr(self.token) + ")"
+        return "Leaf(" + repr(self.value) + ")"
 
     def sexpr(self):
         return self.value
 
+class Temp(Tree):
+    def __init__(self, name, children):
+        self.label = name
+        self.children = children
+
+    def __repr__(self):
+        return "Temp({!r}, {!r})".format(self.label, self.children)
+
+    def sexpr(self):
+        sep = " "
+        return "(" + self.label + " " + sep.join([x.sexpr() for x in self.children]) + ")"
 
 class Factory:
     def __init__(self, process):
@@ -477,6 +504,32 @@ class IdentityFactory(Factory):
     def build(self, values):
         return values[self.index]
 
+class CallFactory(Factory):
+    def __init__(self, func, type_, arg_indexes):
+        assert isinstance(func, Function)
+        self.func = func
+        assert isinstance(type_, str)
+        self.type = Symbol.get(type_)
+        self.arg_indexes = arg_indexes
+
+    def build(self, values):
+        args = []
+        for index in self.arg_indexes:
+            args.append(values[index])
+        return Call(self.func, self.type, args)
+
+class TempFactory(Factory):
+    def __init__(self, name, arg_indexes):
+        self.name = name
+        self.arg_indexes = arg_indexes
+
+    def build(self, values):
+        args = []
+        for index in self.arg_indexes:
+            args.append(values[index])
+        return Temp(self.name, args)
+
+
 class ListFactory(Factory):
     def __init__(self, label):
         self.label = label
@@ -485,27 +538,15 @@ class ListFactory(Factory):
         node, child = values
         list_ = node.children
         list_.append(child)
-        return Node(self.label, list_)
+        return Temp(self.label, list_)
 
 class BoxFactory(ListFactory):
     def build(self, symbols):
-        return Node(self.label, [symbols[0]])
+        return Temp(self.label, [symbols[0]])
 
 class EmptyListFactory(ListFactory):
     def build(self, symbols):
-        return Node(self.label, [])
-
-class NodeFactory(Factory):
-    def __init__(self, label, arg_indexes):
-        self.label = label
-        self.arg_indexes = arg_indexes
-
-    def build(self, values):
-        args = []
-        for index in self.arg_indexes:
-            args.append(values[index])
-        return Node(self.label, args)
-
+        return Temp(self.label, [])
 
 # nullable whitespace derivation -- whitespace is always optional.
 # note however that whitespace has to be explicitly allowed, eg. "Int +- Int"
@@ -513,7 +554,7 @@ class NodeFactory(Factory):
 # ie. whitespace is only permitted if it appears in the definition.
 
 def whitespace(null):
-    return Literal("")
+    return Leaf("")
 
 grammar = Grammar()
 grammar.add(Token.WS, [], Factory(whitespace))
@@ -522,8 +563,8 @@ STAR = Token.word('*')
 COLON = Token.word(':')
 TYPE = Symbol.get('Type')
 grammar.define('Spec', [Token.WS])
-grammar.define('Spec', [Token.WORD], NodeFactory('WORD', [0]))
-grammar.define('Spec', [Token.PUNC], NodeFactory('PUNC', [0]))
+grammar.define('Spec', [Token.WORD], TempFactory('WORD', [0]))
+grammar.define('Spec', [Token.PUNC], TempFactory('PUNC', [0]))
 grammar.define('Spec', [COLON, TYPE])
 grammar.define('Spec', [COLON, STAR, TYPE])
 grammar.define('Spec', [Token.WORD, COLON, TYPE])
@@ -551,8 +592,8 @@ def predef(values):
         
         elif len(spec) == 3:
             name, _, type_ = spec
-            assert name.token.kind == 'WORD'
-            name = name.token.value
+            assert Token.word(name.value).kind == 'WORD'
+            name = name.value
 
         elif len(spec) == 2:
             is_list = True
@@ -561,11 +602,10 @@ def predef(values):
 
         else:
             leaf = spec[0]
-            if isinstance(leaf, Literal):
-                if leaf.value == "": # null whitespace
-                    continue
-                assert False
-            token = leaf.token
+            assert isinstance(leaf, Leaf)
+            if leaf.value == "": # null whitespace
+                continue
+            token = Token.word(leaf.value)
 
             if token == Token.WS:
                 label_parts.append('_')
@@ -575,31 +615,34 @@ def predef(values):
             symbols.append(token)
             continue
 
-        type_ = type_.children[0].token.value
+        type_ = type_.children[0].value
 
         arg_indexes.append(index)
         symbols.append(Symbol.get(type_))
-        arguments.append(Node('arg', [Literal(name), Literal(type_)]))
+        arguments.append(Temp('arg', [Leaf(name), Leaf(type_)]))
         label_parts.append(type_)
 
-    assert symbols.pop() == Token.WS
-    assert label_parts.pop() == "_"
+    #assert symbols.pop() == Token.WS
+    #assert label_parts.pop() == "_"
     label = ''.join(label_parts)
 
     output_type = 'Int' # TODO type checking? [need body first!]
 
-    rule = grammar.define(output_type, symbols, NodeFactory(label, arg_indexes))
+    func = Function(label)
+    # TODO set_block on Function
+    rule = grammar.define(output_type, symbols, CallFactory(func, output_type, arg_indexes))
 
     grammar.save()
 
+    get_var = Function('GetVar')
     for arg in arguments:
         name, type_ = arg.children
-        assert isinstance(type_, Literal)
-        assert isinstance(type_, Literal)
+        assert isinstance(type_, Leaf)
+        assert isinstance(type_, Leaf)
         type_ = type_.value
-        q = grammar.define(type_, [Token.word(name.value)], NodeFactory('GetVar', [0]))
+        q = grammar.define(type_, [Token.word(name.value)], CallFactory(get_var, type_, [0]))
 
-    return Node('predef', [Literal(label), Node('args', arguments)])
+    return Temp('predef', [Leaf(label), Temp('args', arguments)])
 
 def postdef(values):
     predef, body, _ = values
@@ -609,19 +652,23 @@ def postdef(values):
 
     names = [arg.children[0] for arg in arguments.children]
 
-    return Node('def', [label, Node('args', names), body]) #, Node('body', body)])
+    return Temp('def', [label, Temp('args', names), body]) #, Temp('body', body)])
+
+def program(values):
+    import ipdb; ipdb.set_trace()
+    return Block(values[0].children)
 
 def body(values):
     _, lines, _ = values
-    return lines
+    return Block(lines.children)
 
 def empty_body(values):
-    return Node('LineList', [])
+    return Block([])
 
 def deftype(values):
     token = values[2].token
     grammar.define_type(token.value)
-    return Node('deftype', [Literal(token.value)])
+    return Temp('deftype', [Leaf(token.value)])
 
 grammar.define('PreDef', [Token.word('define'), Token.WS, Symbol.get('SpecList'), Token.word('{')], Factory(predef))
 grammar.define('Line', [Symbol.get('PreDef'), Symbol.get('Body'), Token.word('}')], Factory(postdef))
@@ -630,10 +677,12 @@ grammar.define('Body', [Token.WS], Factory(empty_body))
 
 grammar.define('Line', [Token.word('deftype'), Token.WS, Token.WORD], Factory(deftype))
 
-grammar.add(Symbol.PROGRAM, [Symbol.get("LineList")])
+grammar.add(Symbol.PROGRAM, [Symbol.get("LineList")], Factory(program))
 grammar.define_seq("LineList", Symbol.get("Line"))
 grammar.define("Line", [Symbol.get("Int"), Token.NL], IdentityFactory(0))
-grammar.define("Line", [Token.NL], NodeFactory('Empty', []))
+def empty(values):
+    return Leaf("")
+grammar.define("Line", [Token.NL], Factory(empty))
 
 grammar.define_type('Int')
 grammar.define_type('List')
@@ -696,7 +745,6 @@ def parse(source):
             for token in previous.wants:
                 if isinstance(token, Token):
                     if token.value:
-                        assert not isinstance(token.value, Leaf) # TODO remove
                         msg += "\nExpected: " + token.value
                     else:
                         msg += "\nExpected: " + token.kind
