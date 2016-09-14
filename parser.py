@@ -5,6 +5,7 @@ class Tree:
     def sexpr(self):
         raise NotImplementedError
 
+
 class Tag(Tree):
     def expand(self, grammar):
         return [self]
@@ -54,8 +55,13 @@ class Type(Tag):
         if self is other:
             return Unification()
 
+    def expand(self, grammar):
+        return [self, Type.EXPR]
+
 # TODO custom parametric types
 class List(Type):
+    _cache = {}
+
     def __init__(self, child):
         self.child = child
         self._union = {}
@@ -80,7 +86,7 @@ class List(Type):
             return self.child.is_super(other.child)
 
     def expand(self, grammar):
-        return [List.get(type_) for type_ in self.child.expand(grammar)]
+        return [List.get(type_) for type_ in self.child.expand(grammar)] + [Type.EXPR]
 
     def specialise(self, unification):
         return List.get(self.child.specialise(unification))
@@ -121,7 +127,7 @@ class Generic(Type):
         })
 
     def expand(self, grammar):
-        return grammar.types
+        return grammar.types + [Type.EXPR]
 
     def specialise(self, unification):
         return unification.values.get(self.index, self)
@@ -138,10 +144,10 @@ class Any(Type):
         return "Any"
 
     def _is_super(self, other):
-        return True
+        return Unification()
 
-    def expand(self, grammar):
-        return grammar.types
+    #def expand(self, grammar):
+    #    return grammar.types
 
 
 
@@ -154,8 +160,7 @@ Type.EXPR = Type.get('Expr')
 Type.TYPE = Type.get('Type')
 
 # Any -- a slot which accepts any expression.
-#Type.ANY = Type._cache['Any'] = Any()
-# TODO
+Type.ANY = Type._cache['Any'] = Any()
 
 
 # make sure Type.get('List') fails!
@@ -165,12 +170,10 @@ Type._cache['List'] = None
 
 class Unification:
     # specialise typevars.
-    def __init__(self, values={}):
-        assert isinstance(values, dict)
-        if values:
-            first = values.items()[0]
-            assert isinstance(first[0], int)
-            assert isinstance(first[1], Type)
+    def __init__(self, values=None):
+        if values is None:
+            values = {}
+        #assert isinstance(values, dict)
         self.values = values
 
     def union(self, other):
@@ -512,7 +515,7 @@ class Column:
     def predict(self, tag):
         wanted_by = self.wants[tag]
 
-        for target in set(self.grammar.expand(tag)):
+        for target in self.grammar.expand(tag):
             for rule in self.grammar.get(target):
                 item = self.add(self.index, rule.first, wanted_by)
                 # nullables need a value!
@@ -560,7 +563,7 @@ class Column:
                 self.want(item, type_)
                 self.predict(type_)
         else:
-            for type_ in set(self.grammar.expand(item.tag.wants)):
+            for type_ in self.grammar.expand(item.tag.wants):
                 self.want(item, type_)
                 self.predict(type_)
 
@@ -649,7 +652,11 @@ class Grammar:
         self.add(target, [item], StartList)
 
     def expand(self, tag):
-        return tag.expand(self) + [Type.EXPR]
+        assert isinstance(tag, Type)
+        targets = {}
+        for x in tag.expand(self):
+            targets[x] = None
+        return targets.keys()
 
 
 def build(rule, children):
@@ -738,8 +745,8 @@ class ContinueList(Macro):
         list_ = values[0]
         assert isinstance(list_, Call)
         assert list_[0].func is LIST
-        list_[0].args.append(child)
-        return lis_
+        list_[0].args.append(values[-1])
+        return list_
 
 # For, um, subtypes and stuff.
 @singleton
@@ -791,6 +798,8 @@ grammar.add_type(Type.get('Text'))
 grammar.add_type(Type.get('Bool'))
 grammar.add_type(List.get(Generic.get(1)))
 
+grammar.add(Type.ANY, [Generic.get(1)], Identity)
+#grammar.add(Generic.get(1), [Type.EXPR], Identity)
 
 # Generic parentheses!
 
@@ -821,15 +830,17 @@ Int = Type.get('Int')
 Text = Type.get('Text')
 Bool = Type.get('Bool')
 
-#grammar.add(Type.PROGRAM, [Type.ANY, Token.NL], Identity)
+grammar.add(Type.PROGRAM, [Type.ANY, Token.NL], Identity)
 #grammar.add(Type.ANY, [Int], Identity)
-grammar.add(Type.PROGRAM, [Int, Token.NL], Identity)
-grammar.add(Type.PROGRAM, [Text, Token.NL], Identity)
-grammar.add(Type.PROGRAM, [Bool, Token.NL], Identity)
+#grammar.add(Type.PROGRAM, [Int, Token.NL], Identity)
+#grammar.add(Type.PROGRAM, [Text, Token.NL], Identity)
+#grammar.add(Type.PROGRAM, [Bool, Token.NL], Identity)
 
 grammar.add(Int, [Token.word('hello')], Identity)
 grammar.add(Text, [Token.word('goodbye')], Identity)
 grammar.add(Bool, [Token.word('false')], Identity)
+
+grammar.add(Type.EXPR, [Token.word('foo')], Identity)
 
 
 #grammar.add(List(Generic()), [Generic(), Token.WS, Generic()], StartList)
@@ -909,13 +920,13 @@ def parse(source):
     key = 0, Type.PROGRAM
     if key not in column.unique:
         msg = "Unexpected EOF"
-        for token in previous.wants:
-            if isinstance(token, Token):
-                if token.value and token.value != ' ':
-                    msg += "\nExpected: " + token.value
-                else:
-                    msg += "\nExpected: " + token.kind
-        msg += "\n>> " + line
+        #for token in previous.wants:
+        #    if isinstance(token, Token):
+        #        if token.value and token.value != ' ':
+        #            msg += "\nExpected: " + token.value
+        #        else:
+        #            msg += "\nExpected: " + token.kind
+        #msg += "\n>> " + line
         return msg
     start = column.unique[key]
     value = start.evaluate()

@@ -1,1 +1,1 @@
-choose (hello) or hello
+foo
