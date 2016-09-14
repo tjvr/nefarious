@@ -1,18 +1,1 @@
-
-1 + 2
-
-define :Int + :Int {
-}
-
-define fib n:Int {
-    if n < 2 then {
-        return 1
-    }
-    return (fib n - 1) + (fib n - 2)
-}
-
-fib 5
-
-print 4
-print (4 + 2)
-
+hello

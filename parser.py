@@ -1,18 +1,28 @@
 #import sys
 #sys.setrecursionlimit(2000)
 
-class Tag:
-    pass
+class Tree:
+    def sexpr(self):
+        raise NotImplementedError
 
-class Symbol(Tag):
+class Tag(Tree):
+    def specialise(self, grammar):
+        return [self]
+
+    def is_super(self, other):
+        if self is other:
+            return Unification()
+
+class Type(Tag):
     """A non-terminal / type name."""
     _cache = {}
 
     def __init__(self, name):
         self.name = name
+        self._union = {}
 
     def __repr__(self):
-        return 'Symbol({!r})'.format(self.name)
+        return 'Type({!r})'.format(self.name)
 
     def __str__(self):
         return self.name
@@ -20,13 +30,122 @@ class Symbol(Tag):
     @staticmethod
     def get(name):
         assert isinstance(name, str), name
-        if name in Symbol._cache:
-            symbol = Symbol._cache[name]
+        if name in Type._cache:
+            symbol = Type._cache[name]
         else:
-            symbol = Symbol._cache[name] = Symbol(name)
+            symbol = Type._cache[name] = Type(name)
         return symbol
 
-Symbol.PROGRAM = Symbol.get('start')
+    def sexpr(self):
+        return "<" + str(self) + ">"
+
+    def is_super(self, other):
+        assert isinstance(other, Type)
+        if other in self._union:
+            return self._union[other]
+        unification = self._union[other] = self._is_super(other)
+        return unification
+
+    def _is_super(self, other):
+        # TODO what about *actual* subtypes? do we care about those?
+        if self is other:
+            return Unification()
+
+
+Type.PROGRAM = Type.get('start')
+Type.ANY = Type.get('Any')
+
+
+# TODO custom parametric types
+class List(Type):
+    def __init__(self, child):
+        self.child = child
+        self._union = {}
+
+    @staticmethod
+    def get(child):
+        assert isinstance(child, Type)
+        if child in List._cache:
+            type_ = List._cache[child]
+        else:
+            type_ = List._cache[child] = List(child)
+        return type_
+
+    def __repr__(self):
+        return 'List({!r})'.format(self.child)
+
+    def __str__(self):
+        return "List " + str(self.child)
+
+    def _is_super(self, other):
+        if isinstance(other, List):
+            return self.child.is_super(other.child)
+
+    def specialise(self, grammar):
+        return [List.get(type_) for type_ in self.child.specialise(grammar)]
+
+
+class Generic(Type):
+    """a typevar."""
+    def __init__(self, index):
+        assert 1 <= index <= 26
+        self.index = index
+        self._union = {}
+
+    def __repr__(self):
+        return 'Generic({!r})'.format(self.index)
+
+    def __str__(self):
+        return "'" + chr(96 + self.index)
+
+    def _is_super(self, other):
+        if isinstance(other, Generic):
+            # TODO what's the right thing to do here; 'a = 'b ?
+            return
+        return Unification({
+            self.index: other,
+        })
+
+    def specialise(self, grammar):
+        return grammar.types
+
+
+class Unification:
+    # specialise typevars.
+    def __init__(self, values={}):
+        assert isinstance(values, dict)
+        if values:
+            first = values.items()[0]
+            assert isinstance(first[0], int)
+            assert isinstance(first[1], Type)
+        self.values = values
+
+    def union(self, other):
+        assert isinstance(other, Unification)
+        for key in other.values:
+            if key in self.values:
+                # TODO is equality the right thing here?
+                assert self.values[key] is other.values[key]
+        values = self.values.copy()
+        values.update(other.values)
+        return Unification(values)
+
+    def __repr__(self):
+        if self.values:
+            return "Unification({!r})".format(self.values)
+        return "Unification()"
+
+    def __str__(self):
+        return "<" + ",\n ".join(str(Generic(i)) + " = " + str(t) for (i, t)
+                in self.values.items()) + ">"
+
+# test cases.
+list_int = List.get(Type.get('Int'))
+assert Type.get('Int').is_super(Type.get('Text')) == None
+assert Type.get('Int').is_super(Type.get('Int')).values == {}
+assert list_int.is_super(List(Type.get('Int'))).values == {}
+assert Generic(2).is_super(Type.get('Int')).values == {2: Type.get('Int')}
+assert List.get(Generic(1)).is_super(List.get(List.get(Type.get('Int')))).values == {1: List.get(Type.get('Int'))}
 
 
 
@@ -41,7 +160,7 @@ class Token(Tag):
         return self.value or self.kind
 
     def __repr__(self):
-        if self.value:
+        if self.value and self.value != ' ':
             return 'Token.word({!r})'.format(self.value)
         else:
             return 'Token.{}'.format(self.kind)
@@ -78,6 +197,10 @@ class Token(Tag):
         elif value == ' ':
             return Token.WS
         raise ValueError(value)
+
+    def sexpr(self):
+        return self.value or self.kind
+
 
 
 # Match token kind, eg. NL
@@ -166,7 +289,7 @@ class Lexer:
 
 
 class Rule:
-    def __init__(self, target, symbols, factory=None):
+    def __init__(self, target, symbols, call=None):
         assert isinstance(symbols, list)
         for s in symbols:
             assert isinstance(s, Tag)
@@ -184,7 +307,8 @@ class Rule:
             self.first = target
 
         self.priority = 0
-        self.factory = factory
+        assert isinstance(call, Function)
+        self.call = call
 
     def __repr__(self):
         return "<{} -> {}>".format(self.target, " ".join(map(str, self.symbols)))
@@ -242,12 +366,7 @@ class Item:
 
         children = self.evaluate_children(stack)
 
-        if rule.target == Symbol.PROGRAM:
-            value = children[0]
-        elif rule.factory:
-            value = rule.factory.build(children)
-        else:
-            value = Temp(rule.target.name, children)
+        value = build(rule, children)
         self.value = value
         assert stack.pop() == self
         return value
@@ -307,23 +426,23 @@ class Column:
         if word.value:
             if word in previous.wants:
                 item = self.add(previous.index, word, previous.wants[word])
-                item.value = Leaf(word.value)
+                item.value = word
             token = Token.get(word.kind)
         else:
             token = word
         if token in previous.wants:
             item = self.add(previous.index, token, previous.wants[token])
-            item.value = Leaf(word.value)
+            item.value = word
         return len(self.items) > 0
 
     def predict(self, tag):
         wanted_by = self.wants[tag]
-        for rule in self.grammar.get(tag):
-            item = self.add(self.index, rule.first, wanted_by)
-            # nullables need a value!
-            if not isinstance(rule.first, LR0) and rule.factory: # is nullable
-                item.rule = rule
-
+        for target in self.grammar.specialise(tag):
+            for rule in self.grammar.get(target):
+                item = self.add(self.index, rule.first, wanted_by)
+                # nullables need a value!
+                if not isinstance(rule.first, LR0) and rule.call: # is nullable
+                    item.rule = rule
 
     def complete(self, right):
         for left in right.wanted_by:
@@ -350,8 +469,11 @@ class Grammar:
         self.stack = [self.rule_sets]
         self.highest_priority = 0
 
-    def add(self, target, symbols, factory=None):
-        rule = Rule(target, symbols, factory)
+        self.types = []
+        # TODO scope Types?
+
+    def add(self, target, symbols, call=None):
+        rule = Rule(target, symbols, call)
         self.highest_priority += 1
         rule.priority = self.highest_priority
 
@@ -359,6 +481,9 @@ class Grammar:
             self.rule_sets[target] = []
         self.rule_sets[target].append(rule)
         return rule
+
+    def add_type(self, type_):
+        self.types.append(type_)
 
     def remove(self, rule):
         # TODO should this traverse the stack?
@@ -387,340 +512,183 @@ class Grammar:
         self.rule_sets = self.stack[-1]
         assert self.stack[-1] is self.rule_sets
 
-    def define(self, name, symbols, factory=None):
-        return self.add(Symbol.get(name), symbols, factory)
+    def add_list(self, target, cont):
+        symbols = [target] + cont
+        self.add(target, symbols, ContinueList)
+        item = cont[-1]
+        self.add(target, [item], StartList)
 
-    def define_builtin(self, output_type, spec, label=None):
-        words = Lexer.tokenize(spec)
+    def specialise(self, tag):
+        return tag.specialise(self) + [Type.ANY]
 
-        symbols = []
-        arg_indexes = []
-        for index, word in enumerate(words):
-            if word.value and word.value[0].isupper():
-                symbols.append(Symbol.get(word.value))
-                arg_indexes.append(index)
-            else:
-                symbols.append(word)
 
-        if label is None:
-            label = ''.join(('_' if w == Token.WS else w.value) for w in words)
-        func = Function(label)
-        factory = CallFactory(func, output_type, arg_indexes)
-        return self.define(output_type, symbols, factory)
+def build(rule, children):
+    if rule.target == Type.PROGRAM:
+        return children[0]
+    return rule.call.build(children)
 
-    def define_seq(self, name, symbol):
-        self.add(Symbol.get(name), [symbol], BoxFactory(name))
-        self.add(Symbol.get(name), [Symbol.get(name), symbol], ListFactory(name))
 
-    def define_type(self, name):
-        # Type -- a slot which wants a type name
-        self.define('Type', [Token.word(name)]) #ConstantFactory(w_Type(name)))
-        # Any -- a slot which accepts any expression
-        self.define('Any', [Symbol.get(name)], CallFactory(Function('any'), name, [0]))
-        # Expr -- a value which can fit into any slot
-        self.define(name, [Symbol.get('Expr')], CallFactory(Function('expr'), name, [0]))
-        # Parens -- need a rule for each type!
-        self.define(name, [
-            Token.word('('), Token.WS, Symbol.get(name), Token.WS, Token.word(')')
-        ], IdentityFactory(2))
-
+# two kinds of factories--
+# * a Function pointer. From which, we build an AST node. This gets evaluated at runtime.
+#
+# * But! Sometimes we want to evaluate a rule at compile-time.
+#   So, we invent Macros. These are just functions which are evaluated at
+#   compile-time, and return a piece of AST.
 
 class Function:
-    def __init__(self, name, block=None):
-        self.name = name
-        self.set_block(block)
-
-    def set_block(self, block):
-        if block is not None:
-            self.block = block
-            assert isinstance(block, Block)
-
-class Tree:
-    def __repr__(self):
-        return "Tree"
-
-class Block(Tree):
-    def __init__(self, lines):
-        for line in lines:
-            assert isinstance(line, Tree)
-        self.lines = lines
-
-    def __repr__(self):
-        return "Block({!r})".format(self.lines)
+    def __init__(self, debug_name):
+        assert isinstance(debug_name, str)
+        self.debug_name = debug_name
+        self.body = None
 
     def sexpr(self):
-        return "{\n" + "\n".join(x.sexpr() for x in self.lines) + "\n}"
+        return self.debug_name
+
+    def set_body(self, body):
+        assert isinstance(body, Body)
+        self.body = body
+
+    def build(self, children):
+        return Call(self, children)
+
+    def call_immediate(self, children):
+        assert self.body is not None
+        pass # TODO
+
+class Macro(Function):
+    def build(self, children):
+        return self.call_immediate(children)
+
+    def sexpr(self):
+        assert False # macros should never be in the AST!
 
 class Call(Tree):
-    def __init__(self, func, type_, args):
-        assert isinstance(func, Function)
+    def __init__(self, func, args):
         self.func = func
-        assert isinstance(type_, Symbol)
-        self.type = type_
-        for arg in args:
-            assert isinstance(arg, Tree)
         self.args = args
 
-    def __repr__(self):
-        return "Call({!r}, {!r}, {!r})".format(self.func, self.type, self.args)
-
     def sexpr(self):
-        return "(" + self.func.name + " " + " ".join([x.sexpr() for x in self.args]) + ")" + ":" + self.type.name
+        return "(" + self.func.sexpr() + " " + " ".join(a.sexpr() for a in self.args) + ")"
 
-class Leaf(Tree):
-    def __init__(self, value):
-        assert isinstance(value, str)
-        self.value = value
-
-    def __repr__(self):
-        return "Leaf(" + repr(self.value) + ")"
-
-    def sexpr(self):
-        return self.value
-
-class Temp(Tree):
-    def __init__(self, name, children):
-        self.label = name
-        self.children = children
-
-    def __repr__(self):
-        return "Temp({!r}, {!r})".format(self.label, self.children)
-
-    def sexpr(self):
-        sep = " "
-        return "(" + self.label + " " + sep.join([x.sexpr() for x in self.children]) + ")"
-
-class Factory:
-    def __init__(self, process):
-        self.process = process
-
-    def build(self, values):
-        return self.process(values)
-
-class IdentityFactory(Factory):
-    def __init__(self, index):
-        self.index = index
-
-    def build(self, values):
-        return values[self.index]
-
-class CallFactory(Factory):
-    def __init__(self, func, type_, arg_indexes):
-        assert isinstance(func, Function)
-        self.func = func
-        assert isinstance(type_, str)
-        self.type = Symbol.get(type_)
-        self.arg_indexes = arg_indexes
-
-    def build(self, values):
-        args = []
-        for index in self.arg_indexes:
-            args.append(values[index])
-        return Call(self.func, self.type, args)
-
-class TempFactory(Factory):
-    def __init__(self, name, arg_indexes):
-        self.name = name
-        self.arg_indexes = arg_indexes
-
-    def build(self, values):
-        args = []
-        for index in self.arg_indexes:
-            args.append(values[index])
-        return Temp(self.name, args)
-
-
-class ListFactory(Factory):
-    def __init__(self, label):
-        self.label = label
-
-    def build(self, values):
-        node, child = values
-        list_ = node.children
-        list_.append(child)
-        return Temp(self.label, list_)
-
-class BoxFactory(ListFactory):
-    def build(self, symbols):
-        return Temp(self.label, [symbols[0]])
-
-class EmptyListFactory(ListFactory):
-    def build(self, symbols):
-        return Temp(self.label, [])
-
-# nullable whitespace derivation -- whitespace is always optional.
-# note however that whitespace has to be explicitly allowed, eg. "Int +- Int"
-# would not allow a space between + and -.
-# ie. whitespace is only permitted if it appears in the definition.
-
-def whitespace(null):
-    return Leaf("")
 
 grammar = Grammar()
-grammar.add(Token.WS, [], Factory(whitespace))
 
-STAR = Token.word('*')
-COLON = Token.word(':')
-TYPE = Symbol.get('Type')
-grammar.define('Spec', [Token.WS])
-grammar.define('Spec', [Token.WORD], TempFactory('WORD', [0]))
-grammar.define('Spec', [Token.PUNC], TempFactory('PUNC', [0]))
-grammar.define('Spec', [COLON, TYPE])
-grammar.define('Spec', [COLON, STAR, TYPE])
-grammar.define('Spec', [Token.WORD, COLON, TYPE])
-grammar.define('Spec', [Token.WORD, COLON, STAR, TYPE])
+def singleton(cls):
+    return cls(cls.__name__)
 
-grammar.define_seq('SpecList', Symbol.get('Spec'))
+DEFINE = Function('define')
+# MACRO = Function('macro') # macro definitions do not get sent to the compiler!
 
-def predef(values):
-    _define, _ws, spec_list, _ = values
+# nullable whitespace derivation -- whitespace is always optional.
+# note however that whitespace has to be explicitly allowed, eg. "Int <= Int"
+# would not allow a space between < and =.
+# ie. whitespace is only permitted if it appears in the definition.
 
-    label_parts = []
-    symbols = []
-    arg_indexes = []
-    arguments = []
-    for spec in spec_list.children:
-        index = len(symbols)
-        kind = spec.label
-        spec = spec.children
-        is_list = False
-        if len(spec) == 4:
-            name, _, _, type_ = spec
-            is_list = True
-            assert name.token.kind == 'WORD'
-            name = name.token.value
-        
-        elif len(spec) == 3:
-            name, _, type_ = spec
-            assert Token.word(name.value).kind == 'WORD'
-            name = name.value
+@singleton
+class Null(Macro):
+    def build(self, values):
+        return None
 
-        elif len(spec) == 2:
-            is_list = True
-            _, type_ = spec
-            name = "_" + str(len(arguments) + 1)
+grammar.add(Token.WS, [], Null)
 
-        else:
-            leaf = spec[0]
-            assert isinstance(leaf, Leaf)
-            if leaf.value == "": # null whitespace
-                continue
-            token = Token.word(leaf.value)
+# For, um, lists.
+# After all, this is "Nefarious Scheme"
+LIST = Function('list')
 
-            if token == Token.WS:
-                label_parts.append('_')
-            else:
-                assert token.value, token
-                label_parts.append(token.value)
-            symbols.append(token)
-            continue
+@singleton
+class StartList(Macro):
+    def build(self, values):
+        assert len(values) == 1
+        child = values[0]
+        return Call(LIST, [child])
 
-        type_ = type_.children[0].value
+@singleton
+class ContinueList(Macro):
+    def build(self, values):
+        list_ = values[0]
+        assert isinstance(list_, Call)
+        assert list_[0].func is LIST
+        list_[0].args.append(child)
+        return lis_
 
-        arg_indexes.append(index)
-        symbols.append(Symbol.get(type_))
-        arguments.append(Temp('arg', [Leaf(name), Leaf(type_)]))
-        label_parts.append(type_)
+# For, um, subtypes and stuff.
+@singleton
+class Identity(Macro):
+    def build(self, values):
+        assert len(values) == 1
+        return values[0]
 
-    #assert symbols.pop() == Token.WS
-    #assert label_parts.pop() == "_"
-    label = ''.join(label_parts)
+grammar.add_list(Type.get('SpecList'), [Type.get('Spec')])
 
-    output_type = 'Int' # TODO type checking? [need body first!]
+grammar.add_list(Type.get('Block'), [Type.get('Line')])
 
-    func = Function(label)
-    # TODO set_block on Function
-    rule = grammar.define(output_type, symbols, CallFactory(func, output_type, arg_indexes))
+# We want to--
+# - allow for scoping the inside of blocks.
+#   so eg. an `sql _` statement that accepts a block -- `sql { select * from ... }`
+# - allow recursive definitions. `define fib Int:n { return fib ... }`
+# - allow generic types. eg. (List 'a) -> (List 'a) "," 'a
+#
+# when *does* evaluation happen?
+# is there a way to let evaluation affect prediction? That seems *somewhat*
+# what we want to allow for here...
+#
+# Aside from generics, it would be fine if evaluation/scoping was hard-bound to
+# { }...
 
-    grammar.save()
+# Generics.
+# =========
+#
+# Prediction: ask Grammar for all subtypes of T.
+# Always include "All".
+# Generics specialise to any type.   'a -> All, Int, Frac, Text ...
+#
+# Completion: unify right with left.wants. 
+# Create new (but uniqued!) LR0s.
+# right must be a *subtype* of left.wants!
+# and target must be a *subtype* of the original wanted_by ~ target.
+# Unification can fail!
 
-    get_var = Function('GetVar')
-    for arg in arguments:
-        name, type_ = arg.children
-        assert isinstance(type_, Leaf)
-        assert isinstance(type_, Leaf)
-        type_ = type_.value
-        q = grammar.define(type_, [Token.word(name.value)], CallFactory(get_var, type_, [0]))
+#grammar.add_type(Type.ANY)
+# Don't need to add the Any type -- grammar.specialise() always returns it.
 
-    return Temp('predef', [Leaf(label), Temp('args', arguments)])
+grammar.add_type(Type.get('Int'))
+grammar.add_type(List.get(Generic(1)))
 
-def postdef(values):
-    predef, body, _ = values
-    label, arguments = predef.children
+from pprint import pprint
+pprint(grammar.specialise(Generic(1)))
 
-    grammar.restore()
 
-    names = [arg.children[0] for arg in arguments.children]
 
-    return Temp('def', [label, Temp('args', names), body]) #, Temp('body', body)])
+#grammar.add(List(Generic()), [Generic(), Token.WS, Generic()], StartList)
+#grammar.add(List(Generic()), [List(Generic()), Token.WS, Generic()], ContinueList)
 
-def program(values):
-    import ipdb; ipdb.set_trace()
-    return Block(values[0].children)
+#grammar.add_list(List(Generic(0)), [Token.get(","), Generic(0)])
 
-def body(values):
-    _, lines, _ = values
-    return Block(lines.children)
+# grammar.add(Type.get('_PreDef'), [
+#     Type.get('_PreDef'),
+#     Type.get('Block'),
+#     Token.get('{'),
+# ], PreDef)
+# 
+# grammar.add(Type.get('Line'), [
+#     Type.get('_PreDef'),
+#     Type.get('Block'),
+#     Token.get('}'),
+# ], PostDef)
 
-def empty_body(values):
-    return Block([])
+class Test(Macro):
+    def build(self):
+        return 'hello'
 
-def deftype(values):
-    token = values[2].token
-    grammar.define_type(token.value)
-    return Temp('deftype', [Leaf(token.value)])
-
-grammar.define('PreDef', [Token.word('define'), Token.WS, Symbol.get('SpecList'), Token.word('{')], Factory(predef))
-grammar.define('Line', [Symbol.get('PreDef'), Symbol.get('Body'), Token.word('}')], Factory(postdef))
-grammar.define('Body', [Token.WS, Symbol.get('LineList'), Token.WS], Factory(body))
-grammar.define('Body', [Token.WS], Factory(empty_body))
-
-grammar.define('Line', [Token.word('deftype'), Token.WS, Token.WORD], Factory(deftype))
-
-grammar.add(Symbol.PROGRAM, [Symbol.get("LineList")], Factory(program))
-grammar.define_seq("LineList", Symbol.get("Line"))
-grammar.define("Line", [Symbol.get("Int"), Token.NL], IdentityFactory(0))
-def empty(values):
-    return Leaf("")
-grammar.define("Line", [Token.NL], Factory(empty))
-
-grammar.define_type('Int')
-grammar.define_type('List')
-
-grammar.define_builtin('Line', 'Opcode')
-grammar.define_builtin('Opcode', 'PRINT')
-grammar.define_builtin('Opcode', 'PUSH Any')
-grammar.define_builtin('Opcode', 'INT_ADD')
-grammar.define_builtin('Opcode', 'INT_TO_STR')
-
-# later definitions will override earlier ones.
-# However, earlier definitions bind tighter than later ones!
-
-grammar.define_builtin('Int', 'Int * Int').priority = grammar.define_builtin('Int', 'Int / Int').priority
-grammar.define_builtin('Int', 'Int + Int').priority = grammar.define_builtin('Int', 'Int - Int').priority
-grammar.define_builtin('Bool', 'Int < Int')
-grammar.define_builtin('Int', 'distance to x: Int y: Int')
-grammar.define_builtin('Line', 'print Int')
-grammar.define_builtin('Line', 'return Any')
-grammar.define_builtin('Line', 'if Bool then Block')
-#grammar.define_builtin('Line', 'if Bool then Block else Line')
-#grammar.define_builtin('Line', 'Block')
-
-grammar.define('Block', [Token.word('{'), Symbol.get('Body'), Token.word('}')], IdentityFactory(1))
-
-grammar.define("Int", [Token.word("1")])
-grammar.define("Int", [Token.word("2")])
-grammar.define("Int", [Token.word("3")])
-grammar.define("Int", [Token.word("4")])
-grammar.define("Int", [Token.word("5")])
+grammar.add(Type.PROGRAM, [Token.word('hello'), Token.NL], Function('hello'))
 
 
 def parse(source):
     lexer = Lexer(source)
 
     column = Column(grammar, 0)
-    column.wants[Symbol.PROGRAM] = []
-    column.predict(Symbol.PROGRAM)
+    column.wants[Type.PROGRAM] = []
+    column.predict(Type.PROGRAM)
     column.process()
 
     grammar.save()
@@ -764,11 +732,11 @@ def parse(source):
         index += 1
 
     #print index, column.items
-    key = 0, Symbol.PROGRAM
+    key = 0, Type.PROGRAM
     if key not in column.unique:
         return "Unexpected EOF"
     start = column.unique[key]
     value = start.evaluate()
 
-    return value.sexpr() #"yay"
+    return value.sexpr()
 
