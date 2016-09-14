@@ -114,6 +114,8 @@ class Generic(Type):
         if isinstance(other, Generic):
             # TODO what's the right thing to do here; 'a = 'b ?
             return
+        if isinstance(other, Any):
+            return
         return Unification({
             self.index: other,
         })
@@ -453,7 +455,8 @@ class Item:
         self.children = children = []
         for item in reversed(stack):
             child = item.right.evaluate(stack)
-            assert child is not None, repr(item) + " RHS evaluated to None"
+            # TODO this doesn't work for WS
+            #assert child is not None, repr(item) + " RHS evaluated to None"
             children.append(child)
 
         return children
@@ -509,13 +512,22 @@ class Column:
                 if not isinstance(rule.first, LR0) and rule.call: # is nullable
                     item.rule = rule
 
-        if not isinstance(tag, Type):
-            return
-        for rule in self.grammar.get_generics():
-            unification = rule.target.is_super(tag)
-            if unification:
-                rule = rule.specialise(unification)
-                item = self.add(self.index, rule.first, wanted_by)
+        # aaaaaaaaaaaaaaaaaaaaaaaaaaaa this is complicated.
+        #   Item(0, <Program -> . Any NL>)
+        #   Item(0, <Program -> . (   Program   )>)
+        #   Item(0, <Int -> . hello>)
+        #   Item(0, <Text -> . goodbye>)
+        # how have we ended up *not* predicting Int -> . ( Int ) ??
+
+            # Oh dear. Now we have too many items...
+
+            # TODO move this to a separate function?
+            if isinstance(target, Type) and target != Type.EXPR:
+                for rule in self.grammar.get_generics():
+                    unification = rule.target.is_super(target)
+                    if unification:
+                        rule = rule.specialise(unification)
+                        item = self.add(self.index, rule.first, wanted_by)
 
         #if isinstance(tag, Type) and not isinstance(tag, Generic):
         #    self.wants[Generic.get(1)].extend(self.wants[tag])
@@ -547,9 +559,10 @@ class Column:
 
         for item in self.items:
             if isinstance(item.tag, LR0):
-                self.predict(item.tag.wants)
                 if isinstance(item.tag.wants, Generic):
                     self.want_any.append(item)
+                else:
+                    self.predict(item.tag.wants)
             else:
                 self.complete(item)
 
@@ -771,6 +784,7 @@ class TypeMacro(Macro):
         return Type.get(values[0].value)
 
 grammar.add_type(Type.get('Int'))
+grammar.add_type(Type.get('Text'))
 grammar.add_type(Type.get('Bool'))
 grammar.add_type(List.get(Generic.get(1)))
 
@@ -801,9 +815,11 @@ grammar.add(Type.get('Bool'), [Generic.get(1), Token.WS, Token.word("<"), Token.
 #grammar.add(Type.PROGRAM, [Token.word('hello'), Token.NL], Function('hello'))
 
 Int = Type.get('Int')
+Text = Type.get('Text')
 grammar.add(Type.PROGRAM, [Type.ANY, Token.NL], Identity)
 grammar.add(Type.ANY, [Int], Identity)
 grammar.add(Int, [Token.word('hello')], Identity)
+grammar.add(Text, [Token.word('goodbye')], Identity)
 
 
 #grammar.add(List(Generic()), [Generic(), Token.WS, Generic()], StartList)
