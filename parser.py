@@ -154,7 +154,8 @@ Type.EXPR = Type.get('Expr')
 Type.TYPE = Type.get('Type')
 
 # Any -- a slot which accepts any expression.
-Type.ANY = Type._cache['Any'] = Any()
+#Type.ANY = Type._cache['Any'] = Any()
+# TODO
 
 
 # make sure Type.get('List') fails!
@@ -348,6 +349,9 @@ class Rule:
         self.symbols = symbols
         self.target = target
 
+        # TODO if target is Generic, same Generic must appear somewhere in
+        # symbols.
+
         self.lr0s = []
         if symbols:
             self.first = previous = LR0(self, 0)
@@ -398,6 +402,7 @@ class Item:
         self.tag = tag
         self.start = start
         self.wanted_by = wanted_by
+        self.generic_wants = None
 
         # derivation
         self.left = None
@@ -470,7 +475,12 @@ class Column:
         self.items = []
         self.unique = {}
         self.wants = {}
-        self.want_any = []
+
+    def want(self, item, type_):
+        if type_ in self.wants:
+            self.wants[type_].append(item)
+        else:
+            self.wants[type_] = [item]
 
     def add(self, start, tag, wanted_by):
         key = start, tag
@@ -481,11 +491,8 @@ class Column:
         self.items.append(item)
         self.unique[key] = item
 
-        if isinstance(tag, LR0):
-            if tag.wants in self.wants:
-                self.wants[tag.wants].append(item)
-            else:
-                self.wants[tag.wants] = [item]
+        if isinstance(tag, LR0) and not isinstance(tag.wants, Generic):
+            self.want(item, tag.wants)
         return item
 
     def scan(self, word, previous):
@@ -512,65 +519,63 @@ class Column:
                 if not isinstance(rule.first, LR0) and rule.call: # is nullable
                     item.rule = rule
 
-        # aaaaaaaaaaaaaaaaaaaaaaaaaaaa this is complicated.
-        #   Item(0, <Program -> . Any NL>)
-        #   Item(0, <Program -> . (   Program   )>)
-        #   Item(0, <Int -> . hello>)
-        #   Item(0, <Text -> . goodbye>)
-        # how have we ended up *not* predicting Int -> . ( Int ) ??
-
-            # Oh dear. Now we have too many items...
-
-            # TODO move this to a separate function?
-            if isinstance(target, Type) and target != Type.EXPR:
-                for rule in self.grammar.get_generics():
-                    unification = rule.target.is_super(target)
-                    if unification:
-                        rule = rule.specialise(unification)
-                        item = self.add(self.index, rule.first, wanted_by)
-
-        #if isinstance(tag, Type) and not isinstance(tag, Generic):
-        #    self.wants[Generic.get(1)].extend(self.wants[tag])
+    def generics(self):
+        for rule in self.grammar.get_generics():
+            assert rule.target == Generic.get(1)
+            item = self.add(self.index, rule.first, [])
+            item.generic_wants = self.wants
 
     def complete(self, right):
         for left in right.wanted_by:
-            #print left
-            #print right
-            #print
 
             tag = left.tag
-            if isinstance(tag.wants, Generic) and isinstance(right.tag, Type):
+            wanted_by = left.wanted_by
+            if isinstance(tag.wants, Generic):
+                if not isinstance(right.tag, Type):
+                    continue
+
                 unification = tag.wants.is_super(right.tag)
                 if not unification:
                     # TODO warn?
                     continue
                 old, tag = tag, tag.specialise(unification)
                 assert old.rule.target.is_super(tag.rule.target)
-                #print old.rule.target, ':>', tag.rule.target
+                print old.rule.target, ':>', tag.rule.target
+
+                if isinstance(left.tag.rule.target, Generic):
+                    new_lhs = tag.rule.target
+                    if new_lhs not in left.generic_wants:
+                        # TODO warn?
+                        continue
+                    wanted_by = left.generic_wants[new_lhs]
 
             # assert other.tag.wants == item.tag
-            new = self.add(left.start, tag.advance, left.wanted_by)
+            new = self.add(left.start, tag.advance, wanted_by)
             new.add_derivation(left, right, tag.rule)
+            new.generic_wants = left.generic_wants
+
+    def predict_generic(self, item):
+        if isinstance(item.tag.rule.target, Generic):
+            for type_ in item.generic_wants.keys():
+                self.want(item, type_)
+                self.predict(type_)
+        else:
+            for type_ in set(self.grammar.expand(item.tag.wants)):
+                self.want(item, type_)
+                self.predict(type_)
 
     def process(self):
-        #generic = Generic.get(1)
-        #self.wants[generic] = []
-        #self.predict(generic)
+        self.generics()
 
         for item in self.items:
             if isinstance(item.tag, LR0):
-                if isinstance(item.tag.wants, Generic):
-                    self.want_any.append(item)
+                target = item.tag.wants
+                if isinstance(target, Generic):
+                    self.predict_generic(item)
                 else:
-                    self.predict(item.tag.wants)
+                    self.predict(target)
             else:
                 self.complete(item)
-
-        if self.want_any:
-            for key in self.wants:
-                if isinstance(key, Generic):
-                    continue
-                self.wants[key].extend(self.want_any)
 
     def evaluate(self):
         for item in self.items:
@@ -644,8 +649,6 @@ class Grammar:
         self.add(target, [item], StartList)
 
     def expand(self, tag):
-        if isinstance(tag, Generic):
-            return [tag]
         return tag.expand(self) + [Type.EXPR]
 
 
@@ -766,8 +769,8 @@ grammar.add_list(Type.get('Block'), [Type.get('Line')])
 # =========
 #
 # Prediction: ask Grammar for all subtypes of T.
-# Always include "All".
-# Generics expand to any type.   'a -> All, Int, Frac, Text ...
+# Always include "Expr".
+# Generics expand to any type.   'a -> Expr, Int, Frac, Text ...
 #
 # Completion: unify right with left.wants. 
 # Create new (but uniqued!) LR0s.
@@ -816,10 +819,17 @@ grammar.add(Type.get('Bool'), [Generic.get(1), Token.WS, Token.word("<"), Token.
 
 Int = Type.get('Int')
 Text = Type.get('Text')
-grammar.add(Type.PROGRAM, [Type.ANY, Token.NL], Identity)
-grammar.add(Type.ANY, [Int], Identity)
+Bool = Type.get('Bool')
+
+#grammar.add(Type.PROGRAM, [Type.ANY, Token.NL], Identity)
+#grammar.add(Type.ANY, [Int], Identity)
+grammar.add(Type.PROGRAM, [Int, Token.NL], Identity)
+grammar.add(Type.PROGRAM, [Text, Token.NL], Identity)
+grammar.add(Type.PROGRAM, [Bool, Token.NL], Identity)
+
 grammar.add(Int, [Token.word('hello')], Identity)
 grammar.add(Text, [Token.word('goodbye')], Identity)
+grammar.add(Bool, [Token.word('false')], Identity)
 
 
 #grammar.add(List(Generic()), [Generic(), Token.WS, Generic()], StartList)
@@ -845,7 +855,6 @@ def parse(source):
     lexer = Lexer(source)
 
     column = Column(grammar, 0)
-    column.wants[Generic.get(1)] = []
     column.wants[Type.PROGRAM] = []
     column.predict(Type.PROGRAM)
     column.process()
