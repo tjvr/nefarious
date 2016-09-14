@@ -6,8 +6,11 @@ class Tree:
         raise NotImplementedError
 
 class Tag(Tree):
-    def specialise(self, grammar):
+    def expand(self, grammar):
         return [self]
+
+    def specialise(self, unification):
+        return self
 
     def is_super(self, other):
         if self is other:
@@ -51,11 +54,6 @@ class Type(Tag):
         if self is other:
             return Unification()
 
-
-Type.PROGRAM = Type.get('start')
-Type.ANY = Type.get('Any')
-
-
 # TODO custom parametric types
 class List(Type):
     def __init__(self, child):
@@ -81,11 +79,16 @@ class List(Type):
         if isinstance(other, List):
             return self.child.is_super(other.child)
 
-    def specialise(self, grammar):
-        return [List.get(type_) for type_ in self.child.specialise(grammar)]
+    def expand(self, grammar):
+        return [List.get(type_) for type_ in self.child.expand(grammar)]
+
+    def specialise(self, unification):
+        return List.get(self.child.specialise(unification))
 
 
 class Generic(Type):
+    _cache = {}
+
     """a typevar."""
     def __init__(self, index):
         assert 1 <= index <= 26
@@ -98,6 +101,15 @@ class Generic(Type):
     def __str__(self):
         return "'" + chr(96 + self.index)
 
+    @staticmethod
+    def get(index):
+        assert isinstance(index, int), index
+        if index in Generic._cache:
+            type_ = Generic._cache[index]
+        else:
+            type_ = Generic._cache[index] = Generic(index)
+        return type_
+
     def _is_super(self, other):
         if isinstance(other, Generic):
             # TODO what's the right thing to do here; 'a = 'b ?
@@ -106,8 +118,46 @@ class Generic(Type):
             self.index: other,
         })
 
-    def specialise(self, grammar):
+    def expand(self, grammar):
         return grammar.types
+
+    def specialise(self, unification):
+        return unification.values.get(self.index, self)
+
+
+class Any(Type):
+    def __init__(self):
+        self._union = {}
+
+    def __repr__(self):
+        return "Type.ANY"
+
+    def __str__(self):
+        return "Any"
+
+    def _is_super(self, other):
+        return True
+
+    def expand(self, grammar):
+        return grammar.types
+
+
+
+Type.PROGRAM = Type.get('Program')
+
+# Expr -- a value which can fit into any slot
+Type.EXPR = Type.get('Expr')
+
+# Type -- a slot which wants a type name
+Type.TYPE = Type.get('Type')
+
+# Any -- a slot which accepts any expression.
+Type.ANY = Type._cache['Any'] = Any()
+
+
+# make sure Type.get('List') fails!
+Type._cache['List'] = None
+
 
 
 class Unification:
@@ -136,7 +186,7 @@ class Unification:
         return "Unification()"
 
     def __str__(self):
-        return "<" + ",\n ".join(str(Generic(i)) + " = " + str(t) for (i, t)
+        return "<" + ",\n ".join(str(Generic.get(i)) + " = " + str(t) for (i, t)
                 in self.values.items()) + ">"
 
 # test cases.
@@ -144,8 +194,8 @@ list_int = List.get(Type.get('Int'))
 assert Type.get('Int').is_super(Type.get('Text')) == None
 assert Type.get('Int').is_super(Type.get('Int')).values == {}
 assert list_int.is_super(List(Type.get('Int'))).values == {}
-assert Generic(2).is_super(Type.get('Int')).values == {2: Type.get('Int')}
-assert List.get(Generic(1)).is_super(List.get(List.get(Type.get('Int')))).values == {1: List.get(Type.get('Int'))}
+assert Generic.get(2).is_super(Type.get('Int')).values == {2: Type.get('Int')}
+assert List.get(Generic.get(1)).is_super(List.get(List.get(Type.get('Int')))).values == {1: List.get(Type.get('Int'))}
 
 
 
@@ -296,10 +346,13 @@ class Rule:
         self.symbols = symbols
         self.target = target
 
+        self.lr0s = []
         if symbols:
             self.first = previous = LR0(self, 0)
+            self.lr0s.append(self.first)
             for dot in range(1, len(symbols)):
                 lr0 = LR0(self, dot)
+                self.lr0s.append(lr0)
                 previous.advance = lr0
                 previous = lr0
             previous.advance = target
@@ -313,18 +366,28 @@ class Rule:
     def __repr__(self):
         return "<{} -> {}>".format(self.target, " ".join(map(str, self.symbols)))
 
+    def specialise(self, unification):
+        target = self.target.specialise(unification)
+        symbols = [t.specialise(unification) for t in self.symbols]
+        rule = Rule(target, symbols, self.call)
+        rule.priority = self.priority
+        return rule
+
+
 class LR0(Tag):
     def __init__(self, rule, dot):
         self.rule = rule
         self.wants = rule.symbols[dot]
         self.advance = None # set by Rule
-
-        self.dot = dot # for debugging
+        self.dot = dot
 
     def __repr__(self):
         symbols = list(self.rule.symbols)
         symbols.insert(self.dot, ".")
         return "<{} -> {}>".format(self.rule.target, " ".join(map(str, symbols)))
+
+    def specialise(self, unification):
+        return self.rule.specialise(unification).lr0s[self.dot]
 
 
 class Item:
@@ -390,7 +453,7 @@ class Item:
         self.children = children = []
         for item in reversed(stack):
             child = item.right.evaluate(stack)
-            assert child is not None, item
+            assert child is not None, repr(item) + " RHS evaluated to None"
             children.append(child)
 
         return children
@@ -404,6 +467,7 @@ class Column:
         self.items = []
         self.unique = {}
         self.wants = {}
+        self.want_any = []
 
     def add(self, start, tag, wanted_by):
         key = start, tag
@@ -437,25 +501,63 @@ class Column:
 
     def predict(self, tag):
         wanted_by = self.wants[tag]
-        for target in self.grammar.specialise(tag):
+
+        for target in set(self.grammar.expand(tag)):
             for rule in self.grammar.get(target):
                 item = self.add(self.index, rule.first, wanted_by)
                 # nullables need a value!
                 if not isinstance(rule.first, LR0) and rule.call: # is nullable
                     item.rule = rule
 
+        if not isinstance(tag, Type):
+            return
+        for rule in self.grammar.get_generics():
+            unification = rule.target.is_super(tag)
+            if unification:
+                rule = rule.specialise(unification)
+                item = self.add(self.index, rule.first, wanted_by)
+
+        #if isinstance(tag, Type) and not isinstance(tag, Generic):
+        #    self.wants[Generic.get(1)].extend(self.wants[tag])
+
     def complete(self, right):
         for left in right.wanted_by:
+            #print left
+            #print right
+            #print
+
+            tag = left.tag
+            if isinstance(tag.wants, Generic) and isinstance(right.tag, Type):
+                unification = tag.wants.is_super(right.tag)
+                if not unification:
+                    # TODO warn?
+                    continue
+                old, tag = tag, tag.specialise(unification)
+                assert old.rule.target.is_super(tag.rule.target)
+                #print old.rule.target, ':>', tag.rule.target
+
             # assert other.tag.wants == item.tag
-            new = self.add(left.start, left.tag.advance, left.wanted_by)
-            new.add_derivation(left, right, left.tag.rule)
+            new = self.add(left.start, tag.advance, left.wanted_by)
+            new.add_derivation(left, right, tag.rule)
 
     def process(self):
+        #generic = Generic.get(1)
+        #self.wants[generic] = []
+        #self.predict(generic)
+
         for item in self.items:
             if isinstance(item.tag, LR0):
                 self.predict(item.tag.wants)
+                if isinstance(item.tag.wants, Generic):
+                    self.want_any.append(item)
             else:
                 self.complete(item)
+
+        if self.want_any:
+            for key in self.wants:
+                if isinstance(key, Generic):
+                    continue
+                self.wants[key].extend(self.want_any)
 
     def evaluate(self):
         for item in self.items:
@@ -484,6 +586,9 @@ class Grammar:
 
     def add_type(self, type_):
         self.types.append(type_)
+        if isinstance(type_, List):
+            return # TODO parametric rules
+        self.add(Type.TYPE, [Token.word(type_.name)], TypeMacro)
 
     def remove(self, rule):
         # TODO should this traverse the stack?
@@ -499,6 +604,13 @@ class Grammar:
             if target in rule_sets:
                 matches += rule_sets[target]
         return matches
+
+    def get_generics(self):
+        # TODO optimise
+        for target in self.rule_sets:
+            if isinstance(target, Generic):
+                for x in self.rule_sets[target]:
+                    yield x
 
     def save(self):
         assert self.stack[-1] is self.rule_sets
@@ -518,8 +630,10 @@ class Grammar:
         item = cont[-1]
         self.add(target, [item], StartList)
 
-    def specialise(self, tag):
-        return tag.specialise(self) + [Type.ANY]
+    def expand(self, tag):
+        if isinstance(tag, Generic):
+            return [tag]
+        return tag.expand(self) + [Type.EXPR]
 
 
 def build(rule, children):
@@ -580,8 +694,8 @@ DEFINE = Function('define')
 # MACRO = Function('macro') # macro definitions do not get sent to the compiler!
 
 # nullable whitespace derivation -- whitespace is always optional.
-# note however that whitespace has to be explicitly allowed, eg. "Int <= Int"
-# would not allow a space between < and =.
+# note however that whitespace has to be explicitly allowed, eg. "Int <> Int"
+# would not allow a space between < and >.
 # ie. whitespace is only permitted if it appears in the definition.
 
 @singleton
@@ -640,7 +754,7 @@ grammar.add_list(Type.get('Block'), [Type.get('Line')])
 #
 # Prediction: ask Grammar for all subtypes of T.
 # Always include "All".
-# Generics specialise to any type.   'a -> All, Int, Frac, Text ...
+# Generics expand to any type.   'a -> All, Int, Frac, Text ...
 #
 # Completion: unify right with left.wants. 
 # Create new (but uniqued!) LR0s.
@@ -648,15 +762,48 @@ grammar.add_list(Type.get('Block'), [Type.get('Line')])
 # and target must be a *subtype* of the original wanted_by ~ target.
 # Unification can fail!
 
-#grammar.add_type(Type.ANY)
-# Don't need to add the Any type -- grammar.specialise() always returns it.
+#grammar.add_type(Type.EXPR)
+# Don't need to add the Expr type -- grammar.expand() always returns it.
+
+@singleton
+class TypeMacro(Macro):
+    def build(self, values):
+        return Type.get(values[0].value)
 
 grammar.add_type(Type.get('Int'))
-grammar.add_type(List.get(Generic(1)))
+grammar.add_type(Type.get('Bool'))
+grammar.add_type(List.get(Generic.get(1)))
 
-from pprint import pprint
-pprint(grammar.specialise(Generic(1)))
 
+# Generic parentheses!
+
+@singleton
+class Parens(Macro):
+    def build(self, values):
+        return values[2]
+grammar.add(Generic.get(1), [Token.word("("), Token.WS, Generic.get(1), Token.WS, Token.word(")")], Parens)
+
+CHOICE = Function('choice')
+@singleton
+class Choice(Macro):
+    def build(self, values):
+        return Call(CHOICE, [values[2], values[6]])
+grammar.add(Generic.get(1), [Token.word("choose"), Token.WS, Generic.get(1), Token.WS, Token.word("or"), Token.WS, Generic.get(1)], Choice)
+
+CMP = Function('cmp')
+@singleton
+class Cmp(Macro):
+    def build(self, values):
+        return Call(CMP, [values[0], values[4]])
+grammar.add(Type.get('Bool'), [Generic.get(1), Token.WS, Token.word("<"), Token.WS, Generic.get(1)], Cmp)
+
+
+#grammar.add(Type.PROGRAM, [Token.word('hello'), Token.NL], Function('hello'))
+
+Int = Type.get('Int')
+grammar.add(Type.PROGRAM, [Type.ANY, Token.NL], Identity)
+grammar.add(Type.ANY, [Int], Identity)
+grammar.add(Int, [Token.word('hello')], Identity)
 
 
 #grammar.add(List(Generic()), [Generic(), Token.WS, Generic()], StartList)
@@ -676,17 +823,13 @@ pprint(grammar.specialise(Generic(1)))
 #     Token.get('}'),
 # ], PostDef)
 
-class Test(Macro):
-    def build(self):
-        return 'hello'
-
-grammar.add(Type.PROGRAM, [Token.word('hello'), Token.NL], Function('hello'))
 
 
 def parse(source):
     lexer = Lexer(source)
 
     column = Column(grammar, 0)
+    column.wants[Generic.get(1)] = []
     column.wants[Type.PROGRAM] = []
     column.predict(Type.PROGRAM)
     column.process()
@@ -704,7 +847,10 @@ def parse(source):
             else:
                 line += token.value
 
-        #print index, column.items
+        print index
+        for item in column.items:
+            print item
+        print
         previous, column = column, Column(grammar, index + 1)
         if not column.scan(token, previous):
             msg = "Unexpected " + token.kind + " @ " + str(index)
@@ -712,7 +858,7 @@ def parse(source):
                 msg += ": " + token.value
             for token in previous.wants:
                 if isinstance(token, Token):
-                    if token.value:
+                    if token.value and token.value != ' ':
                         msg += "\nExpected: " + token.value
                     else:
                         msg += "\nExpected: " + token.kind
@@ -731,10 +877,21 @@ def parse(source):
         token = lexer.lex()
         index += 1
 
-    #print index, column.items
+    print index
+    for item in column.items:
+        print item
+    print
     key = 0, Type.PROGRAM
     if key not in column.unique:
-        return "Unexpected EOF"
+        msg = "Unexpected EOF"
+        for token in previous.wants:
+            if isinstance(token, Token):
+                if token.value and token.value != ' ':
+                    msg += "\nExpected: " + token.value
+                else:
+                    msg += "\nExpected: " + token.kind
+        msg += "\n>> " + line
+        return msg
     start = column.unique[key]
     value = start.evaluate()
 
