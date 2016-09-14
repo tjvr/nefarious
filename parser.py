@@ -56,7 +56,7 @@ class Type(Tag):
             return Unification()
 
     def expand(self, grammar):
-        return [self, Type.EXPR]
+        return [self]
 
 # TODO custom parametric types
 class List(Type):
@@ -86,7 +86,7 @@ class List(Type):
             return self.child.is_super(other.child)
 
     def expand(self, grammar):
-        return [List.get(type_) for type_ in self.child.expand(grammar)] + [Type.EXPR]
+        return [List.get(type_) for type_ in self.child.expand(grammar)]
 
     def specialise(self, unification):
         return List.get(self.child.specialise(unification))
@@ -127,7 +127,7 @@ class Generic(Type):
         })
 
     def expand(self, grammar):
-        return grammar.types + [Type.EXPR]
+        return grammar.types
 
     def specialise(self, unification):
         return unification.values.get(self.index, self)
@@ -146,15 +146,30 @@ class Any(Type):
     def _is_super(self, other):
         return Unification()
 
-    #def expand(self, grammar):
-    #    return grammar.types
 
+class Expr(Type):
+    _rules = {}
+
+    def __init__(self):
+        self._union = {}
+
+    def __repr__(self):
+        return "Type.EXPR"
+
+    def __str__(self):
+        return "Expr"
+
+    def get_rule(self, target):
+        if target in self._rules:
+            return self._rules[target]
+        self._rules[target] = rule = Rule(target, [Type.EXPR], CoerceMacro(target))
+        return rule
 
 
 Type.PROGRAM = Type.get('Program')
 
 # Expr -- a value which can fit into any slot
-Type.EXPR = Type.get('Expr')
+Type.EXPR = Type._cache['Expr'] = Expr()
 
 # Type -- a slot which wants a type name
 Type.TYPE = Type.get('Type')
@@ -522,6 +537,8 @@ class Column:
                 if not isinstance(rule.first, LR0) and rule.call: # is nullable
                     item.rule = rule
 
+        self.predict_expr(tag)
+
     def generics(self):
         for rule in self.grammar.get_generics():
             assert rule.target == Generic.get(1)
@@ -566,6 +583,15 @@ class Column:
             for type_ in self.grammar.expand(item.tag.wants):
                 self.want(item, type_)
                 self.predict(type_)
+
+    def predict_expr(self, tag):
+        if isinstance(tag, Token):
+            return
+        if tag == Type.ANY or tag == Type.EXPR:
+            return
+        wanted_by = self.wants[tag]
+        rule = Type.EXPR.get_rule(tag)
+        item = self.add(self.index, rule.first, wanted_by)
 
     def process(self):
         self.generics()
@@ -652,7 +678,7 @@ class Grammar:
         self.add(target, [item], StartList)
 
     def expand(self, tag):
-        assert isinstance(tag, Type)
+        assert isinstance(tag, Tag)
         targets = {}
         for x in tag.expand(self):
             targets[x] = None
@@ -793,13 +819,29 @@ class TypeMacro(Macro):
     def build(self, values):
         return Type.get(values[0].value)
 
+COERCE = Function('Coerce')
+class CoerceMacro(Macro):
+    def __init__(self, type_):
+        self.type = type_
+    def build(self, values):
+        assert len(values) == 1
+        return Call(COERCE, [self.type, values[0]])
+
 grammar.add_type(Type.get('Int'))
 grammar.add_type(Type.get('Text'))
 grammar.add_type(Type.get('Bool'))
 grammar.add_type(List.get(Generic.get(1)))
 
 grammar.add(Type.ANY, [Generic.get(1)], Identity)
-#grammar.add(Generic.get(1), [Type.EXPR], Identity)
+
+class CallMacro(Macro):
+    def __init__(self, call, arg_indexes):
+        assert isinstance(call, Function) and not isinstance(call, Macro)
+        self.call = call
+        self.arg_indexes = arg_indexes
+    def build(self, values):
+        args = [values[i] for i in self.arg_indexes]
+        return Call(self.call, args)
 
 # Generic parentheses!
 
@@ -824,6 +866,7 @@ class Cmp(Macro):
 grammar.add(Type.get('Bool'), [Generic.get(1), Token.WS, Token.word("<"), Token.WS, Generic.get(1)], Cmp)
 
 
+
 #grammar.add(Type.PROGRAM, [Token.word('hello'), Token.NL], Function('hello'))
 
 Int = Type.get('Int')
@@ -839,6 +882,8 @@ grammar.add(Type.PROGRAM, [Type.ANY, Token.NL], Identity)
 grammar.add(Int, [Token.word('hello')], Identity)
 grammar.add(Text, [Token.word('goodbye')], Identity)
 grammar.add(Bool, [Token.word('false')], Identity)
+
+grammar.add(Int, [Int, Token.WS, Token.word("+"), Token.WS, Int], CallMacro(Function('+'), [0, 4]))
 
 grammar.add(Type.EXPR, [Token.word('foo')], Identity)
 
