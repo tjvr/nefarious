@@ -24,6 +24,7 @@ class Type(Tag):
     def __init__(self, name):
         self.name = name
         self._union = {}
+        self.has_generic = False
 
     def __repr__(self):
         return 'Type({!r})'.format(self.name)
@@ -65,6 +66,7 @@ class List(Type):
     def __init__(self, child):
         self.child = child
         self._union = {}
+        self.has_generic = child.has_generic
 
     @staticmethod
     def get(child):
@@ -100,6 +102,7 @@ class Generic(Type):
         assert 1 <= index <= 26
         self.index = index
         self._union = {}
+        self.has_generic = True
 
     def __repr__(self):
         return 'Generic({!r})'.format(self.index)
@@ -136,6 +139,7 @@ class Generic(Type):
 class Any(Type):
     def __init__(self):
         self._union = {}
+        self.has_generic = False
 
     def __repr__(self):
         return "Type.ANY"
@@ -152,6 +156,7 @@ class Expr(Type):
 
     def __init__(self):
         self._union = {}
+        self.has_generic = False
 
     def __repr__(self):
         return "Type.EXPR"
@@ -185,10 +190,8 @@ Type._cache['List'] = None
 
 class Unification:
     # specialise typevars.
-    def __init__(self, values=None):
-        if values is None:
-            values = {}
-        #assert isinstance(values, dict)
+    def __init__(self, values={}):
+        assert isinstance(values, dict)
         self.values = values
 
     def union(self, other):
@@ -222,6 +225,7 @@ assert List.get(Generic.get(1)).is_super(List.get(List.get(Type.get('Int')))).va
 
 class Token(Tag):
     _cache = {}
+    has_generic = False
 
     def __init__(self, kind, value=""):
         self.kind = kind
@@ -439,7 +443,12 @@ class Item:
         self.rule = rule
 
     def __repr__(self):
-        return "Item({!r}, {!r})".format(self.start, self.tag)
+        if self.generic_wants:
+            return "Item({!r}, {!r}, <{}>)".format(self.start, self.tag,
+                    ", ".join(str(t) for t in self.generic_wants.keys() if isinstance(t, Type)))
+        else:
+            return "Item({!r}, {!r}, [{}])".format(self.start, self.tag,
+                    ", ".join(str(item.tag.rule.target) for item in self.wanted_by))
 
     def evaluate(self, stack=None):
         if self.value is not None:
@@ -478,7 +487,7 @@ class Item:
         self.children = children = []
         for item in reversed(stack):
             child = item.right.evaluate(stack)
-            # TODO this doesn't work for WS
+            # TODO this doesn't work for (nullable) WS
             #assert child is not None, repr(item) + " RHS evaluated to None"
             children.append(child)
 
@@ -509,7 +518,7 @@ class Column:
         self.items.append(item)
         self.unique[key] = item
 
-        if isinstance(tag, LR0) and not isinstance(tag.wants, Generic):
+        if isinstance(tag, LR0) and not tag.wants.has_generic:
             self.want(item, tag.wants)
         return item
 
@@ -537,7 +546,7 @@ class Column:
                 if not isinstance(rule.first, LR0) and rule.call: # is nullable
                     item.rule = rule
 
-        self.predict_expr(tag)
+        #self.predict_expr(tag)
 
     def generics(self):
         for rule in self.grammar.get_generics():
@@ -547,22 +556,27 @@ class Column:
 
     def complete(self, right):
         for left in right.wanted_by:
+            
+            print '[', left
+            print ']', right
+            print
 
             tag = left.tag
             wanted_by = left.wanted_by
-            if isinstance(tag.wants, Generic):
+            if tag.wants.has_generic:
                 if not isinstance(right.tag, Type):
                     continue
 
                 unification = tag.wants.is_super(right.tag)
                 if not unification:
+                    #import pdb; pdb.set_trace()
                     # TODO warn?
                     continue
                 old, tag = tag, tag.specialise(unification)
                 assert old.rule.target.is_super(tag.rule.target)
-                print old.rule.target, ':>', tag.rule.target
+                #print old.rule.target, ':>', tag.rule.target
 
-                if isinstance(left.tag.rule.target, Generic):
+                if left.tag.rule.target.has_generic:
                     new_lhs = tag.rule.target
                     if new_lhs not in left.generic_wants:
                         # TODO warn?
@@ -575,7 +589,7 @@ class Column:
             new.generic_wants = left.generic_wants
 
     def predict_generic(self, item):
-        if isinstance(item.tag.rule.target, Generic):
+        if item.tag.rule.target.has_generic:
             for type_ in item.generic_wants.keys():
                 self.want(item, type_)
                 self.predict(type_)
@@ -830,6 +844,7 @@ class CoerceMacro(Macro):
 grammar.add_type(Type.get('Int'))
 grammar.add_type(Type.get('Text'))
 grammar.add_type(Type.get('Bool'))
+grammar.add_type(Type.get('Pair'))
 grammar.add_type(List.get(Generic.get(1)))
 
 grammar.add(Type.ANY, [Generic.get(1)], Identity)
@@ -849,21 +864,21 @@ class CallMacro(Macro):
 class Parens(Macro):
     def build(self, values):
         return values[2]
-grammar.add(Generic.get(1), [Token.word("("), Token.WS, Generic.get(1), Token.WS, Token.word(")")], Parens)
+#grammar.add(Generic.get(1), [Token.word("("), Token.WS, Generic.get(1), Token.WS, Token.word(")")], Parens)
 
 CHOICE = Function('choice')
 @singleton
 class Choice(Macro):
     def build(self, values):
         return Call(CHOICE, [values[2], values[6]])
-grammar.add(Generic.get(1), [Token.word("choose"), Token.WS, Generic.get(1), Token.WS, Token.word("or"), Token.WS, Generic.get(1)], Choice)
+#grammar.add(Generic.get(1), [Token.word("choose"), Token.WS, Generic.get(1), Token.WS, Token.word("or"), Token.WS, Generic.get(1)], Choice)
 
 CMP = Function('cmp')
 @singleton
 class Cmp(Macro):
     def build(self, values):
         return Call(CMP, [values[0], values[4]])
-grammar.add(Type.get('Bool'), [Generic.get(1), Token.WS, Token.word("<"), Token.WS, Generic.get(1)], Cmp)
+#grammar.add(Type.get('Bool'), [Generic.get(1), Token.WS, Token.word("<"), Token.WS, Generic.get(1)], Cmp)
 
 
 
@@ -883,13 +898,17 @@ grammar.add(Int, [Token.word('hello')], Identity)
 grammar.add(Text, [Token.word('goodbye')], Identity)
 grammar.add(Bool, [Token.word('false')], Identity)
 
-grammar.add(Int, [Int, Token.WS, Token.word("+"), Token.WS, Int], CallMacro(Function('+'), [0, 4]))
+#grammar.add(Int, [Int, Token.WS, Token.word("+"), Token.WS, Int], CallMacro(Function('+'), [0, 4]))
 
 grammar.add(Type.EXPR, [Token.word('foo')], Identity)
 
 
-#grammar.add(List(Generic()), [Generic(), Token.WS, Generic()], StartList)
-#grammar.add(List(Generic()), [List(Generic()), Token.WS, Generic()], ContinueList)
+#grammar.add(Type.get('Pair'), [Generic.get(1), Token.WS, Generic.get(1)],
+#        CallMacro(Function('pair'), [0, 2]))
+grammar.add(Generic.get(1), [Generic.get(1), Token.WS, Generic.get(1)],
+        CallMacro(Function('pair'), [0, 2]))
+
+#grammar.add(List.get(Generic.get(1)), [List.get(Generic.get(1)), Token.WS, Token.word(","), Token.WS, Generic.get(1)], ContinueList)
 
 #grammar.add_list(List(Generic(0)), [Token.get(","), Generic(0)])
 
