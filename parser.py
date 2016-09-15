@@ -450,6 +450,7 @@ class Item:
         self.rule = rule
 
     def __repr__(self):
+        #return "Item({!r}, {!r})".format(self.start, self.tag)
         if self.generic_wants:
             return "Item({!r}, {!r}, <{}>)".format(self.start, self.tag,
                     ", ".join(str(t) for t in self.generic_wants.keys() if isinstance(t, Type)))
@@ -572,9 +573,9 @@ class Column:
     def complete(self, right):
         for left in right.wanted_by:
 
-            print '[', left
-            print ']', right
-            print
+            #print '[', left
+            #print ']', right
+            #print
 
             tag = left.tag
             wanted_by = left.wanted_by
@@ -625,6 +626,9 @@ class Column:
         wanted_by = self.wants[tag]
         rule = Type.EXPR.get_rule(tag)
         item = self.add(self.index, rule.first, wanted_by)
+        # nullables need a value!
+        if not isinstance(rule.first, LR0) and rule.call: # is nullable
+            item.rule = rule
 
     def process(self):
         self.generics()
@@ -892,13 +896,18 @@ class CallMacro(Macro):
         args = [values[i] for i in self.arg_indexes]
         return Call(self.call, args)
 
+
+
+grammar.add(List.get(Generic.get(1)), [Generic.get(1)], StartList)
+grammar.add(List.get(Generic.get(1)), [List.get(Generic.get(1)), Token.WS, Token.word(","), Token.WS, Generic.get(1)], ContinueList)
+
 # Generic parentheses!
 
 @singleton
 class Parens(Macro):
     def build(self, values):
         return values[2]
-#grammar.add(Generic.get(1), [Token.word("("), Token.WS, Generic.get(1), Token.WS, Token.word(")")], Parens)
+grammar.add(Generic.get(1), [Token.word("("), Token.WS, Generic.get(1), Token.WS, Token.word(")")], Parens)
 
 CHOICE = Function('choice')
 @singleton
@@ -936,10 +945,6 @@ grammar.add(Bool, [Token.word('false')], Identity)
 
 grammar.add(Type.EXPR, [Token.word('foo')], Identity)
 
-
-grammar.add(List.get(Generic.get(1)), [Generic.get(1)], StartList)
-
-grammar.add(List.get(Generic.get(1)), [List.get(Generic.get(1)), Token.WS, Token.word(","), Token.WS, Generic.get(1)], ContinueList)
 
 #grammar.add_list(List(Generic(0)), [Token.get(","), Generic(0)])
 
