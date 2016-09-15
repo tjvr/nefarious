@@ -1,6 +1,8 @@
 #import sys
 #sys.setrecursionlimit(2000)
 
+DEBUG = False
+
 class Tree:
     def sexpr(self):
         raise NotImplementedError
@@ -189,7 +191,7 @@ Type._cache['List'] = None
 class Unification:
     # specialise typevars.
     def __init__(self, values={}):
-        assert isinstance(values, dict)
+        #assert isinstance(values, dict)
         self.values = values
 
     def union(self, other):
@@ -211,8 +213,8 @@ class Unification:
         return "<" + ",\n ".join(str(Generic.get(i)) + " = " + str(t) for (i, t)
                 in self.values.items()) + ">"
 
-    def __hash__(self):
-        return hash(tuple(self.values.items()))
+    def hash(self):
+        return tuple(self.values.items())
 
 # test cases.
 list_int = List.get(Type.get('Int'))
@@ -399,13 +401,25 @@ class Rule:
         return "<{} -> {}>".format(self.target, " ".join(map(str, self.symbols)))
 
     def specialise(self, unification):
-        if hash(unification) in self._specialise:
-            return self._specialise[hash(unification)]
-        target = self.target.specialise(unification)
-        symbols = [t.specialise(unification) for t in self.symbols]
+        rule = self
+        indexes = unification.values.keys()
+        # TODO sort indexes
+        for index in indexes:
+            type_ = unification.values[index]
+            rule = rule._specialise_once(index, type_)
+        return rule
+
+    def _specialise_once(self, index, type_):
+        key = index, type_
+        if key in self._specialise:
+            return self._specialise[key]
+
+        u = Unification({index: type_})
+        target = self.target.specialise(u)
+        symbols = [t.specialise(u) for t in self.symbols]
         rule = Rule(target, symbols, self.call)
         rule.priority = self.priority
-        self._specialise[hash(unification)] = rule
+        self._specialise[key] = rule
         return rule
 
 
@@ -660,6 +674,12 @@ class Column:
             if not isinstance(item.tag, LR0):
                 item.evaluate()
 
+    def print_(self):
+        print self.index
+        for item in self.items:
+            print item
+        print
+
 
 class Grammar:
     def __init__(self):
@@ -790,11 +810,15 @@ class Macro(Function):
 
 class Call(Tree):
     def __init__(self, func, args):
+        assert isinstance(func, Function)
         self.func = func
+        assert isinstance(args, list)
+        for arg in args:
+            assert isinstance(arg, Tree)
         self.args = args
 
     def sexpr(self):
-        return "(" + self.func.sexpr() + " " + " ".join(a.sexpr() for a in self.args) + ")"
+        return "(" + self.func.sexpr() + " " + " ".join([a.sexpr() for a in self.args]) + ")"
 
 
 grammar = Grammar()
@@ -995,10 +1019,9 @@ def parse(source):
             else:
                 line += token.value
 
-        print index
-        for item in column.items:
-            print item
-        print
+        if DEBUG:
+            column.print_()
+
         previous, column = column, Column(grammar, index + 1)
         if not column.scan(token, previous):
             msg = "Unexpected " + token.kind + " @ " + str(index)
@@ -1025,10 +1048,8 @@ def parse(source):
         token = lexer.lex()
         index += 1
 
-    print index
-    for item in column.items:
-        print item
-    print
+    if DEBUG:
+        column.print_()
     key = 0, Type.PROGRAM
     if key not in column.unique:
         msg = "Unexpected EOF"
