@@ -502,6 +502,7 @@ class Column:
         self.items = []
         self.unique = {}
         self.wants = {}
+        self.wants_generic = []
 
     def want(self, item, type_):
         if type_ in self.wants:
@@ -539,6 +540,10 @@ class Column:
     def predict(self, tag):
         wanted_by = self.wants[tag]
 
+        for item in self.wants_generic:
+            if item not in wanted_by:
+                wanted_by.append(item)
+
         for target in self.grammar.expand(tag):
             for rule in self.grammar.get(target):
                 item = self.add(self.index, rule.first, wanted_by)
@@ -556,7 +561,7 @@ class Column:
 
     def complete(self, right):
         for left in right.wanted_by:
-            
+
             print '[', left
             print ']', right
             print
@@ -593,6 +598,11 @@ class Column:
             for type_ in item.generic_wants.keys():
                 self.want(item, type_)
                 self.predict(type_)
+
+            # fix edge case
+            if item.start == self.index:
+                self.wants_generic.append(item)
+
         else:
             for type_ in self.grammar.expand(item.tag.wants):
                 self.want(item, type_)
@@ -819,7 +829,7 @@ grammar.add_list(Type.get('Block'), [Type.get('Line')])
 # Always include "Expr".
 # Generics expand to any type.   'a -> Expr, Int, Frac, Text ...
 #
-# Completion: unify right with left.wants. 
+# Completion: unify right with left.wants.
 # Create new (but uniqued!) LR0s.
 # right must be a *subtype* of left.wants!
 # and target must be a *subtype* of the original wanted_by ~ target.
@@ -908,7 +918,7 @@ grammar.add(Type.EXPR, [Token.word('foo')], Identity)
 grammar.add(Generic.get(1), [Generic.get(1), Token.WS, Generic.get(1)],
         CallMacro(Function('pair'), [0, 2]))
 
-#grammar.add(List.get(Generic.get(1)), [List.get(Generic.get(1)), Token.WS, Token.word(","), Token.WS, Generic.get(1)], ContinueList)
+grammar.add(List.get(Generic.get(1)), [List.get(Generic.get(1)), Token.WS, Token.word(","), Token.WS, Generic.get(1)], ContinueList)
 
 #grammar.add_list(List(Generic(0)), [Token.get(","), Generic(0)])
 
@@ -917,7 +927,7 @@ grammar.add(Generic.get(1), [Generic.get(1), Token.WS, Generic.get(1)],
 #     Type.get('Block'),
 #     Token.get('{'),
 # ], PreDef)
-# 
+#
 # grammar.add(Type.get('Line'), [
 #     Type.get('_PreDef'),
 #     Type.get('Block'),
