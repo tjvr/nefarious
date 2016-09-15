@@ -123,8 +123,6 @@ class Generic(Type):
         if isinstance(other, Generic):
             # TODO what's the right thing to do here; 'a = 'b ?
             return
-        if isinstance(other, Any):
-            return
         return Unification({
             self.index: other,
         })
@@ -213,6 +211,9 @@ class Unification:
         return "<" + ",\n ".join(str(Generic.get(i)) + " = " + str(t) for (i, t)
                 in self.values.items()) + ">"
 
+    def __hash__(self):
+        return hash(tuple(self.values.items()))
+
 # test cases.
 list_int = List.get(Type.get('Int'))
 assert Type.get('Int').is_super(Type.get('Text')) == None
@@ -220,6 +221,7 @@ assert Type.get('Int').is_super(Type.get('Int')).values == {}
 assert list_int.is_super(List(Type.get('Int'))).values == {}
 assert Generic.get(2).is_super(Type.get('Int')).values == {2: Type.get('Int')}
 assert List.get(Generic.get(1)).is_super(List.get(List.get(Type.get('Int')))).values == {1: List.get(Type.get('Int'))}
+assert List.get(Generic.get(1)) == List.get(Generic.get(1))
 
 
 
@@ -371,6 +373,8 @@ class Rule:
         self.symbols = symbols
         self.target = target
 
+        self._specialise = {}
+
         # TODO if target is Generic, same Generic must appear somewhere in
         # symbols.
 
@@ -395,10 +399,13 @@ class Rule:
         return "<{} -> {}>".format(self.target, " ".join(map(str, self.symbols)))
 
     def specialise(self, unification):
+        if hash(unification) in self._specialise:
+            return self._specialise[hash(unification)]
         target = self.target.specialise(unification)
         symbols = [t.specialise(unification) for t in self.symbols]
         rule = Rule(target, symbols, self.call)
         rule.priority = self.priority
+        self._specialise[hash(unification)] = rule
         return rule
 
 
@@ -551,6 +558,9 @@ class Column:
                 if not isinstance(rule.first, LR0) and rule.call: # is nullable
                     item.rule = rule
 
+                if target.has_generic:
+                    item.generic_wants = {}
+
         #self.predict_expr(tag)
 
     def generics(self):
@@ -574,7 +584,6 @@ class Column:
 
                 unification = tag.wants.is_super(right.tag)
                 if not unification:
-                    #import pdb; pdb.set_trace()
                     # TODO warn?
                     continue
                 old, tag = tag, tag.specialise(unification)
@@ -623,7 +632,7 @@ class Column:
         for item in self.items:
             if isinstance(item.tag, LR0):
                 target = item.tag.wants
-                if isinstance(target, Generic):
+                if target.has_generic:
                     self.predict_generic(item)
                 else:
                     self.predict(target)
@@ -670,6 +679,19 @@ class Grammar:
                 return
 
     def get(self, target):
+        # TODO specialise target for container types.
+
+        if isinstance(target, List) and not target.has_generic:
+            # TODO Rules need to be uniqued.
+            list_gen = List.get(Generic.get(1))
+            matches = self.get(list_gen)
+            unification = list_gen.is_super(target)
+            if unification is None:
+                print list_gen, target
+                return []
+            else:
+                return [m.specialise(unification) for m in matches]
+
         matches = []
         for rule_sets in reversed(self.stack):
             if target in rule_sets:
@@ -703,6 +725,8 @@ class Grammar:
 
     def expand(self, tag):
         assert isinstance(tag, Tag)
+        if isinstance(tag, List):
+            return [tag]
         targets = {}
         for x in tag.expand(self):
             targets[x] = None
@@ -794,8 +818,8 @@ class ContinueList(Macro):
     def build(self, values):
         list_ = values[0]
         assert isinstance(list_, Call)
-        assert list_[0].func is LIST
-        list_[0].args.append(values[-1])
+        assert list_.func is LIST
+        list_.args.append(values[-1])
         return list_
 
 # For, um, subtypes and stuff.
@@ -851,11 +875,11 @@ class CoerceMacro(Macro):
         assert len(values) == 1
         return Call(COERCE, [self.type, values[0]])
 
+# add_type: what should Type.ANY expand to?
 grammar.add_type(Type.get('Int'))
 grammar.add_type(Type.get('Text'))
 grammar.add_type(Type.get('Bool'))
-grammar.add_type(Type.get('Pair'))
-grammar.add_type(List.get(Generic.get(1)))
+grammar.add_type(List.get(Type.ANY)) #Generic.get(1)))
 
 grammar.add(Type.ANY, [Generic.get(1)], Identity)
 
@@ -913,10 +937,7 @@ grammar.add(Bool, [Token.word('false')], Identity)
 grammar.add(Type.EXPR, [Token.word('foo')], Identity)
 
 
-#grammar.add(Type.get('Pair'), [Generic.get(1), Token.WS, Generic.get(1)],
-#        CallMacro(Function('pair'), [0, 2]))
-grammar.add(Generic.get(1), [Generic.get(1), Token.WS, Generic.get(1)],
-        CallMacro(Function('pair'), [0, 2]))
+grammar.add(List.get(Generic.get(1)), [Generic.get(1)], StartList)
 
 grammar.add(List.get(Generic.get(1)), [List.get(Generic.get(1)), Token.WS, Token.word(","), Token.WS, Generic.get(1)], ContinueList)
 
