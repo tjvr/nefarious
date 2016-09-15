@@ -1,0 +1,6 @@
+*.pyc
+pypy/
+
+# The built binary.
+nfs
+
