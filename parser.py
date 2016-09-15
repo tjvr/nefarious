@@ -518,6 +518,11 @@ class Column:
         else:
             self.wants[type_] = [item]
 
+    def has(self, start, tag):
+        key = start, tag
+        if key in self.unique:
+            return self.unique[key]
+
     def add(self, start, tag, wanted_by):
         key = start, tag
         if key in self.unique:
@@ -640,6 +645,13 @@ class Column:
                     self.predict_generic(item)
                 else:
                     self.predict(target)
+
+                # nullable hack.
+                # sometimes we predict a nullable that's already been completed...
+                other = self.has(self.index, target)
+                if other and not isinstance(other.tag, LR0) and other.rule.call: # is nullable
+                    self.complete(other) # TODO optimize
+
             else:
                 self.complete(item)
 
@@ -690,17 +702,16 @@ class Grammar:
             list_gen = List.get(Generic.get(1))
             matches = self.get(list_gen)
             unification = list_gen.is_super(target)
-            if unification is None:
-                print list_gen, target
-                return []
-            else:
-                return [m.specialise(unification) for m in matches]
+            if unification is not None:
+                for m in matches:
+                    yield m.specialise(unification)
 
         matches = []
         for rule_sets in reversed(self.stack):
             if target in rule_sets:
                 matches += rule_sets[target]
-        return matches
+        for m in matches:
+            yield m
 
     def get_generics(self):
         # TODO optimise
@@ -883,7 +894,7 @@ class CoerceMacro(Macro):
 grammar.add_type(Type.get('Int'))
 grammar.add_type(Type.get('Text'))
 grammar.add_type(Type.get('Bool'))
-grammar.add_type(List.get(Type.ANY)) #Generic.get(1)))
+grammar.add_type(List.get(Type.ANY))
 
 grammar.add(Type.ANY, [Generic.get(1)], Identity)
 
@@ -898,8 +909,9 @@ class CallMacro(Macro):
 
 
 
-grammar.add(List.get(Generic.get(1)), [Generic.get(1)], StartList)
-grammar.add(List.get(Generic.get(1)), [List.get(Generic.get(1)), Token.WS, Token.word(","), Token.WS, Generic.get(1)], ContinueList)
+alpha = Type.ANY #Generic.get(1)
+grammar.add(List.get(alpha), [alpha], StartList)
+grammar.add(List.get(alpha), [List.get(alpha), Token.WS, Token.word(","), Token.WS, alpha], ContinueList)
 
 # Generic parentheses!
 
