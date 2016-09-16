@@ -7,7 +7,15 @@ else
 RUNINTERP = $(PYPY_EXECUTABLE)
 endif
 
-nfs: test pypy nefarious/parser.py nefarious/nefarious.py
+all:
+	make test && make nfs
+
+nfs: pypy \
+		nefarious/lex.py \
+		nefarious/types.py \
+		nefarious/parser.py \
+		nefarious/grammar.py \
+		nefarious/nefarious.py
 	$(RUNINTERP) pypy/rpython/bin/rpython --gc=incminimark --output=nfs goal.py
 	# -Ojit --jit-backend=x86 --translation-jit
 	# --cc=afl-clang
@@ -24,12 +32,14 @@ test-nfs:
 
 # RPython toolchain is required to build nfs executable.
 pypy.zip:
-	echo "Downloading PyPy source..."
+	echo "Downloading PyPy source $(PYPY_SOURCE)..."
 	curl -L https://bitbucket.org/pypy/pypy/downloads/$(PYPY_SOURCE).zip > pypy.zip
 pypy: pypy.zip
-	echo "Unzipping..."
-	unzip -q pypy.zip
-	mv $(PYPY_SOURCE) pypy
+	echo "Unzipping $(PYPY_SOURCE)..."
+	rm -rf pypy
+	unzip -qn pypy.zip
+	mv $(PYPY_SOURCE)/ pypy
+	touch pypy
 
 clean:
 	rm nfs
