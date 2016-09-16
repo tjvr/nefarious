@@ -9,9 +9,6 @@ class Tree:
 
 
 class Tag(Tree):
-    def expand(self, grammar):
-        return [self]
-
     def specialise(self, unification):
         return self
 
@@ -58,8 +55,6 @@ class Type(Tag):
         if self is other:
             return Unification()
 
-    def expand(self, grammar):
-        return [self]
 
 # TODO custom parametric types
 class List(Type):
@@ -88,9 +83,6 @@ class List(Type):
     def _is_super(self, other):
         if isinstance(other, List):
             return self.child.is_super(other.child)
-
-    def expand(self, grammar):
-        return [List.get(type_) for type_ in self.child.expand(grammar)]
 
     def specialise(self, unification):
         return List.get(self.child.specialise(unification))
@@ -128,9 +120,6 @@ class Generic(Type):
         return Unification({
             self.index: other,
         })
-
-    def expand(self, grammar):
-        return grammar.types
 
     def specialise(self, unification):
         return unification.values.get(self.index, self)
@@ -760,12 +749,9 @@ class Grammar:
 
     def expand(self, tag):
         assert isinstance(tag, Tag)
-        if isinstance(tag, List):
-            return [tag]
-        targets = {}
-        for x in tag.expand(self):
-            targets[x] = None
-        return targets.keys()
+        if isinstance(tag, Generic):
+            return self.types
+        return [tag]
 
 
 def build(rule, children):
