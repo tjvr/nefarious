@@ -950,14 +950,14 @@ CHOICE = Function('choice')
 class Choice(Macro):
     def build(self, values):
         return Call(CHOICE, [values[2], values[6]])
-#grammar.add(Generic.get(1), [Token.word("choose"), Token.WS, Generic.get(1), Token.WS, Token.word("or"), Token.WS, Generic.get(1)], Choice)
+grammar.add(Generic.get(1), [Token.word("choose"), Token.WS, Generic.get(1), Token.WS, Token.word("or"), Token.WS, Generic.get(1)], Choice)
 
 CMP = Function('cmp')
 @singleton
 class Cmp(Macro):
     def build(self, values):
         return Call(CMP, [values[0], values[4]])
-#grammar.add(Type.get('Bool'), [Generic.get(1), Token.WS, Token.word("<"), Token.WS, Generic.get(1)], Cmp)
+grammar.add(Type.get('Bool'), [Generic.get(1), Token.WS, Token.word("<"), Token.WS, Generic.get(1)], Cmp)
 
 
 
@@ -998,7 +998,7 @@ grammar.add(Type.EXPR, [Token.word('foo')], Identity)
 
 
 
-def parse(source):
+def parse(source, debug=DEBUG):
     lexer = Lexer(source)
 
     column = Column(grammar, 0)
@@ -1019,7 +1019,7 @@ def parse(source):
             else:
                 line += token.value
 
-        if DEBUG:
+        if debug:
             column.print_()
 
         previous, column = column, Column(grammar, index + 1)
@@ -1048,7 +1048,7 @@ def parse(source):
         token = lexer.lex()
         index += 1
 
-    if DEBUG:
+    if debug:
         column.print_()
     key = 0, Type.PROGRAM
     if key not in column.unique:

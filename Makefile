@@ -18,3 +18,6 @@ pypy:
 	echo "Downloading PyPy..."
 	hg clone https://bitbucket.org/pypy/pypy
 
+test:
+	$(RUNINTERP) -m unittest --buffer tests
+
