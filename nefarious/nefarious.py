@@ -2,7 +2,7 @@
 import os
 import sys
 
-from parser import parse
+from .grammar import parse
 
 
 try:

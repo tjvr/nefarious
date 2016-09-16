@@ -5,7 +5,8 @@ from StringIO import StringIO
 import sys
 import unittest
 
-from nefarious.parser import *
+from nefarious.types import *
+from nefarious.grammar import parse
 
 SELF_PATH = os.path.dirname(os.path.abspath(__file__))
 
@@ -19,6 +20,17 @@ def captured_output():
         yield sys.stdout, sys.stderr
     finally:
         sys.stdout, sys.stderr = old_out, old_err
+
+
+class TypesTests(unittest.TestCase):
+    def test_types(self):
+        list_int = List.get(Type.get('Int'))
+        assert Type.get('Int').is_super(Type.get('Text')) == None
+        assert Type.get('Int').is_super(Type.get('Int')).values == {}
+        assert list_int.is_super(List(Type.get('Int'))).values == {}
+        assert Generic.get(2).is_super(Type.get('Int')).values == {2: Type.get('Int')}
+        assert List.get(Generic.get(1)).is_super(List.get(List.get(Type.get('Int')))).values == {1: List.get(Type.get('Int'))}
+        assert List.get(Generic.get(1)) == List.get(Generic.get(1))
 
 
 # TODO move grammar into setUp()
