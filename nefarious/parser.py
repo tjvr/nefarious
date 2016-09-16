@@ -216,36 +216,35 @@ assert List.get(Generic.get(1)) == List.get(Generic.get(1))
 
 
 
-class Token(Tag):
+class Word(Tag):
     _cache = {}
     has_generic = False
 
     def __init__(self, kind, value=""):
         self.kind = kind
         self.value = value
+        self.has_value = bool(len(self.value) and self.kind != 'WS' and self.kind != 'NL')
 
     def __str__(self):
         return self.value or self.kind
 
     def __repr__(self):
         if self.value and self.value != ' ':
-            return 'Token.word({!r})'.format(self.value)
+            return 'Word.word({!r})'.format(self.value)
         else:
-            return 'Token.{}'.format(self.kind)
+            return 'Word.{}'.format(self.kind)
 
     @staticmethod
     def get(kind, value=""):
         assert isinstance(kind, str)
         assert isinstance(value, str)
-        if kind == 'WS':
-            value = ' '
-        elif value:
-            assert kind in ('RESERVED', 'PUNC', 'WORD', 'ERROR'), value
+        if value:
+            assert kind in ('RESERVED', 'PUNC', 'WORD', 'ERROR', 'WS'), value
         key = kind, value
-        if key in Token._cache:
-            word = Token._cache[key]
+        if key in Word._cache:
+            word = Word._cache[key]
         else:
-            word = Token._cache[key] = Token(kind, value)
+            word = Word._cache[key] = Word(kind, value)
         return word
 
     @staticmethod
@@ -257,31 +256,32 @@ class Token(Tag):
         else:
             is_word = True
         if is_word:
-            return Token.get('WORD', value)
+            return Word.get('WORD', value)
         elif value in ":{}":
-            return Token.get('RESERVED', value)
+            return Word.get('RESERVED', value)
         elif value in "-!\"#$%&\\'()*+,./;<=>?@[]^`|~":
-            return Token.get('PUNC', value)
+            return Word.get('PUNC', value)
         elif value == ' ':
-            return Token.WS
+            return Word.WS
         raise ValueError(value)
 
     def sexpr(self):
-        return self.value or self.kind
+        return self.value if self.has_value else self.kind
 
 
 
 # Match token kind, eg. NL
-Token.EOF = Token.get('EOF')
-Token.NL = Token.get('NL')
-Token.WS = Token.get('WS', ' ')
+Word.EOF = Word.get('EOF')
+Word.NL = Word.get('NL')
+Word.WS = Word.get('WS', ' ')
+Word.NULL_WS = Word.get('WS', '')
 
 # Match token value, eg. `+` or `while`
 # nb. can *also* match on kind.
-Token.RESERVED = Token.get('RESERVED')
-Token.PUNC = Token.get('PUNC')
-Token.WORD = Token.get('WORD')
-Token.ERROR = Token.get('ERROR')
+Word.RESERVED = Word.get('RESERVED')
+Word.PUNC = Word.get('PUNC')
+Word.WORD = Word.get('WORD')
+Word.ERROR = Word.get('ERROR')
 
 class Lexer:
     def __init__(self, source):
@@ -299,13 +299,13 @@ class Lexer:
 
     def lex(self):
         if self.tok == '':
-            return Token.EOF
+            return Word.EOF
 
         elif self.tok == '\n':
             self.next()
             while self.tok == ' ':
                 self.next()
-            return Token.NL
+            return Word.NL
 
         elif self.tok == ' ':
             self.next()
@@ -315,24 +315,24 @@ class Lexer:
                 self.next()
                 while self.tok == ' ':
                     self.next()
-                return Token.NL
-            return Token.WS
+                return Word.NL
+            return Word.WS
 
         elif self.tok in '\t\f\r':
             c = self.tok
             self.next()
             # error
-            return Token.get('ERROR', c)
+            return Word.get('ERROR', c)
 
         elif self.tok in ":{}":
             c = self.tok
             self.next()
-            return Token.get('RESERVED', c)
+            return Word.get('RESERVED', c)
 
         elif self.tok in "-!\"#$%&\\'()*+,./;<=>?@[]^`|~":
             c = self.tok
             self.next()
-            return Token.get('PUNC', c)
+            return Word.get('PUNC', c)
 
         # TODO _
         else:
@@ -341,7 +341,7 @@ class Lexer:
             while self.tok not in " \n\t\f\r:{}-!\"#$%&\\'()*+,./;<=>?@[]^`|~":
                 s += self.tok
                 self.next()
-            return Token.get('WORD', s)
+            return Word.get('WORD', s)
 
     @staticmethod
     def tokenize(text):
@@ -350,7 +350,7 @@ class Lexer:
         tokens = []
         lexer = Lexer(text)
         token = lexer.lex()
-        while token != Token.EOF:
+        while token != Word.EOF:
             tokens.append(token)
             token = lexer.lex()
         return tokens
@@ -498,8 +498,7 @@ class Item:
         self.children = children = []
         for item in reversed(stack):
             child = item.right.evaluate(stack)
-            # TODO this doesn't work for (nullable) WS
-            #assert child is not None, repr(item) + " RHS evaluated to None"
+            assert child is not None, "item RHS evaluated to None"
             children.append(child)
 
         return children
@@ -540,12 +539,13 @@ class Column:
         return item
 
     def scan(self, word, previous):
+        assert isinstance(word, Word)
         assert len(self.items) == 0
-        if word.value:
+        if word.has_value:
             if word in previous.wants:
                 item = self.add(previous.index, word, previous.wants[word])
                 item.value = word
-            token = Token.get(word.kind)
+            token = Word.get(word.kind)
         else:
             token = word
         if token in previous.wants:
@@ -627,7 +627,7 @@ class Column:
                 self.predict(type_)
 
     def predict_expr(self, tag):
-        if isinstance(tag, Token):
+        if isinstance(tag, Word):
             return
         if tag == Type.ANY or tag == Type.EXPR:
             return
@@ -693,7 +693,7 @@ class Grammar:
         self.types.append(type_)
         if isinstance(type_, List):
             return # TODO parametric rules
-        self.add(Type.TYPE, [Token.word(type_.name)], TypeMacro)
+        self.add(Type.TYPE, [Word.word(type_.name)], TypeMacro)
 
     def remove(self, rule):
         # TODO should this traverse the stack?
@@ -823,9 +823,8 @@ DEFINE = Function('define')
 @singleton
 class Null(Macro):
     def build(self, values):
-        return None
-
-grammar.add(Token.WS, [], Null)
+        return Word.NULL_WS
+grammar.add(Word.WS, [], Null)
 
 # For, um, lists.
 # After all, this is "Nefarious Scheme"
@@ -921,7 +920,7 @@ class CallMacro(Macro):
 
 alpha = Type.ANY #Generic.get(1)
 grammar.add(List.get(alpha), [alpha], StartList)
-grammar.add(List.get(alpha), [List.get(alpha), Token.WS, Token.word(","), Token.WS, alpha], ContinueList)
+grammar.add(List.get(alpha), [List.get(alpha), Word.WS, Word.word(","), Word.WS, alpha], ContinueList)
 
 # Generic parentheses!
 
@@ -929,57 +928,57 @@ grammar.add(List.get(alpha), [List.get(alpha), Token.WS, Token.word(","), Token.
 class Parens(Macro):
     def build(self, values):
         return values[2]
-grammar.add(Generic.get(1), [Token.word("("), Token.WS, Generic.get(1), Token.WS, Token.word(")")], Parens)
+grammar.add(Generic.get(1), [Word.word("("), Word.WS, Generic.get(1), Word.WS, Word.word(")")], Parens)
 
 CHOICE = Function('choice')
 @singleton
 class Choice(Macro):
     def build(self, values):
         return Call(CHOICE, [values[2], values[6]])
-grammar.add(Generic.get(1), [Token.word("choose"), Token.WS, Generic.get(1), Token.WS, Token.word("or"), Token.WS, Generic.get(1)], Choice)
+grammar.add(Generic.get(1), [Word.word("choose"), Word.WS, Generic.get(1), Word.WS, Word.word("or"), Word.WS, Generic.get(1)], Choice)
 
 CMP = Function('cmp')
 @singleton
 class Cmp(Macro):
     def build(self, values):
         return Call(CMP, [values[0], values[4]])
-grammar.add(Type.get('Bool'), [Generic.get(1), Token.WS, Token.word("<"), Token.WS, Generic.get(1)], Cmp)
+grammar.add(Type.get('Bool'), [Generic.get(1), Word.WS, Word.word("<"), Word.WS, Generic.get(1)], Cmp)
 
 
 
-#grammar.add(Type.PROGRAM, [Token.word('hello'), Token.NL], Function('hello'))
+#grammar.add(Type.PROGRAM, [Word.word('hello'), Word.NL], Function('hello'))
 
 Int = Type.get('Int')
 Text = Type.get('Text')
 Bool = Type.get('Bool')
 
-grammar.add(Type.PROGRAM, [Type.ANY, Token.NL], Identity)
+grammar.add(Type.PROGRAM, [Type.ANY, Word.NL], Identity)
 #grammar.add(Type.ANY, [Int], Identity)
-#grammar.add(Type.PROGRAM, [Int, Token.NL], Identity)
-#grammar.add(Type.PROGRAM, [Text, Token.NL], Identity)
-#grammar.add(Type.PROGRAM, [Bool, Token.NL], Identity)
+#grammar.add(Type.PROGRAM, [Int, Word.NL], Identity)
+#grammar.add(Type.PROGRAM, [Text, Word.NL], Identity)
+#grammar.add(Type.PROGRAM, [Bool, Word.NL], Identity)
 
-grammar.add(Int, [Token.word('hello')], Identity)
-grammar.add(Text, [Token.word('goodbye')], Identity)
-grammar.add(Bool, [Token.word('false')], Identity)
+grammar.add(Int, [Word.word('hello')], Identity)
+grammar.add(Text, [Word.word('goodbye')], Identity)
+grammar.add(Bool, [Word.word('false')], Identity)
 
-#grammar.add(Int, [Int, Token.WS, Token.word("+"), Token.WS, Int], CallMacro(Function('+'), [0, 4]))
+#grammar.add(Int, [Int, Word.WS, Word.word("+"), Word.WS, Int], CallMacro(Function('+'), [0, 4]))
 
-grammar.add(Type.EXPR, [Token.word('foo')], Identity)
+grammar.add(Type.EXPR, [Word.word('foo')], Identity)
 
 
-#grammar.add_list(List(Generic(0)), [Token.get(","), Generic(0)])
+#grammar.add_list(List(Generic(0)), [Word.get(","), Generic(0)])
 
 # grammar.add(Type.get('_PreDef'), [
 #     Type.get('_PreDef'),
 #     Type.get('Block'),
-#     Token.get('{'),
+#     Word.get('{'),
 # ], PreDef)
 #
 # grammar.add(Type.get('Line'), [
 #     Type.get('_PreDef'),
 #     Type.get('Block'),
-#     Token.get('}'),
+#     Word.get('}'),
 # ], PostDef)
 
 
@@ -998,9 +997,9 @@ def parse(source, debug=DEBUG):
     token = lexer.lex()
     index = 0
     line = ""
-    while token != Token.EOF:
-        if token != Token.NL:
-            if token == Token.WS:
+    while token != Word.EOF:
+        if token != Word.NL:
+            if token == Word.WS:
                 line += " "
             else:
                 line += token.value
@@ -1014,21 +1013,18 @@ def parse(source, debug=DEBUG):
             if token.value:
                 msg += ": " + token.value
             for token in previous.wants:
-                if isinstance(token, Token):
-                    if token.value and token.value != ' ':
-                        msg += "\nExpected: " + token.value
-                    else:
-                        msg += "\nExpected: " + token.kind
+                if isinstance(token, Word):
+                    msg += "\nExpected: " + token.sexpr()
             msg += "\n>> " + line
             return msg
         column.process()
 
-        if token == Token.word('{'):
+        if token == Word.word('{'):
             column.evaluate()
-        elif token == Token.word('}'):
+        elif token == Word.word('}'):
             column.evaluate()
 
-        if token == Token.NL:
+        if token == Word.NL:
             line = ""
 
         token = lexer.lex()
@@ -1040,11 +1036,8 @@ def parse(source, debug=DEBUG):
     if key not in column.unique:
         msg = "Unexpected EOF"
         #for token in previous.wants:
-        #    if isinstance(token, Token):
-        #        if token.value and token.value != ' ':
-        #            msg += "\nExpected: " + token.value
-        #        else:
-        #            msg += "\nExpected: " + token.kind
+        #    if isinstance(token, Word):
+        #        msg += "\nExpected: " + token.sexpr()
         #msg += "\n>> " + line
         return msg
     start = column.unique[key]
