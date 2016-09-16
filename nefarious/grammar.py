@@ -234,7 +234,6 @@ grammar.add(Type.EXPR, [Word.word('foo')], Identity)
 # ], PostDef)
 
 
-
 def parse(source, debug=False):
     return grammar_parse(source, grammar, debug)
 

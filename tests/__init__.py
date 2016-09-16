@@ -65,7 +65,9 @@ class ParserTests(unittest.TestCase):
     def test_7(self): self._parse("choose hello < hello or false", "(choice (cmp hello hello) false)")
     def test_8(self): self._parse("choose (hello < hello) or false", "(choice (cmp hello hello) false)")
     def test_9(self): self._parse("hello, hello", "(list hello hello)")
-    def test_10(self): self._parse("(hello, hello)", "(list hello hello)")
+    def test_10(self):
+        """sometimes we predict a nullable that's already been completed"""
+        self._parse("(hello, hello)", "(list hello hello)")
     def test_11(self): self._parse("false, hello < hello", "(list false (cmp hello hello))")
 
     def test_12(self): self._parse("hello + foo", "(+ hello (coerce <Int> foo))")

@@ -209,6 +209,12 @@ class Column:
             item.value = word
         return len(self.items) > 0
 
+    def generics(self):
+        for rule in self.grammar.generics():
+            assert rule.target == Generic.get(1)
+            item = self.add(self.index, rule.first, [])
+            item.generic_wants = self.wants
+
     def predict(self, tag):
         wanted_by = self.wants[tag]
 
@@ -228,60 +234,6 @@ class Column:
 
         self.predict_expr(tag)
 
-    def generics(self):
-        for rule in self.grammar.get_generics():
-            assert rule.target == Generic.get(1)
-            item = self.add(self.index, rule.first, [])
-            item.generic_wants = self.wants
-
-    def complete(self, right):
-        for left in right.wanted_by:
-
-            #print '[', left
-            #print ']', right
-            #print
-
-            tag = left.tag
-            wanted_by = left.wanted_by
-            if tag.wants.has_generic:
-                if not isinstance(right.tag, Type):
-                    continue
-
-                unification = tag.wants.is_super(right.tag)
-                if not unification:
-                    # TODO warn?
-                    continue
-                old, tag = tag, tag.specialise(unification)
-                assert old.rule.target.is_super(tag.rule.target)
-                #print old.rule.target, ':>', tag.rule.target
-
-                if left.tag.rule.target.has_generic:
-                    new_lhs = tag.rule.target
-                    if new_lhs not in left.generic_wants:
-                        # TODO warn?
-                        continue
-                    wanted_by = left.generic_wants[new_lhs]
-
-            # assert other.tag.wants == item.tag
-            new = self.add(left.start, tag.advance, wanted_by)
-            new.add_derivation(left, right, tag.rule)
-            new.generic_wants = left.generic_wants
-
-    def predict_generic(self, item):
-        if item.tag.rule.target.has_generic:
-            for type_ in item.generic_wants.keys():
-                self.want(item, type_)
-                self.predict(type_)
-
-            # fix edge case
-            if item.start == self.index:
-                self.wants_generic.append(item)
-
-        else:
-            for type_ in self.grammar.expand(item.tag.wants):
-                self.want(item, type_)
-                self.predict(type_)
-
     def predict_expr(self, tag):
         if isinstance(tag, Word):
             return
@@ -299,6 +251,51 @@ class Column:
         if not isinstance(rule.first, LR0) and rule.call: # is nullable
             item.rule = rule
 
+    def predict_generic(self, item):
+        if item.tag.rule.target.has_generic:
+            for type_ in item.generic_wants.keys():
+                self.want(item, type_)
+                self.predict(type_)
+
+            # fix edge case
+            if item.start == self.index:
+                self.wants_generic.append(item)
+
+        else:
+            for type_ in self.grammar.expand(item.tag.wants):
+                self.want(item, type_)
+                self.predict(type_)
+    def complete(self, right):
+        for left in right.wanted_by:
+            self.complete_once(left, right)
+
+    def complete_once(self, left, right):
+        tag = left.tag
+        wanted_by = left.wanted_by
+        if tag.wants.has_generic:
+            if not isinstance(right.tag, Type):
+                return
+
+            unification = tag.wants.is_super(right.tag)
+            if not unification:
+                # TODO warn?
+                return
+            old, tag = tag, tag.specialise(unification)
+            assert old.rule.target.is_super(tag.rule.target)
+            #print old.rule.target, ':>', tag.rule.target
+
+            if left.tag.rule.target.has_generic:
+                new_lhs = tag.rule.target
+                if new_lhs not in left.generic_wants:
+                    # TODO warn?
+                    return
+                wanted_by = left.generic_wants[new_lhs]
+
+        # assert other.tag.wants == item.tag
+        new = self.add(left.start, tag.advance, wanted_by)
+        new.add_derivation(left, right, tag.rule)
+        new.generic_wants = left.generic_wants
+
     def process(self):
         self.generics()
 
@@ -310,11 +307,11 @@ class Column:
                 else:
                     self.predict(target)
 
-                # nullable hack.
-                # sometimes we predict a nullable that's already been completed...
-                other = self.has(self.index, target)
-                if other and not isinstance(other.tag, LR0) and other.rule.call: # is nullable
-                    self.complete(other) # TODO optimize
+                # sometimes we predict a nullable that's already been completed
+                if self.grammar.is_nullable(target):
+                    # TODO: check, has `other` already been processed?
+                    other = self.has(self.index, target)
+                    self.complete_once(item, other)
 
             else:
                 self.complete(item)
@@ -333,43 +330,39 @@ class Column:
 
 class Grammar:
     def __init__(self):
-        self.rule_sets = {}
-        self.stack = [self.rule_sets]
+        self.scope = Scope()
+        self.stack = [self.scope]
         self.highest_priority = 0
 
-        self.types = []
-        # TODO scope Types?
+    def save(self):
+        assert self.stack[-1] is self.scope
+        self.scope = Scope()
+        self.stack.append(self.scope)
+        assert self.stack[-1] is self.scope
+
+    def restore(self):
+        assert self.stack[-1] is self.scope
+        self.stack.pop()
+        self.scope = self.stack[-1]
+        assert self.stack[-1] is self.scope
+
+    # Rules
 
     def add(self, target, symbols, call=None):
         rule = Rule(target, symbols, call)
         self.highest_priority += 1
         rule.priority = self.highest_priority
-
-        if target not in self.rule_sets:
-            self.rule_sets[target] = []
-        self.rule_sets[target].append(rule)
-        return rule
-
-    def add_type(self, type_):
-        self.types.append(type_)
-        if isinstance(type_, List):
-            return # TODO parametric rules
-        # TODO Type rules
-        #self.add(Type.TYPE, [Word.word(type_.name)], TypeMacro)
+        self.scope.add(rule)
 
     def remove(self, rule):
-        # TODO should this traverse the stack?
-        for rule_sets in reversed(self.stack):
-            rules = rule_sets[target]
-            if rule in rules:
-                rules.remove(rule)
+        for scope in reversed(self.stack):
+            if scope.remove(rule):
                 return
 
     def get(self, target):
-        # TODO specialise target for container types.
-
+        # specialise target for container types. (I think?)
         if isinstance(target, List) and not target.has_generic:
-            # TODO Rules need to be uniqued.
+            # TODO rewrite
             list_gen = List.get(Generic.get(1))
             matches = self.get(list_gen)
             unification = list_gen.is_super(target)
@@ -378,36 +371,71 @@ class Grammar:
                     yield m.specialise(unification)
 
         matches = []
-        for rule_sets in reversed(self.stack):
-            if target in rule_sets:
-                matches += rule_sets[target]
+        for scope in reversed(self.stack):
+            if target in scope.rule_sets:
+                matches += scope.rule_sets[target]
         for m in matches:
             yield m
 
-    def get_generics(self):
-        # TODO optimise
-        for target in self.rule_sets:
-            if isinstance(target, Generic):
-                for x in self.rule_sets[target]:
-                    yield x
+    def is_nullable(self, target):
+        for scope in reversed(self.stack):
+            if target in scope.nullables:
+                return True
+        return False
 
-    def save(self):
-        assert self.stack[-1] is self.rule_sets
-        self.rule_sets = {}
-        self.stack.append(self.rule_sets)
-        assert self.stack[-1] is self.rule_sets
+    def generics(self):
+        for scope in reversed(self.stack):
+            for rule in scope.generics:
+                yield rule
 
-    def restore(self):
-        assert self.stack[-1] is self.rule_sets
-        self.stack.pop()
-        self.rule_sets = self.stack[-1]
-        assert self.stack[-1] is self.rule_sets
+    # Types
+
+    def add_type(self, type_):
+        self.scope.types.append(type_)
+        # TODO Type rules
+        #self.add(Type.TYPE, [Word.word(type_.name)], TypeMacro)
 
     def expand(self, tag):
         assert isinstance(tag, Tag)
         if isinstance(tag, Generic):
-            return self.types
+            return self.all_types()
         return [tag]
+
+    def all_types(self):
+        types = []
+        for scope in self.stack:
+            types.extend(scope.types)
+        return types
+
+
+class Scope:
+    def __init__(self):
+        self.rule_sets = {}
+        self.generics = []
+        self.nullables = {}
+        self.types = []
+
+    def add(self, rule):
+        target = rule.target
+        if target not in self.rule_sets:
+            self.rule_sets[target] = []
+        self.rule_sets[target].append(rule)
+
+        if len(rule.symbols) == 0:
+            self.nullables[target] = None
+        if isinstance(target, Generic):
+            self.generics.append(rule)
+
+    def remove(self, rule):
+        if rule.target in self.rule_sets:
+            rules = self.rule_sets[rule.target]
+            try:
+                rules.remove(rule)
+                return True
+            except IndexError:
+                pass
+        return False
+
 
 
 def grammar_parse(source, grammar, debug=DEBUG):
