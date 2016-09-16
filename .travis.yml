@@ -1,0 +1,5 @@
+install: make pypy
+script: make
+compiler: clang
+language: python
+
