@@ -1,5 +1,6 @@
 *.pyc
 pypy/
+pypy.zip
 
 # The built binary.
 nfs
