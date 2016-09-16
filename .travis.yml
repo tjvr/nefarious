@@ -2,4 +2,10 @@ install: make pypy
 script: make
 compiler: clang
 language: python
-
+deploy:
+  provider: releases
+  api_key:
+    secure: igCYEhEkFd4CQAIIWV4U1TcrMOjNwTWc7aca+/Rsxd5MWkh2KGf7BRwEHHqPv46gRG4w58Gf1oABNMllJOxf3an0E55WWPT/IOkRoKlZpt6K7lS4d1IRdoYkL07cbaUFU47nCkqLU1jniI7KrXf4z4WdFKi5f2AOmXBV5gJqv6isq6jFRPBdZKqGseL0i5wcG9/5Otw09YrZM+XIY80ai0Ljj+KKLfGWVCdHJou4ch8MYGG68B7Ud0i6G6cYP8hJkBXOIvRZnPfKWgRHgopTpT0bOO6safrEj9eUGCRbA/eG4b9Xlme9uK+V4q0oVqh02y3qxs9PRiq9Z0HiSlXQs76mr7rriJbgjTPeKwJQJasS/MROYqflMbEXlRKe3Q8gAD71p087N9XbJ+h1YwWDJoAyrQMoejChIQOaWJRTc6t5Lt4gfm3FD5/czaXmnWuNbUbKD6vuKfs++8B0vP927eULjI68BKYTxPyKA4ODrQgExDlORpWT2LSd0M/ARdpyFLdW24WAJmiAfH5T37VHwEqo3BKz0ZbvaBdVD3bPa4QQB4UkrJuP5vepZTl+7t2sKgBWNcJhZerQdLWPgD2JO/CmbHUgLiBn1wmBUZf+q8lG5d0NdZ92VxjCC6Fvkc8tb+gIGZSjRzoyhxIczzWXrrVEU99oUqhwPqYAC7e303I=
+  file: nfs
+  on:
+    repo: tjvr/nefarious
