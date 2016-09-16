@@ -53,6 +53,6 @@ class ParserTests(unittest.TestCase):
     def test_10(self): self._parse("(hello, hello)", "(list hello hello)")
     def test_11(self): self._parse("false, hello < hello", "(list false (cmp hello hello))")
 
-    # TODO: fix expr
-    #def test_12(self): self._parse("false, foo", "(list false (coerce <Bool> foo))")
+    def test_12(self): self._parse("hello + foo", "(+ hello (coerce <Int> foo))")
+    def test_13(self): self._parse("hello + choose hello or foo", "(+ hello (choice hello (coerce <Int> foo)))")
 

@@ -570,7 +570,7 @@ class Column:
                 if target.has_generic:
                     item.generic_wants = {}
 
-        #self.predict_expr(tag)
+        self.predict_expr(tag)
 
     def generics(self):
         for rule in self.grammar.get_generics():
@@ -891,7 +891,7 @@ class TypeMacro(Macro):
     def build(self, values):
         return Type.get(values[0].value)
 
-COERCE = Function('Coerce')
+COERCE = Function('coerce')
 class CoerceMacro(Macro):
     def __init__(self, type_):
         self.type = type_
@@ -962,7 +962,7 @@ grammar.add(Int, [Word.word('hello')], Identity)
 grammar.add(Text, [Word.word('goodbye')], Identity)
 grammar.add(Bool, [Word.word('false')], Identity)
 
-#grammar.add(Int, [Int, Word.WS, Word.word("+"), Word.WS, Int], CallMacro(Function('+'), [0, 4]))
+grammar.add(Int, [Int, Word.WS, Word.word("+"), Word.WS, Int], CallMacro(Function('+'), [0, 4]))
 
 grammar.add(Type.EXPR, [Word.word('foo')], Identity)
 
