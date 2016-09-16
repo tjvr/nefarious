@@ -25,6 +25,9 @@ class Type(Tag):
         return 'Type({!r})'.format(self.name)
 
     def __str__(self):
+        return self._str()
+
+    def _str(self):
         return self.name
 
     @staticmethod
@@ -37,7 +40,7 @@ class Type(Tag):
         return symbol
 
     def sexpr(self):
-        return "<" + str(self) + ">"
+        return "<" + self._str() + ">"
 
     def is_super(self, other):
         assert isinstance(other, Type)
@@ -73,8 +76,8 @@ class List(Type):
     def __repr__(self):
         return 'List({!r})'.format(self.child)
 
-    def __str__(self):
-        return "List " + str(self.child)
+    def _str(self):
+        return "List " + self.child._str()
 
     def _is_super(self, other):
         if isinstance(other, List):
@@ -97,7 +100,7 @@ class Generic(Type):
     def __repr__(self):
         return 'Generic({!r})'.format(self.index)
 
-    def __str__(self):
+    def _str(self):
         return "'" + chr(96 + self.index)
 
     @staticmethod
@@ -129,7 +132,7 @@ class Any(Type):
     def __repr__(self):
         return "Type.ANY"
 
-    def __str__(self):
+    def _str(self):
         return "Any"
 
     def _is_super(self, other):
@@ -146,7 +149,7 @@ class Expr(Type):
     def __repr__(self):
         return "Type.EXPR"
 
-    def __str__(self):
+    def _str(self):
         return "Expr"
 
 

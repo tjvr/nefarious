@@ -56,7 +56,11 @@ def entry_point(argv):
         print "You must supply a filename"
         return 1
 
-    run(os.open(filename, os.O_RDONLY, 0777))
+    if filename == '-':
+        fp = 0
+    else:
+        fp = os.open(filename, os.O_RDONLY, 0777)
+    run(fp)
     return 0
 
 def target(*args):

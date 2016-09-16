@@ -36,9 +36,12 @@ class TypesTests(unittest.TestCase):
 # TODO move grammar into setUp()
 
 class ParserTests(unittest.TestCase):
+    def _execute(self, source):
+        return parse(source + "\n", debug=True)
+
     def _parse(self, source, sexpr):
         # nb. debug reprs / capturing stdout is slow!
-        result = parse(source + "\n", debug=True)
+        result = self._execute(source)
         print result
         print
         print "Test input:"
@@ -49,7 +52,7 @@ class ParserTests(unittest.TestCase):
         self.assertEqual(result, sexpr)
 
     def _error(self, source):
-        result = parse(source + "\n", debug=True)
+        result = self._execute(source)
         self.assertIn("Unexpected", result)
         self.assertIn("\n>>", result)
 

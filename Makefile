@@ -21,3 +21,7 @@ pypy:
 test:
 	$(RUNINTERP) -m unittest --buffer tests
 
+test-nfs:
+	# test compiled binary
+	$(RUNINTERP) -m unittest --buffer tests.compiled
+
