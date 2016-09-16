@@ -130,6 +130,7 @@ class Item:
             value = children[0]
         else:
             value = rule.call.build(children)
+            # TODO pass item.tag into build()
 
         self.value = value
         assert stack.pop() == self
@@ -168,13 +169,6 @@ class Column:
         self.items = []
         self.unique = {}
         self.wants = {}
-        self.wants_generic = []
-
-    def want(self, item, type_):
-        if type_ in self.wants:
-            self.wants[type_].append(item)
-        else:
-            self.wants[type_] = [item]
 
     def has(self, start, tag):
         key = start, tag
@@ -190,8 +184,12 @@ class Column:
         self.items.append(item)
         self.unique[key] = item
 
-        if isinstance(tag, LR0) and not tag.wants.has_generic:
-            self.want(item, tag.wants)
+        if isinstance(tag, LR0):
+            for type_ in tag.wants.lookup_keys():
+                if type_ in self.wants:
+                    self.wants[type_].append(item)
+                else:
+                    self.wants[type_] = [item]
         return item
 
     def scan(self, word, previous):
@@ -209,112 +207,79 @@ class Column:
             item.value = word
         return len(self.items) > 0
 
-    def generics(self):
-        for rule in self.grammar.generics():
-            assert rule.target == Generic.get(1)
-            item = self.add(self.index, rule.first, [])
-            item.generic_wants = self.wants
-
     def predict(self, tag):
+        generic_wants = self.wants if tag.has_generic else None
+        for type_ in tag.lookup_keys():
+            self._predict(type_, generic_wants)
+
+    def _predict(self, tag, generic_wants=None):
         wanted_by = self.wants[tag]
 
-        for item in self.wants_generic:
-            if item not in wanted_by:
-                wanted_by.append(item)
+        for rule in self.grammar.get(tag):
+            item = self.add(self.index, rule.first, wanted_by)
+            # nullables need a value!
+            if not isinstance(rule.first, LR0) and rule.call: # is nullable
+                item.rule = rule
+            item.generic_wants = generic_wants
 
-        for target in self.grammar.expand(tag):
-            for rule in self.grammar.get(target):
-                item = self.add(self.index, rule.first, wanted_by)
-                # nullables need a value!
-                if not isinstance(rule.first, LR0) and rule.call: # is nullable
-                    item.rule = rule
+        return
 
-                if target.has_generic:
-                    item.generic_wants = {}
-
-        self.predict_expr(tag)
-
-    def predict_expr(self, tag):
-        if isinstance(tag, Word):
-            return
-        if tag == Type.ANY or tag == Type.EXPR:
-            return
-        wanted_by = self.wants[tag]
-
-        if tag in Type.EXPR._rules:
-            rule = Type.EXPR._rules[tag]
-        else:
-            rule = Type.EXPR._rules[tag] = Rule(tag, [Type.EXPR], CoerceMacro(tag))
-
-        item = self.add(self.index, rule.first, wanted_by)
-        # nullables need a value!
-        if not isinstance(rule.first, LR0) and rule.call: # is nullable
-            item.rule = rule
-
-    def predict_generic(self, item):
-        if item.tag.rule.target.has_generic:
-            for type_ in item.generic_wants.keys():
-                self.want(item, type_)
-                self.predict(type_)
-
-            # fix edge case
-            if item.start == self.index:
-                self.wants_generic.append(item)
-
-        else:
-            for type_ in self.grammar.expand(item.tag.wants):
-                self.want(item, type_)
-                self.predict(type_)
     def complete(self, right):
         for left in right.wanted_by:
             self.complete_once(left, right)
+        right.wanted_by = [] # GC!
 
     def complete_once(self, left, right):
-        tag = left.tag
-        wanted_by = left.wanted_by
-        if tag.wants.has_generic:
-            if not isinstance(right.tag, Type):
-                return
+        print '[', left
+        print ']', right
 
-            unification = tag.wants.is_super(right.tag)
+        lr0 = left.tag
+        tag = left.tag.wants
+        wanted_by = left.wanted_by
+        generic_wants = left.generic_wants
+        if tag.has_generic:
+            unification = tag.is_super(right.tag)
             if not unification:
                 # TODO warn?
                 return
-            old, tag = tag, tag.specialise(unification)
-            assert old.rule.target.is_super(tag.rule.target)
+
+            old, lr0 = lr0, lr0.specialise(unification)
+            assert old.rule.target.is_super(lr0.rule.target)
             #print old.rule.target, ':>', tag.rule.target
 
-            if left.tag.rule.target.has_generic:
-                new_lhs = tag.rule.target
-                if new_lhs not in left.generic_wants:
+            if old.rule.target.has_generic:
+                new_target = lr0.rule.target
+                #if left.generic_wants is None:
+                #    import pdb; pdb.set_trace()
+                if new_target not in left.generic_wants: # TODO *_keys
                     # TODO warn?
                     return
-                wanted_by = left.generic_wants[new_lhs]
+                wanted_by = left.generic_wants[new_target]
+                generic_wants = None
 
         # assert other.tag.wants == item.tag
-        new = self.add(left.start, tag.advance, wanted_by)
-        new.add_derivation(left, right, tag.rule)
-        new.generic_wants = left.generic_wants
+        new = self.add(left.start, lr0.advance, wanted_by)
+        new.add_derivation(left, right, lr0.rule)
+        new.generic_wants = generic_wants
+
+        print ' ', new
+        print
 
     def process(self):
-        self.generics()
-
         for item in self.items:
             if isinstance(item.tag, LR0):
-                target = item.tag.wants
-                if target.has_generic:
-                    self.predict_generic(item)
-                else:
-                    self.predict(target)
+                tag = item.tag.wants
+                self.predict(tag)
 
                 # sometimes we predict a nullable that's already been completed
-                if self.grammar.is_nullable(target):
+                if not isinstance(tag, Word) and self.grammar.is_nullable(tag):
                     # TODO: check, has `other` already been processed?
-                    other = self.has(self.index, target)
+                    other = self.has(self.index, tag)
                     self.complete_once(item, other)
 
             else:
                 self.complete(item)
+        self.print_()
 
     def evaluate(self):
         for item in self.items:
@@ -352,7 +317,9 @@ class Grammar:
         rule = Rule(target, symbols, call)
         self.highest_priority += 1
         rule.priority = self.highest_priority
-        self.scope.add(rule)
+
+        for target in rule.target.insert_keys():
+            self.scope.add(target, rule)
 
     def remove(self, rule):
         for scope in reversed(self.stack):
@@ -360,22 +327,27 @@ class Grammar:
                 return
 
     def get(self, target):
-        # specialise target for container types. (I think?)
-        if isinstance(target, List) and not target.has_generic:
-            # TODO rewrite
-            list_gen = List.get(Generic.get(1))
-            matches = self.get(list_gen)
-            unification = list_gen.is_super(target)
-            if unification is not None:
-                for m in matches:
-                    yield m.specialise(unification)
-
-        matches = []
         for scope in reversed(self.stack):
             if target in scope.rule_sets:
-                matches += scope.rule_sets[target]
-        for m in matches:
-            yield m
+                for rule in scope.rule_sets[target]:
+                    yield rule
+
+        # # specialise target for container types. (I think?)
+        # if isinstance(target, List) and not target.has_generic:
+        #     # TODO rewrite
+        #     list_gen = List.get(Generic.get(1))
+        #     matches = self.get(list_gen)
+        #     unification = list_gen.is_super(target)
+        #     if unification is not None:
+        #         for m in matches:
+        #             yield m.specialise(unification)
+
+        # matches = []
+        # for scope in reversed(self.stack):
+        #     if target in scope.rule_sets:
+        #         matches += scope.rule_sets[target]
+        # for m in matches:
+        #     yield m
 
     def is_nullable(self, target):
         for scope in reversed(self.stack):
@@ -411,20 +383,16 @@ class Grammar:
 class Scope:
     def __init__(self):
         self.rule_sets = {}
-        self.generics = []
         self.nullables = {}
         self.types = []
 
-    def add(self, rule):
-        target = rule.target
+    def add(self, target, rule):
         if target not in self.rule_sets:
             self.rule_sets[target] = []
         self.rule_sets[target].append(rule)
 
         if len(rule.symbols) == 0:
             self.nullables[target] = None
-        if isinstance(target, Generic):
-            self.generics.append(rule)
 
     def remove(self, rule):
         if rule.target in self.rule_sets:
@@ -437,7 +405,6 @@ class Scope:
         return False
 
 
-
 def grammar_parse(source, grammar, debug=DEBUG):
     lexer = Lexer(source)
 
@@ -446,12 +413,12 @@ def grammar_parse(source, grammar, debug=DEBUG):
     column.predict(Type.PROGRAM)
     column.process()
 
-    grammar.save()
-    grammar.restore()
+    #grammar.save()
 
     token = lexer.lex()
     index = 0
     line = ""
+    previous = None
     while token != Word.EOF:
         if token != Word.NL:
             if token == Word.WS:
@@ -490,10 +457,11 @@ def grammar_parse(source, grammar, debug=DEBUG):
     key = 0, Type.PROGRAM
     if key not in column.unique:
         msg = "Unexpected EOF"
-        #for token in previous.wants:
-        #    if isinstance(token, Word):
-        #        msg += "\nExpected: " + token.sexpr()
-        #msg += "\n>> " + line
+        if previous:
+            for token in previous.wants:
+                if isinstance(token, Word):
+                    msg += "\nExpected: " + token.sexpr()
+            msg += "\n>> " + line
         return msg
     start = column.unique[key]
     value = start.evaluate()

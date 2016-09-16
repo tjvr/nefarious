@@ -12,6 +12,13 @@ class Tag(Tree):
         if self is other:
             return Unification()
 
+    def insert_keys(self):
+        return [self]
+
+    def lookup_keys(self):
+        return [self]
+
+
 class Type(Tag):
     """A non-terminal / type name."""
     _cache = {}
@@ -54,6 +61,12 @@ class Type(Tag):
         if self is other:
             return Unification()
 
+    def insert_keys(self):
+        return [Type.ANY, self]
+
+    def lookup_keys(self):
+        return [self, Type.EXPR]
+
 
 # TODO custom parametric types
 class List(Type):
@@ -86,6 +99,18 @@ class List(Type):
     def specialise(self, unification):
         return List.get(self.child.specialise(unification))
 
+    def insert_keys(self):
+        l = [Type.EXPR if self.has_generic else Type.ANY]
+        for t in self.child.insert_keys():
+            l.append(List.get(t))
+        return l
+
+    def lookup_keys(self):
+        l = []
+        for t in self.child.lookup_keys():
+            l.append(List.get(t))
+        l.append(Type.EXPR)
+        return l
 
 class Generic(Type):
     _cache = {}
@@ -114,7 +139,11 @@ class Generic(Type):
 
     def _is_super(self, other):
         if isinstance(other, Generic):
-            # TODO what's the right thing to do here; 'a = 'b ?
+            # TODO 'a = 'b
+            # - return a Unification 'a -> 'b; not sure which way round though!
+            # (might be 'b -> 'a).
+
+            # TODO alpha-rename before unifying.
             return
         return Unification({
             self.index: other,
@@ -122,6 +151,13 @@ class Generic(Type):
 
     def specialise(self, unification):
         return unification.values.get(self.index, self)
+
+    def insert_keys(self):
+        return [Type.EXPR]
+
+    def lookup_keys(self):
+        return [Type.ANY, Type.EXPR]
+
 
 
 class Any(Type):
@@ -138,6 +174,12 @@ class Any(Type):
     def _is_super(self, other):
         return Unification()
 
+    def insert_keys(self):
+        return [Type.ANY]
+
+    def lookup_keys(self):
+        return [Type.ANY, Type.EXPR]
+
 
 class Expr(Type):
     _rules = {}
@@ -151,6 +193,13 @@ class Expr(Type):
 
     def _str(self):
         return "Expr"
+
+    def insert_keys(self):
+        return [Type.EXPR]
+
+    def lookup_keys(self):
+        return [Type.EXPR]
+
 
 
 Type.PROGRAM = Type.get('Program')

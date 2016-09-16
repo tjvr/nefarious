@@ -113,9 +113,8 @@ def add_list(target, cont):
     item = cont[-1]
     grammar.add(target, [item], StartList)
 
-add_list(Type.get('SpecList'), [Type.get('Spec')])
-
-add_list(Type.get('Block'), [Type.get('Line')])
+#add_list(Type.get('SpecList'), [Type.get('Spec')])
+#add_list(Type.get('Block'), [Type.get('Line')])
 
 # We want to--
 # - allow for scoping the inside of blocks.
@@ -157,8 +156,6 @@ grammar.add_type(Type.get('Text'))
 grammar.add_type(Type.get('Bool'))
 grammar.add_type(List.get(Type.ANY))
 
-grammar.add(Type.ANY, [Generic.get(1)], Identity)
-
 class CallMacro(Macro):
     def __init__(self, call, arg_indexes):
         assert isinstance(call, Function) and not isinstance(call, Macro)
@@ -170,7 +167,7 @@ class CallMacro(Macro):
 
 
 
-alpha = Type.ANY #Generic.get(1)
+alpha = Generic.get(1)
 grammar.add(List.get(alpha), [alpha], StartList)
 grammar.add(List.get(alpha), [List.get(alpha), Word.WS, Word.word(","), Word.WS, alpha], ContinueList)
 
@@ -194,7 +191,7 @@ CMP = Function('cmp')
 class Cmp(Macro):
     def build(self, values):
         return Call(CMP, [values[0], values[4]])
-grammar.add(Type.get('Bool'), [Generic.get(1), Word.WS, Word.word("<"), Word.WS, Generic.get(1)], Cmp)
+#grammar.add(Type.get('Bool'), [Generic.get(1), Word.WS, Word.word("<"), Word.WS, Generic.get(1)], Cmp)
 
 
 
@@ -217,6 +214,8 @@ grammar.add(Bool, [Word.word('false')], Identity)
 grammar.add(Int, [Int, Word.WS, Word.word("+"), Word.WS, Int], CallMacro(Function('+'), [0, 4]))
 
 grammar.add(Type.EXPR, [Word.word('foo')], Identity)
+
+grammar.add(List.get(Int), [Word.word('range'), Int, Word.word('to'), Int], CallMacro(Function('range'), [1, 3]))
 
 
 #grammar.add_list(List(Generic(0)), [Word.get(","), Generic(0)])
