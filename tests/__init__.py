@@ -55,12 +55,11 @@ class TypesTests(unittest.TestCase):
         self.assertTrue(Generic(1).has_generic)
         self.assertTrue(List(Generic(1)).has_generic)
         self.assertFalse(Type.get('Int').has_generic)
+        self.assertFalse(List(Type.get('Int')).has_generic)
         self.assertFalse(Type.ANY.has_generic)
-        self.assertFalse(Type.WILD.has_generic)
 
     def test_insert_lookup(self):
-        self.assertEqual(Generic(1).supertypes(), Type.WILD.supertypes())
-        self.assertEqual(Generic(1).subtypes(), Type.ANY.subtypes())
+        self.assertEqual(Generic.ALPHA.subtypes(), Type.ANY.subtypes())
 
     def test_insert(self):
         Int = Type.get('Int')
@@ -77,31 +76,41 @@ class TypesTests(unittest.TestCase):
             [Type.ANY]
         )
         self.assertEqual(Generic.get(1).supertypes(),
-            [Type.WILD]
+            [Generic.ALPHA]
         )
         self.assertEqual(List.get(List.get(Int)).supertypes(),
             [Type.ANY, List.get(Type.ANY), List.get(List.get(Type.ANY)), List.get(List.get(Int))]
         )
 
+    def test_insert_all(self):
+        for type_ in grammar.scope.types:
+            self.assertIn(Type.ANY, type_.supertypes())
+
     def test_lookup(self):
         Int = Type.get('Int')
+        self.assertEqual(List.get(Int).subtypes(),
+            [List.get(Int), List.get(Generic.ALPHA), Generic.ALPHA]
+        )
         self.assertEqual(Type.ANY.subtypes(),
-            [Type.ANY, Type.WILD]
+            [Type.ANY, Generic.ALPHA]
         )
         self.assertEqual(Int.subtypes(),
-            [Int, Type.WILD]
+            [Int, Generic.ALPHA]
         )
-        self.assertEqual(List.get(Int).subtypes(),
-            [List.get(Int), List.get(Type.WILD), Type.WILD]
+        self.assertEqual(List.get(Type.ANY).subtypes(),
+            [List.get(Type.ANY), List.get(Generic.ALPHA), Generic.ALPHA]
         )
-        self.assertEqual(
-            List.get(Type.ANY).subtypes(),
-            [List.get(Type.ANY), List.get(Type.WILD), Type.WILD]
+        self.assertEqual(Generic.ALPHA.subtypes(),
+            [Type.ANY, Generic.ALPHA]
         )
-        self.assertEqual(
-            List.get(Generic.get(1)).subtypes(),
-            [List.get(Type.ANY), List.get(Type.WILD), Type.WILD]
+        self.assertEqual(List.get(Generic.ALPHA).subtypes(),
+            [List.get(Type.ANY), List.get(Generic.ALPHA), Generic.ALPHA]
+            # [List.get(Type.ANY), List.get(Generic.ALPHA), Generic.BETA] # TODO ?
         )
+
+    def test_lookup_all(self):
+        for type_ in grammar.scope.types:
+            self.assertIn(Generic.ALPHA, type_.subtypes())
 
     def _accepts(self, slot, child):
         d = {}
@@ -123,18 +132,17 @@ class TypesTests(unittest.TestCase):
         Bool = Type.get('Bool')
         self._does_accept(Int, Int, True)
 
-        self._does_accept(Int, Type.WILD, True)
+        self._does_accept(Int, Generic.ALPHA, True)
         self._does_accept(Type.ANY, Int, True)
-        self._does_accept(Type.ANY, Type.WILD, True)
+        self._does_accept(Type.ANY, Generic.ALPHA, True)
 
         self._does_accept(Int, Bool, False)
-        self._does_accept(Type.WILD, Int, False)
         self._does_accept(Int, Type.ANY, False)
 
-        self._does_accept(Generic(1), Int, True)
+        self._does_accept(Generic.ALPHA, Int, True)
         self._does_accept(Int, Generic(1), True)
         self._does_accept(List(Int), List(Int), True)
-        self._does_accept(List(Int), List(Type.WILD), True)
+        self._does_accept(List(Int), List(Generic.ALPHA), True)
         self._does_accept(List(Type.ANY), List(Int), True)
 
         self._does_accept(List(Int), Int, False)
@@ -145,6 +153,7 @@ class TypesTests(unittest.TestCase):
         self._does_accept(List(Generic(1)), List(Generic(1)), True)
         self._does_accept(List(Generic(1)), List(Generic(2)), True)
 
+    def test_accepts_all(self):
         for a in grammar.scope.types:
             for b in grammar.scope.types:
                 self.assertEqual(bool(a.is_super(b)), self._accepts(a, b))
@@ -155,6 +164,8 @@ class TypesTests(unittest.TestCase):
                 lb = List.get(b)
                 self.assertEqual(bool(la.is_super(lb)), self._accepts(la, lb))
 
+    def test_grammar(self):
+        Int = Type.get('Int')
 
 
 # TODO move grammar into setUp()

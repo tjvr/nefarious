@@ -86,9 +86,7 @@ class Type(Tag):
         assert isinstance(other, Type)
         if other in self._union:
             return self._union[other]
-        if isinstance(other, Wild):
-            result = Unification.EMPTY
-        elif other.has_generic:
+        if other.has_generic:
             # TODO I'm not sure about this...
             result = Unification.EMPTY
         else:
@@ -104,7 +102,7 @@ class Type(Tag):
         return [Type.ANY, self]
 
     def subtypes(self):
-        return [self, Type.WILD]
+        return [self, Generic.ALPHA]
 
 
 # TODO custom parametric types
@@ -139,7 +137,7 @@ class List(Type):
         return List.get(self.child.specialise(unification))
 
     def supertypes(self):
-        l = [Type.WILD if self.has_generic else Type.ANY]
+        l = [Type.ANY]
         for t in self.child.supertypes():
             l.append(List.get(t))
         return l
@@ -148,7 +146,7 @@ class List(Type):
         l = []
         for t in self.child.subtypes():
             l.append(List.get(t))
-        l.append(Type.WILD)
+        l.append(Generic.ALPHA)
         return l
 
 class Generic(Type):
@@ -192,11 +190,12 @@ class Generic(Type):
         return unification.values.get(self.index, self)
 
     def supertypes(self):
-        return [Type.WILD]
+        return [Generic.ALPHA]
 
     def subtypes(self):
-        return [Type.ANY, Type.WILD]
+        return [Type.ANY, Generic.ALPHA]
 
+Generic.ALPHA = Generic.get(1)
 
 
 class Any(Type):
@@ -217,26 +216,8 @@ class Any(Type):
         return [Type.ANY]
 
     def subtypes(self):
-        return [Type.ANY, Type.WILD]
+        return [Type.ANY, Generic.ALPHA]
 
-
-class Wild(Type):
-    def __init__(self):
-        self._union = {}
-        self.has_generic = False
-
-    def __repr__(self):
-        return "Type.WILD"
-
-    def _str(self):
-        return "Wild"
-
-    def supertypes(self):
-        return [Type.WILD]
-
-    def subtypes(self):
-        #assert False # only hit by tests...
-        return []
 
 
 class Program(Type):
@@ -261,7 +242,7 @@ class Program(Type):
 Type.PROGRAM = Type._cache['Program'] = Program()
 
 # Wild -- a value which can fit into any slot
-Type.WILD = Type._cache['Wild'] = Wild()
+# REMOVED -- use Generics instead.
 
 # Type -- a slot which wants a type name
 Type.TYPE = Type.get('Type')

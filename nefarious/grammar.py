@@ -142,7 +142,7 @@ def add_list(target, cont):
 # and target must be a *subtype* of the original wanted_by ~ target.
 # Unification can fail!
 
-#grammar.add_type(Type.WILD)
+#grammar.add_type(Generic.ALPHA)
 # Don't need to add the Wild type -- grammar.expand() always returns it.
 
 @singleton
@@ -213,7 +213,7 @@ grammar.add(Bool, [Word.word('false')], Identity)
 
 grammar.add(Int, [Int, Word.WS, Word.word("+"), Word.WS, Int], CallMacro(Function('+'), [0, 4]))
 
-grammar.add(Type.WILD, [Word.word('foo')], Identity)
+grammar.add(Generic.ALPHA, [Word.word('foo')], Identity)
 
 grammar.add(List.get(Int), [Word.word('range'), Int, Word.word('to'), Int], CallMacro(Function('range'), [1, 3]))
 
