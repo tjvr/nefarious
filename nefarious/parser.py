@@ -166,18 +166,19 @@ class Column:
         self.wants = {}
 
     def has(self, start, tag):
+        assert isinstance(start, Column)
         key = start, tag
         if key in self.unique:
             return self.unique[key]
 
     def add(self, start, tag):
+        assert isinstance(start, Column)
         key = start, tag
         if key in self.unique:
             return self.unique[key]
 
         item = self.unique[key] = Item(start, tag)
         self.items.append(item)
-        self.unique[key] = item
 
         if isinstance(tag, LR0):
             # Remember, we predict anything that's a *subtype* of tag.wants.
@@ -225,7 +226,7 @@ class Column:
         wants = right.start.wants
 
         for tag in right.tag.supertypes():
-            for left in wants.get(tag, []): # TODO get?
+            for left in wants.get(tag, {}):
                 self._complete(left, right)
 
     def _complete(self, left, right):
@@ -255,17 +256,7 @@ class Column:
     def process(self):
         for item in self.items:
             if isinstance(item.tag, LR0):
-                tag = item.tag.wants
-
-                self.predict(tag)
-
-                # sometimes we predict a nullable that's already been completed
-                if self.grammar.is_nullable(tag):
-                    # TODO: check, has `other` already been processed?
-                    other = self.has(self.index, tag)
-                    if other is not None:
-                        self._complete(item, other)
-
+                self.predict(item.tag.wants)
             else:
                 self.complete(item)
 
@@ -400,7 +391,7 @@ def grammar_parse(source, grammar, debug=DEBUG):
     lexer = Lexer(source)
 
     first = column = Column(grammar, 0)
-    column.wants[Type.PROGRAM] = []
+    column.wants[Type.PROGRAM] = {}
     column.predict(Type.PROGRAM)
     column.process()
 
