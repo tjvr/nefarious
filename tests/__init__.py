@@ -42,6 +42,18 @@ class TypesTests(unittest.TestCase):
     #
     # What about List 'a ??
 
+
+    def setUp(self):
+        self.all_types = [
+            Generic.ALPHA,
+            List.get(Type.ANY),
+            List.get(Generic.ALPHA),
+            List.get(Type.ANY),
+            List.get(List.get(Generic.ALPHA)),
+            List.get(List.get(Type.get('Int'))),
+            List.get(List.get(Type.get('Int'))),
+        ] + grammar.scope.types
+
     def test_types(self):
         list_int = List.get(Type.get('Int'))
         assert Type.get('Int').is_super(Type.get('Text')) == None
@@ -58,9 +70,6 @@ class TypesTests(unittest.TestCase):
         self.assertFalse(List(Type.get('Int')).has_generic)
         self.assertFalse(Type.ANY.has_generic)
 
-    def test_insert_lookup(self):
-        self.assertEqual(Generic.ALPHA.subtypes(), Type.ANY.subtypes())
-
     def test_insert(self):
         Int = Type.get('Int')
         self.assertEqual(Int.supertypes(),
@@ -76,14 +85,20 @@ class TypesTests(unittest.TestCase):
             [Type.ANY]
         )
         self.assertEqual(Generic.get(1).supertypes(),
-            [Generic.ALPHA]
+            [Type.ANY, Generic.ALPHA]
+        )
+        self.assertEqual(List.get(Int).supertypes(),
+            [Type.ANY, List.get(Type.ANY), List.get(Int)]
         )
         self.assertEqual(List.get(List.get(Int)).supertypes(),
             [Type.ANY, List.get(Type.ANY), List.get(List.get(Type.ANY)), List.get(List.get(Int))]
         )
+        self.assertEqual(List.get(Generic.ALPHA).supertypes(),
+            [Type.ANY, List.get(Type.ANY), List.get(Generic.ALPHA)]
+        )
 
     def test_insert_all(self):
-        for type_ in grammar.scope.types:
+        for type_ in self.all_types:
             self.assertIn(Type.ANY, type_.supertypes())
 
     def test_lookup(self):
@@ -92,13 +107,13 @@ class TypesTests(unittest.TestCase):
             [List.get(Int), List.get(Generic.ALPHA), Generic.ALPHA]
         )
         self.assertEqual(Type.ANY.subtypes(),
-            [Type.ANY, Generic.ALPHA]
+            [Type.ANY]
         )
         self.assertEqual(Int.subtypes(),
             [Int, Generic.ALPHA]
         )
         self.assertEqual(List.get(Type.ANY).subtypes(),
-            [List.get(Type.ANY), List.get(Generic.ALPHA), Generic.ALPHA]
+            [List.get(Type.ANY), Generic.ALPHA]
         )
         self.assertEqual(Generic.ALPHA.subtypes(),
             [Type.ANY, Generic.ALPHA]
@@ -109,7 +124,7 @@ class TypesTests(unittest.TestCase):
         )
 
     def test_lookup_all(self):
-        for type_ in grammar.scope.types:
+        for type_ in self.all_types:
             self.assertIn(Generic.ALPHA, type_.subtypes())
 
     def _accepts(self, slot, child):
@@ -152,6 +167,8 @@ class TypesTests(unittest.TestCase):
         self._does_accept(List(Int), List(Generic(1)), True)
         self._does_accept(List(Generic(1)), List(Generic(1)), True)
         self._does_accept(List(Generic(1)), List(Generic(2)), True)
+
+        self._does_accept(Type.ANY, List(Generic(1)), True)
 
     def test_accepts_all(self):
         for a in grammar.scope.types:
@@ -199,15 +216,15 @@ class ParserTests(unittest.TestCase):
     def test_02(self): self._parse("(hello)", "hello")
     def test_03(self): self._parse("choose hello or hello", "(choice hello hello)")
     def test_04(self): self._parse("(goodbye)", "goodbye")
+    def test_04b(self): self._parse("hello, hello", "(list hello hello)")
+    def test_04c(self):
+        """sometimes we predict a nullable that's already been completed"""
+        self._parse("(hello, hello)", "(list hello hello)")
     def test_05(self): self._parse("false, hello < hello", "(list false (cmp hello hello))")
     #def test_05b(self): self._error("choose hello or goodbye") # TODO
     def test_06(self): self._parse("hello < hello", "(cmp hello hello)")
     def test_07(self): self._parse("choose hello < hello or false", "(choice (cmp hello hello) false)")
     def test_08(self): self._parse("choose (hello < hello) or false", "(choice (cmp hello hello) false)")
-    def test_09(self): self._parse("hello, hello", "(list hello hello)")
-    def test_10(self):
-        """sometimes we predict a nullable that's already been completed"""
-        self._parse("(hello, hello)", "(list hello hello)")
 
     def test_12(self): self._parse("hello + foo", "(+ hello (coerce <Int> foo))")
     def test_13(self): self._parse("hello + choose hello or foo", "(+ hello (choice hello (coerce <Int> foo)))")

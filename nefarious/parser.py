@@ -259,7 +259,7 @@ class Column:
         #things = right.wanted_by
         wants = self.foo[right.start].wants
         for tag in right.tag.supertypes():
-            for left in wants[tag]:
+            for left in wants.get(tag, []): # TODO get?
                 self._complete(left, right)
         right.wanted_by = [] # GC!
 
@@ -268,36 +268,48 @@ class Column:
         tag = left.tag.wants
         wanted_by = left.wanted_by
         generic_wants = left.generic_wants
+        if generic_wants:
+            assert generic_wants == self.foo[left.start].wants
         if tag.has_generic:
             unification = tag.is_super(right.tag)
             if not unification:
                 # TODO warn?
                 return
 
-            print '[', left
-            print ']', right
+            #print '[', left
+            #print ']', right
 
-            old, lr0 = lr0, lr0.specialise(unification)
-            assert old.rule.target.is_super(lr0.rule.target)
-            #print old.rule.target, ':>', tag.rule.target
+            if len(unification.values):
+                # TODO specialise the rule's target based on generics
 
-            if old.rule.target.has_generic:
-                new_target = lr0.rule.target
-                #if left.generic_wants is None:
-                #    import pdb; pdb.set_trace()
-                if new_target not in generic_wants: # TODO *_keys
-                    # TODO warn?
-                    return
-                wanted_by = left.generic_wants[new_target]
-                generic_wants = None
+                #old, lr0 = lr0, lr0.specialise(unification)
+                #assert old.rule.target.is_super(lr0.rule.target)
+                #print old.rule.target, ':>', tag.rule.target
+
+                print 'oh'
+
+                #if old.rule.target.has_generic:
+                #    new_target = lr0.rule.target
+
+                #    items = []
+                #    wants = self.foo[left.start].wants
+                #    for tag in new_target.supertypes():
+                #        if tag in wants:
+                #            items += wants[tag]
+
+                #    if not items:
+                #        print 'oh'
+                #        return
+                #    wanted_by = items
+                #    generic_wants = None
 
         # assert other.tag.wants == item.tag
         new = self.add(left.start, lr0.advance, wanted_by)
         new.add_derivation(left, right, lr0.rule)
         new.generic_wants = generic_wants
 
-        print ' ', new
-        print
+        #print ' ', new
+        #print
 
     def process(self):
         for item in self.items:
@@ -326,8 +338,9 @@ class Column:
         for item in self.items:
             print item
         print
-        #from pprint import pprint
-        #pprint(self.wants)
+        from pprint import pprint
+        pprint(dict((k, list(v)) for k, v in self.wants.items()))
+        print
 
 
 class Grammar:

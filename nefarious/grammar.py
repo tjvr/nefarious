@@ -234,7 +234,7 @@ grammar.add(List.get(Int), [Word.word('range'), Int, Word.word('to'), Int], Call
 
 from pprint import pprint
 pprint(grammar.scope.rule_sets)
-import sys
+print
 
 def parse(source, debug=False):
     return grammar_parse(source, grammar, debug)

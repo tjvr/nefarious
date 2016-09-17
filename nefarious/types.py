@@ -42,7 +42,7 @@ class Unification:
         return "Unification.EMPTY"
 
     def __str__(self):
-        return "<" + ",\n ".join(str(Generic.get(i)) + " = " + str(t) for (i, t)
+        return "<" + ",\n ".join(str(Generic.get(i)) + " = " + str(t) for i, t
                 in self.values.items()) + ">"
 
     def hash(self):
@@ -190,7 +190,7 @@ class Generic(Type):
         return unification.values.get(self.index, self)
 
     def supertypes(self):
-        return [Generic.ALPHA]
+        return [Type.ANY, Generic.ALPHA]
 
     def subtypes(self):
         return [Type.ANY, Generic.ALPHA]
@@ -216,7 +216,7 @@ class Any(Type):
         return [Type.ANY]
 
     def subtypes(self):
-        return [Type.ANY, Generic.ALPHA]
+        return [Type.ANY]
 
 
 
