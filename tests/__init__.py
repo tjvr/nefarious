@@ -6,7 +6,7 @@ import sys
 import unittest
 
 from nefarious.types import *
-from nefarious.grammar import parse
+from nefarious.grammar import grammar, parse
 
 SELF_PATH = os.path.dirname(os.path.abspath(__file__))
 
@@ -30,7 +30,7 @@ class TypesTests(unittest.TestCase):
     # That includes:
     #
     # - `tag` itself
-    # - Expr
+    # - Wild
     # - any Generic
     # - if `tag` is a container type, must search subtypes recursively.
     #
@@ -56,88 +56,105 @@ class TypesTests(unittest.TestCase):
         self.assertTrue(List(Generic(1)).has_generic)
         self.assertFalse(Type.get('Int').has_generic)
         self.assertFalse(Type.ANY.has_generic)
-        self.assertFalse(Type.EXPR.has_generic)
+        self.assertFalse(Type.WILD.has_generic)
 
     def test_insert_lookup(self):
-        self.assertEqual(Generic(1).insert_keys(), Type.EXPR.insert_keys())
-        self.assertEqual(Generic(1).lookup_keys(), Type.ANY.lookup_keys())
+        self.assertEqual(Generic(1).supertypes(), Type.WILD.supertypes())
+        self.assertEqual(Generic(1).subtypes(), Type.ANY.subtypes())
 
     def test_insert(self):
         Int = Type.get('Int')
-        self.assertEqual(Int.insert_keys(),
+        self.assertEqual(Int.supertypes(),
             [Type.ANY, Int]
         )
-        self.assertEqual(List.get(Int).insert_keys(),
+        self.assertEqual(List.get(Int).supertypes(),
             [Type.ANY, List.get(Type.ANY), List.get(Int)]
         )
-        self.assertEqual(List.get(Type.ANY).insert_keys(),
+        self.assertEqual(List.get(Type.ANY).supertypes(),
             [Type.ANY, List.get(Type.ANY)]
         )
-        self.assertEqual(Type.ANY.insert_keys(),
+        self.assertEqual(Type.ANY.supertypes(),
             [Type.ANY]
         )
-        self.assertEqual(Generic.get(1).insert_keys(),
-            [Type.EXPR]
+        self.assertEqual(Generic.get(1).supertypes(),
+            [Type.WILD]
         )
-        self.assertEqual(List.get(List.get(Int)).insert_keys(),
+        self.assertEqual(List.get(List.get(Int)).supertypes(),
             [Type.ANY, List.get(Type.ANY), List.get(List.get(Type.ANY)), List.get(List.get(Int))]
         )
 
     def test_lookup(self):
         Int = Type.get('Int')
-        self.assertEqual(Type.ANY.lookup_keys(),
-            [Type.ANY, Type.EXPR]
+        self.assertEqual(Type.ANY.subtypes(),
+            [Type.ANY, Type.WILD]
         )
-        self.assertEqual(Int.lookup_keys(),
-            [Int, Type.EXPR]
+        self.assertEqual(Int.subtypes(),
+            [Int, Type.WILD]
         )
-        self.assertEqual(List.get(Int).lookup_keys(),
-            [List.get(Int), List.get(Type.EXPR), Type.EXPR]
-        )
-        self.assertEqual(
-            List.get(Type.ANY).lookup_keys(),
-            [List.get(Type.ANY), List.get(Type.EXPR), Type.EXPR]
+        self.assertEqual(List.get(Int).subtypes(),
+            [List.get(Int), List.get(Type.WILD), Type.WILD]
         )
         self.assertEqual(
-            List.get(Generic.get(1)).lookup_keys(),
-            [List.get(Type.ANY), List.get(Type.EXPR), Type.EXPR]
+            List.get(Type.ANY).subtypes(),
+            [List.get(Type.ANY), List.get(Type.WILD), Type.WILD]
+        )
+        self.assertEqual(
+            List.get(Generic.get(1)).subtypes(),
+            [List.get(Type.ANY), List.get(Type.WILD), Type.WILD]
         )
 
     def _accepts(self, slot, child):
         d = {}
-        for key in child.insert_keys():
+        for key in child.supertypes():
             d[key] = True
-        for key in slot.lookup_keys():
+        for key in slot.subtypes():
             if key in d:
                 return True
         return False
 
+    def _does_accept(self, slot, child, fits):
+        msg = "{} {} {}".format(slot, "should unify" if fits else "should not unify", child)
+        self.assertEqual(bool(slot.is_super(child)), fits, msg)
+        msg = "{} {} {}".format(slot, "should accept" if fits else "should not accept", child)
+        self.assertEqual(self._accepts(slot, child), fits, msg)
+
     def test_accepts(self):
         Int = Type.get('Int')
         Bool = Type.get('Bool')
-        self.assertTrue(self._accepts(Int, Int))
+        self._does_accept(Int, Int, True)
 
-        self.assertTrue(self._accepts(Int, Type.EXPR))
-        self.assertTrue(self._accepts(Type.ANY, Int))
-        self.assertTrue(self._accepts(Type.ANY, Type.EXPR))
+        self._does_accept(Int, Type.WILD, True)
+        self._does_accept(Type.ANY, Int, True)
+        self._does_accept(Type.ANY, Type.WILD, True)
 
-        self.assertFalse(self._accepts(Int, Bool))
-        self.assertFalse(self._accepts(Type.EXPR, Int))
-        self.assertFalse(self._accepts(Int, Type.ANY))
+        self._does_accept(Int, Bool, False)
+        self._does_accept(Type.WILD, Int, False)
+        self._does_accept(Int, Type.ANY, False)
 
-        self.assertTrue(self._accepts(Generic(1), Int))
-        self.assertTrue(self._accepts(Int, Generic(1)))
-        self.assertTrue(self._accepts(List(Int), List(Int)))
-        self.assertTrue(self._accepts(List(Int), List(Type.EXPR)))
-        self.assertTrue(self._accepts(List(Type.ANY), List(Int)))
+        self._does_accept(Generic(1), Int, True)
+        self._does_accept(Int, Generic(1), True)
+        self._does_accept(List(Int), List(Int), True)
+        self._does_accept(List(Int), List(Type.WILD), True)
+        self._does_accept(List(Type.ANY), List(Int), True)
 
-        self.assertFalse(self._accepts(List(Int), Int))
-        self.assertFalse(self._accepts(List(Int), List(Bool)))
+        self._does_accept(List(Int), Int, False)
+        self._does_accept(List(Int), List(Bool), False)
 
-        self.assertTrue(self._accepts(List(Generic(1)), List(Int)))
-        self.assertTrue(self._accepts(List(Int), List(Generic(1))))
-        self.assertTrue(self._accepts(List(Generic(1)), List(Generic(1))))
-        self.assertTrue(self._accepts(List(Generic(1)), List(Generic(2))))
+        self._does_accept(List(Generic(1)), List(Int), True)
+        self._does_accept(List(Int), List(Generic(1)), True)
+        self._does_accept(List(Generic(1)), List(Generic(1)), True)
+        self._does_accept(List(Generic(1)), List(Generic(2)), True)
+
+        for a in grammar.scope.types:
+            for b in grammar.scope.types:
+                self.assertEqual(bool(a.is_super(b)), self._accepts(a, b))
+
+        for a in grammar.scope.types:
+            la = List.get(a)
+            for b in grammar.scope.types:
+                lb = List.get(b)
+                self.assertEqual(bool(la.is_super(lb)), self._accepts(la, lb))
+
 
 
 # TODO move grammar into setUp()

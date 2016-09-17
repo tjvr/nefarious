@@ -133,8 +133,8 @@ def add_list(target, cont):
 # =========
 #
 # Prediction: ask Grammar for all subtypes of T.
-# Always include "Expr".
-# Generics expand to any type.   'a -> Expr, Int, Frac, Text ...
+# Always include "Wild".
+# Generics expand to any type.   'a -> Wild, Int, Frac, Text ...
 #
 # Completion: unify right with left.wants.
 # Create new (but uniqued!) LR0s.
@@ -142,8 +142,8 @@ def add_list(target, cont):
 # and target must be a *subtype* of the original wanted_by ~ target.
 # Unification can fail!
 
-#grammar.add_type(Type.EXPR)
-# Don't need to add the Expr type -- grammar.expand() always returns it.
+#grammar.add_type(Type.WILD)
+# Don't need to add the Wild type -- grammar.expand() always returns it.
 
 @singleton
 class TypeMacro(Macro):
@@ -213,7 +213,7 @@ grammar.add(Bool, [Word.word('false')], Identity)
 
 grammar.add(Int, [Int, Word.WS, Word.word("+"), Word.WS, Int], CallMacro(Function('+'), [0, 4]))
 
-grammar.add(Type.EXPR, [Word.word('foo')], Identity)
+grammar.add(Type.WILD, [Word.word('foo')], Identity)
 
 grammar.add(List.get(Int), [Word.word('range'), Int, Word.word('to'), Int], CallMacro(Function('range'), [1, 3]))
 
@@ -232,6 +232,9 @@ grammar.add(List.get(Int), [Word.word('range'), Int, Word.word('to'), Int], Call
 #     Word.get('}'),
 # ], PostDef)
 
+from pprint import pprint
+pprint(grammar.scope.rule_sets)
+import sys
 
 def parse(source, debug=False):
     return grammar_parse(source, grammar, debug)

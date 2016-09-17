@@ -203,7 +203,7 @@ class Column:
             self.unique[key] = item
 
         if isinstance(tag, LR0):
-            for type_ in tag.wants.lookup_keys():
+            for type_ in tag.wants.subtypes():
                 if type_ in self.wants:
                     wanted_by = self.wants[type_]
                 else:
@@ -211,7 +211,7 @@ class Column:
                 wanted_by[item] = None
 
         #if isinstance(tag, LR0):
-        #    for type_ in tag.wants.lookup_keys():
+        #    for type_ in tag.wants.subtypes():
         #        if type_ not in self.wants:
         #            self.wants[type_] = {}
         #        self.wants[type_] = True
@@ -234,7 +234,9 @@ class Column:
         return len(self.items) > 0
 
     def predict(self, tag):
-        for type_ in tag.lookup_keys():
+        # Look for items that target any *subtype* of tag.
+
+        for type_ in tag.subtypes():
             self._predict(type_)
 
     def _predict(self, tag):
@@ -251,9 +253,11 @@ class Column:
                 item.generic_wants = self.wants
 
     def complete(self, right):
+        # Look for items that want any *supertype* of right.
+
         #things = right.wanted_by
         wants = self.foo[right.start].wants
-        for tag in right.tag.insert_keys():
+        for tag in right.tag.supertypes():
             for left in wants[tag]:
                 self._complete(left, right)
         right.wanted_by = [] # GC!
@@ -321,8 +325,8 @@ class Column:
         for item in self.items:
             print item
         print
-        from pprint import pprint
-        pprint(self.wants)
+        #from pprint import pprint
+        #pprint(self.wants)
 
 
 class Grammar:
@@ -350,7 +354,7 @@ class Grammar:
         self.highest_priority += 1
         rule.priority = self.highest_priority
 
-        for target in rule.target.insert_keys():
+        for target in rule.target.supertypes():
             self.scope.add(target, rule)
 
     def remove(self, rule):

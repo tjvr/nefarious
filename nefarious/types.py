@@ -10,13 +10,46 @@ class Tag(Tree):
 
     def is_super(self, other):
         if self is other:
-            return Unification()
+            return Unification.EMPTY
 
-    def insert_keys(self):
+    def supertypes(self):
         return [self]
 
-    def lookup_keys(self):
+    def subtypes(self):
         return [self]
+
+
+
+class Unification:
+    # specialise typevars.
+    def __init__(self, values={}):
+        #assert isinstance(values, dict)
+        self.values = values
+
+    def union(self, other):
+        assert isinstance(other, Unification)
+        for key in other.values:
+            if key in self.values:
+                # TODO is equality the right thing here?
+                assert self.values[key] is other.values[key]
+        values = self.values.copy()
+        values.update(other.values)
+        return Unification(values)
+
+    def __repr__(self):
+        if self.values:
+            return "Unification({!r})".format(self.values)
+        return "Unification.EMPTY"
+
+    def __str__(self):
+        return "<" + ",\n ".join(str(Generic.get(i)) + " = " + str(t) for (i, t)
+                in self.values.items()) + ">"
+
+    def hash(self):
+        return tuple(self.values.items())
+
+Unification.EMPTY = Unification()
+
 
 
 class Type(Tag):
@@ -53,19 +86,25 @@ class Type(Tag):
         assert isinstance(other, Type)
         if other in self._union:
             return self._union[other]
-        unification = self._union[other] = self._is_super(other)
+        if isinstance(other, Wild):
+            result = Unification.EMPTY
+        elif other.has_generic:
+            # TODO I'm not sure about this...
+            result = Unification.EMPTY
+        else:
+            result = self._is_super(other)
+        unification = self._union[other] = result
         return unification
 
     def _is_super(self, other):
-        # TODO what about *actual* subtypes? do we care about those?
         if self is other:
-            return Unification()
+            return Unification.EMPTY
 
-    def insert_keys(self):
+    def supertypes(self):
         return [Type.ANY, self]
 
-    def lookup_keys(self):
-        return [self, Type.EXPR]
+    def subtypes(self):
+        return [self, Type.WILD]
 
 
 # TODO custom parametric types
@@ -99,17 +138,17 @@ class List(Type):
     def specialise(self, unification):
         return List.get(self.child.specialise(unification))
 
-    def insert_keys(self):
-        l = [Type.EXPR if self.has_generic else Type.ANY]
-        for t in self.child.insert_keys():
+    def supertypes(self):
+        l = [Type.WILD if self.has_generic else Type.ANY]
+        for t in self.child.supertypes():
             l.append(List.get(t))
         return l
 
-    def lookup_keys(self):
+    def subtypes(self):
         l = []
-        for t in self.child.lookup_keys():
+        for t in self.child.subtypes():
             l.append(List.get(t))
-        l.append(Type.EXPR)
+        l.append(Type.WILD)
         return l
 
 class Generic(Type):
@@ -152,11 +191,11 @@ class Generic(Type):
     def specialise(self, unification):
         return unification.values.get(self.index, self)
 
-    def insert_keys(self):
-        return [Type.EXPR]
+    def supertypes(self):
+        return [Type.WILD]
 
-    def lookup_keys(self):
-        return [Type.ANY, Type.EXPR]
+    def subtypes(self):
+        return [Type.ANY, Type.WILD]
 
 
 
@@ -172,31 +211,33 @@ class Any(Type):
         return "Any"
 
     def _is_super(self, other):
-        return Unification()
+        return Unification.EMPTY
 
-    def insert_keys(self):
+    def supertypes(self):
         return [Type.ANY]
 
-    def lookup_keys(self):
-        return [Type.ANY, Type.EXPR]
+    def subtypes(self):
+        return [Type.ANY, Type.WILD]
 
 
-class Expr(Type):
+class Wild(Type):
     def __init__(self):
         self._union = {}
         self.has_generic = False
 
     def __repr__(self):
-        return "Type.EXPR"
+        return "Type.WILD"
 
     def _str(self):
-        return "Expr"
+        return "Wild"
 
-    def insert_keys(self):
-        return [Type.EXPR]
+    def supertypes(self):
+        return [Type.WILD]
 
-    def lookup_keys(self):
-        return [Type.EXPR]
+    def subtypes(self):
+        assert False # only hit by tests...
+        return []
+
 
 class Program(Type):
     def __init__(self):
@@ -209,18 +250,18 @@ class Program(Type):
     def _str(self):
         return "Program"
 
-    def insert_keys(self):
+    def supertypes(self):
         return [Type.PROGRAM]
 
-    def lookup_keys(self):
+    def subtypes(self):
         return [Type.PROGRAM]
 
 
 
 Type.PROGRAM = Type._cache['Program'] = Program()
 
-# Expr -- a value which can fit into any slot
-Type.EXPR = Type._cache['Expr'] = Expr()
+# Wild -- a value which can fit into any slot
+Type.WILD = Type._cache['Wild'] = Wild()
 
 # Type -- a slot which wants a type name
 Type.TYPE = Type.get('Type')
@@ -232,33 +273,4 @@ Type.ANY = Type._cache['Any'] = Any()
 # make sure Type.get('List') fails!
 Type._cache['List'] = None
 
-
-
-class Unification:
-    # specialise typevars.
-    def __init__(self, values={}):
-        #assert isinstance(values, dict)
-        self.values = values
-
-    def union(self, other):
-        assert isinstance(other, Unification)
-        for key in other.values:
-            if key in self.values:
-                # TODO is equality the right thing here?
-                assert self.values[key] is other.values[key]
-        values = self.values.copy()
-        values.update(other.values)
-        return Unification(values)
-
-    def __repr__(self):
-        if self.values:
-            return "Unification({!r})".format(self.values)
-        return "Unification()"
-
-    def __str__(self):
-        return "<" + ",\n ".join(str(Generic.get(i)) + " = " + str(t) for (i, t)
-                in self.values.items()) + ">"
-
-    def hash(self):
-        return tuple(self.values.items())
 
