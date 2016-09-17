@@ -81,12 +81,13 @@ class LR0(Tag):
 
 
 class Item:
-    def __init__(self, start, tag, wanted_by):
+    def __init__(self, start, tag):
         assert isinstance(tag, Tag), tag
         self.tag = tag
+        assert isinstance(start, Column), start
         self.start = start
-        self.wanted_by = wanted_by
-        self.generic_wants = None
+        # TODO cache wanted_by
+        # TODO for generic LHSes, cache (a subset of?) column.wants
 
         # derivation
         self.left = None
@@ -105,13 +106,7 @@ class Item:
         self.rule = rule
 
     def __repr__(self):
-        return "Item({!r}, {!r})".format(self.start, self.tag)
-        if self.generic_wants:
-            return "Item({!r}, {!r}, <{}>)".format(self.start, self.tag,
-                    ", ".join(str(t) for t in self.generic_wants.keys() if isinstance(t, Type)))
-        else:
-            return "Item({!r}, {!r}, [{}])".format(self.start, self.tag,
-                    ", ".join(str(item.tag.rule.target) for item in self.wanted_by))
+        return "<Item: {!r}, {!r})>".format(self.start.index, self.tag)
 
     def evaluate(self, stack=None):
         if self.value is not None:
@@ -163,44 +158,26 @@ class Item:
 
 
 class Column:
-    def __init__(self, grammar, index, foo):
+    def __init__(self, grammar, index):
         self.grammar = grammar
         self.index = index
         self.items = []
         self.unique = {}
-
-        self.foo = foo
-
-        # Maps tag to items that predicted that tag.
-        #
-        # When we add a tag, we save wanted_by onto the item itself. This helps
-        # unused columns to get GC'd.
-        #
-        # items get added to wants[lr0.wants] when they are add()'ed, and
-        # receive their own wanted_by list at the same time.
-        #
-        # wanted_by = wants[lr0.rule.target].
-        self.wants = {} # what to do with this now...
+        self.wants = {}
 
     def has(self, start, tag):
         key = start, tag
         if key in self.unique:
             return self.unique[key]
 
-    def add(self, start, tag, wanted_by):
+    def add(self, start, tag):
         key = start, tag
         if key in self.unique:
-            item = self.unique[key]
-            #assert item.wanted_by == wanted_by
-            #for other in wanted_by:
-            #    if other not in item.wanted_by:
-            #        item.wanted_by.append(other)
+            return self.unique[key]
 
-        else:
-            #if tag != Type.PROGRAM: assert wanted_by == self.wants[tag]
-            item = self.unique[key] = Item(start, tag, wanted_by)
-            self.items.append(item)
-            self.unique[key] = item
+        item = self.unique[key] = Item(start, tag)
+        self.items.append(item)
+        self.unique[key] = item
 
         if isinstance(tag, LR0):
             # Remember, we predict anything that's a *subtype* of tag.wants.
@@ -211,12 +188,6 @@ class Column:
                     wanted_by = self.wants[type_] = {}
                 wanted_by[item] = None
 
-        #if isinstance(tag, LR0):
-        #    for type_ in tag.wants.subtypes():
-        #        if type_ not in self.wants:
-        #            self.wants[type_] = {}
-        #        self.wants[type_] = True
-
         return item
 
     def scan(self, word, previous):
@@ -224,13 +195,13 @@ class Column:
         assert len(self.items) == 0
         if word.has_value:
             if word in previous.wants:
-                item = self.add(previous.index, word, previous.wants[word])
+                item = self.add(previous, word)
                 item.value = word
             token = Word.get(word.kind)
         else:
             token = word
         if token in previous.wants:
-            item = self.add(previous.index, token, previous.wants[token])
+            item = self.add(previous, token)
             item.value = word
         return len(self.items) > 0
 
@@ -241,35 +212,26 @@ class Column:
             self._predict(type_)
 
     def _predict(self, tag):
-        #wanted_by = self.wants[tag]
-
         for rule in self.grammar.get(tag):
-            #assert rule.first == tag
-            item = self.add(self.index, rule.first, None)
-            #assert item.wanted_by == wanted_by
+            item = self.add(self, rule.first)
+
             # nullables need a value!
             if not isinstance(rule.first, LR0) and rule.call: # is nullable
                 item.rule = rule
-            if rule.target.has_generic:
-                item.generic_wants = self.wants
 
     def complete(self, right):
         # Look for items that want any *supertype* of right.
 
-        #things = right.wanted_by
-        wants = self.foo[right.start].wants
+        wants = right.start.wants
+
         for tag in right.tag.supertypes():
             for left in wants.get(tag, []): # TODO get?
                 self._complete(left, right)
-        right.wanted_by = [] # GC!
 
     def _complete(self, left, right):
         lr0 = left.tag
         tag = left.tag.wants
-        wanted_by = left.wanted_by
-        generic_wants = left.generic_wants
-        if generic_wants:
-            assert generic_wants == self.foo[left.start].wants
+
         if tag.has_generic:
             unification = tag.is_super(right.tag)
             if not unification:
@@ -303,10 +265,8 @@ class Column:
                 #    wanted_by = items
                 #    generic_wants = None
 
-        # assert other.tag.wants == item.tag
-        new = self.add(left.start, lr0.advance, wanted_by)
+        new = self.add(left.start, lr0.advance)
         new.add_derivation(left, right, lr0.rule)
-        new.generic_wants = generic_wants
 
         #print ' ', new
         #print
@@ -458,10 +418,7 @@ class Scope:
 def grammar_parse(source, grammar, debug=DEBUG):
     lexer = Lexer(source)
 
-    foo = []
-
-    column = Column(grammar, 0, foo)
-    foo.append(column)
+    first = column = Column(grammar, 0)
     column.wants[Type.PROGRAM] = []
     column.predict(Type.PROGRAM)
     column.process()
@@ -482,8 +439,7 @@ def grammar_parse(source, grammar, debug=DEBUG):
         if debug:
             column.print_()
 
-        previous, column = column, Column(grammar, index + 1, foo)
-        foo.append(column)
+        previous, column = column, Column(grammar, index + 1)
         if not column.scan(token, previous):
             msg = "Unexpected " + token.kind + " @ " + str(index)
             if token.value:
@@ -508,8 +464,9 @@ def grammar_parse(source, grammar, debug=DEBUG):
 
     if debug:
         column.print_()
-    key = 0, Type.PROGRAM
+    key = first, Type.PROGRAM
     if key not in column.unique:
+        pprint(column.unique)
         msg = "Unexpected EOF"
         if previous:
             for token in previous.wants:
