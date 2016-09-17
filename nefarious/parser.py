@@ -105,7 +105,7 @@ class Item:
         self.rule = rule
 
     def __repr__(self):
-        #return "Item({!r}, {!r})".format(self.start, self.tag)
+        return "Item({!r}, {!r})".format(self.start, self.tag)
         if self.generic_wants:
             return "Item({!r}, {!r}, <{}>)".format(self.start, self.tag,
                     ", ".join(str(t) for t in self.generic_wants.keys() if isinstance(t, Type)))
@@ -163,12 +163,24 @@ class Item:
 
 
 class Column:
-    def __init__(self, grammar, index):
+    def __init__(self, grammar, index, foo):
         self.grammar = grammar
         self.index = index
         self.items = []
         self.unique = {}
-        self.wants = {}
+
+        self.foo = foo
+
+        # Maps tag to items that predicted that tag.
+        #
+        # When we add a tag, we save wanted_by onto the item itself. This helps
+        # unused columns to get GC'd.
+        #
+        # items get added to wants[lr0.wants] when they are add()'ed, and
+        # receive their own wanted_by list at the same time.
+        #
+        # wanted_by = wants[lr0.rule.target].
+        self.wants = {} # what to do with this now...
 
     def has(self, start, tag):
         key = start, tag
@@ -178,18 +190,32 @@ class Column:
     def add(self, start, tag, wanted_by):
         key = start, tag
         if key in self.unique:
-            return self.unique[key]
+            item = self.unique[key]
+            #assert item.wanted_by == wanted_by
+            #for other in wanted_by:
+            #    if other not in item.wanted_by:
+            #        item.wanted_by.append(other)
 
-        item = self.unique[key] = Item(start, tag, wanted_by)
-        self.items.append(item)
-        self.unique[key] = item
+        else:
+            #if tag != Type.PROGRAM: assert wanted_by == self.wants[tag]
+            item = self.unique[key] = Item(start, tag, wanted_by)
+            self.items.append(item)
+            self.unique[key] = item
 
         if isinstance(tag, LR0):
             for type_ in tag.wants.lookup_keys():
                 if type_ in self.wants:
-                    self.wants[type_].append(item)
+                    wanted_by = self.wants[type_]
                 else:
-                    self.wants[type_] = [item]
+                    wanted_by = self.wants[type_] = {}
+                wanted_by[item] = None
+
+        #if isinstance(tag, LR0):
+        #    for type_ in tag.wants.lookup_keys():
+        #        if type_ not in self.wants:
+        #            self.wants[type_] = {}
+        #        self.wants[type_] = True
+
         return item
 
     def scan(self, word, previous):
@@ -208,31 +234,31 @@ class Column:
         return len(self.items) > 0
 
     def predict(self, tag):
-        generic_wants = self.wants if tag.has_generic else None
         for type_ in tag.lookup_keys():
-            self._predict(type_, generic_wants)
+            self._predict(type_)
 
-    def _predict(self, tag, generic_wants=None):
-        wanted_by = self.wants[tag]
+    def _predict(self, tag):
+        #wanted_by = self.wants[tag]
 
         for rule in self.grammar.get(tag):
-            item = self.add(self.index, rule.first, wanted_by)
+            #assert rule.first == tag
+            item = self.add(self.index, rule.first, None)
+            #assert item.wanted_by == wanted_by
             # nullables need a value!
             if not isinstance(rule.first, LR0) and rule.call: # is nullable
                 item.rule = rule
-            item.generic_wants = generic_wants
-
-        return
+            if rule.target.has_generic:
+                item.generic_wants = self.wants
 
     def complete(self, right):
-        for left in right.wanted_by:
-            self.complete_once(left, right)
+        #things = right.wanted_by
+        wants = self.foo[right.start].wants
+        for tag in right.tag.insert_keys():
+            for left in wants[tag]:
+                self._complete(left, right)
         right.wanted_by = [] # GC!
 
-    def complete_once(self, left, right):
-        print '[', left
-        print ']', right
-
+    def _complete(self, left, right):
         lr0 = left.tag
         tag = left.tag.wants
         wanted_by = left.wanted_by
@@ -243,6 +269,9 @@ class Column:
                 # TODO warn?
                 return
 
+            print '[', left
+            print ']', right
+
             old, lr0 = lr0, lr0.specialise(unification)
             assert old.rule.target.is_super(lr0.rule.target)
             #print old.rule.target, ':>', tag.rule.target
@@ -251,7 +280,7 @@ class Column:
                 new_target = lr0.rule.target
                 #if left.generic_wants is None:
                 #    import pdb; pdb.set_trace()
-                if new_target not in left.generic_wants: # TODO *_keys
+                if new_target not in generic_wants: # TODO *_keys
                     # TODO warn?
                     return
                 wanted_by = left.generic_wants[new_target]
@@ -269,13 +298,14 @@ class Column:
         for item in self.items:
             if isinstance(item.tag, LR0):
                 tag = item.tag.wants
+
                 self.predict(tag)
 
                 # sometimes we predict a nullable that's already been completed
                 if not isinstance(tag, Word) and self.grammar.is_nullable(tag):
                     # TODO: check, has `other` already been processed?
                     other = self.has(self.index, tag)
-                    self.complete_once(item, other)
+                    self._complete(item, other)
 
             else:
                 self.complete(item)
@@ -291,6 +321,8 @@ class Column:
         for item in self.items:
             print item
         print
+        from pprint import pprint
+        pprint(self.wants)
 
 
 class Grammar:
@@ -408,7 +440,10 @@ class Scope:
 def grammar_parse(source, grammar, debug=DEBUG):
     lexer = Lexer(source)
 
-    column = Column(grammar, 0)
+    foo = []
+
+    column = Column(grammar, 0, foo)
+    foo.append(column)
     column.wants[Type.PROGRAM] = []
     column.predict(Type.PROGRAM)
     column.process()
@@ -429,7 +464,8 @@ def grammar_parse(source, grammar, debug=DEBUG):
         if debug:
             column.print_()
 
-        previous, column = column, Column(grammar, index + 1)
+        previous, column = column, Column(grammar, index + 1, foo)
+        foo.append(column)
         if not column.scan(token, previous):
             msg = "Unexpected " + token.kind + " @ " + str(index)
             if token.value:

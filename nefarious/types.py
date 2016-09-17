@@ -182,8 +182,6 @@ class Any(Type):
 
 
 class Expr(Type):
-    _rules = {}
-
     def __init__(self):
         self._union = {}
         self.has_generic = False
@@ -200,9 +198,26 @@ class Expr(Type):
     def lookup_keys(self):
         return [Type.EXPR]
 
+class Program(Type):
+    def __init__(self):
+        self._union = {}
+        self.has_generic = False
+
+    def __repr__(self):
+        return "Type.PROGRAM"
+
+    def _str(self):
+        return "Program"
+
+    def insert_keys(self):
+        return [Type.PROGRAM]
+
+    def lookup_keys(self):
+        return [Type.PROGRAM]
 
 
-Type.PROGRAM = Type.get('Program')
+
+Type.PROGRAM = Type._cache['Program'] = Program()
 
 # Expr -- a value which can fit into any slot
 Type.EXPR = Type._cache['Expr'] = Expr()
