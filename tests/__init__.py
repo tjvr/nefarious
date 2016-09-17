@@ -244,14 +244,17 @@ class ParserTests(unittest.TestCase):
     def test_04c(self):
         """sometimes we predict a nullable that's already been completed"""
         self._parse("(hello, hello)", "(list hello hello)")
+
     def test_05(self): self._parse("false, hello < hello", "(list false (cmp hello hello))")
+    # TODO this parses wrong, because we're not correctly unifying typevars during completion.
+
     #def test_05b(self): self._error("choose hello or goodbye") # TODO
     def test_06(self): self._parse("hello < hello", "(cmp hello hello)")
     def test_07(self): self._parse("choose hello < hello or false", "(choice (cmp hello hello) false)")
     def test_08(self): self._parse("choose (hello < hello) or false", "(choice (cmp hello hello) false)")
 
-    def test_12(self): self._parse("hello + foo", "(+ hello (coerce <Int> foo))")
-    def test_13(self): self._parse("hello + choose hello or foo", "(+ hello (choice hello (coerce <Int> foo)))")
+    def test_12(self): self._parse("hello + foo", "(+ hello foo)")
+    def test_13(self): self._parse("hello + choose hello or foo", "(+ hello (choice hello foo))")
 
     def test_14(self): self._parse("range hello to hello", "(range hello hello)")
 

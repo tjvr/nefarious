@@ -215,7 +215,7 @@ grammar.add(Int, [Int, Word.WS, Word.word("+"), Word.WS, Int], CallMacro(Functio
 
 grammar.add(Generic.ALPHA, [Word.word('foo')], Identity)
 
-grammar.add(List.get(Int), [Word.word('range'), Int, Word.word('to'), Int], CallMacro(Function('range'), [1, 3]))
+grammar.add(List.get(Int), [Word.word('range'), Word.WS, Int, Word.WS, Word.word('to'), Word.WS, Int], CallMacro(Function('range'), [2, 6]))
 
 
 #grammar.add_list(List(Generic(0)), [Word.get(","), Generic(0)])
