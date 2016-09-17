@@ -91,6 +91,11 @@ class StartList(Macro):
         return Call(LIST, [child])
 
 @singleton
+class PairList(Macro):
+    def build(self, values):
+        return Call(LIST, [values[0], values[-1]])
+
+@singleton
 class ContinueList(Macro):
     def build(self, values):
         list_ = values[0]
@@ -168,8 +173,8 @@ class CallMacro(Macro):
 
 
 alpha = Generic.get(1)
-grammar.add(List.get(alpha), [alpha], StartList)
-grammar.add(List.get(alpha), [List.get(alpha), Word.WS, Word.word(","), Word.WS, alpha], ContinueList)
+grammar.add(List.get(alpha), [alpha, Word.WS, Word.word(","), Word.WS, alpha], PairList)
+grammar.add(List.get(alpha), [List.get(alpha), Word.WS, Word.word(","), Word.WS, alpha, Word.WS], ContinueList)
 
 # Generic parentheses!
 
@@ -232,9 +237,9 @@ grammar.add(List.get(Int), [Word.word('range'), Word.WS, Int, Word.WS, Word.word
 #     Word.get('}'),
 # ], PostDef)
 
-from pprint import pprint
-pprint(grammar.scope.rule_sets)
-print
+#from pprint import pprint
+#pprint(grammar.scope.rule_sets)
+#print
 
 def parse(source, debug=False):
     return grammar_parse(source, grammar, debug)

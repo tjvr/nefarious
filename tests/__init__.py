@@ -182,8 +182,11 @@ class TypesTests(unittest.TestCase):
                 lb = List.get(b)
                 self.assertEqual(bool(la.is_super(lb)), self._accepts(la, lb))
 
-    def test_grammar(self):
-        Int = Type.get('Int')
+    def test_specialise(self):
+        list_alpha = List.get(Generic.ALPHA)
+        list_int = List.get(Type.get('Int'))
+        unification = list_alpha.is_super(list_int)
+        self.assertEqual(list_alpha.specialise(unification), list_int)
 
 
 class GrammarTests(unittest.TestCase):
@@ -246,9 +249,7 @@ class ParserTests(unittest.TestCase):
         self._parse("(hello, hello)", "(list hello hello)")
 
     def test_05(self): self._parse("false, hello < hello", "(list false (cmp hello hello))")
-    # TODO this parses wrong, because we're not correctly unifying typevars during completion.
 
-    #def test_05b(self): self._error("choose hello or goodbye") # TODO
     def test_06(self): self._parse("hello < hello", "(cmp hello hello)")
     def test_07(self): self._parse("choose hello < hello or false", "(choice (cmp hello hello) false)")
     def test_08(self): self._parse("choose (hello < hello) or false", "(choice (cmp hello hello) false)")
@@ -257,4 +258,7 @@ class ParserTests(unittest.TestCase):
     def test_13(self): self._parse("hello + choose hello or foo", "(+ hello (choice hello foo))")
 
     def test_14(self): self._parse("range hello to hello", "(range hello hello)")
+
+    def test_15(self): self._error("hello + (choose hello or goodbye)")
+    def test_16(self): self._error("choose hello or goodbye")
 

@@ -230,46 +230,27 @@ class Column:
 
     def _complete(self, left, right):
         lr0 = left.tag
-        tag = left.tag.wants
-
-        if tag.has_generic:
-            unification = tag.is_super(right.tag)
+        if lr0.wants.has_generic:
+            # unify generic
+            unification = lr0.wants.is_super(right.tag)
             if not unification:
-                # TODO warn?
                 return
 
-            #print '[', left
-            #print ']', right
+            # specialise the rule, including its target
+            old, lr0 = lr0, lr0.specialise(unification)
 
-            if len(unification.values):
-                # TODO specialise the rule's target based on generics
-
-                #old, lr0 = lr0, lr0.specialise(unification)
-                #assert old.rule.target.is_super(lr0.rule.target)
-                #print old.rule.target, ':>', tag.rule.target
-
-                print 'oh'
-
-                #if old.rule.target.has_generic:
-                #    new_target = lr0.rule.target
-
-                #    items = []
-                #    wants = self.foo[left.start].wants
-                #    for tag in new_target.supertypes():
-                #        if tag in wants:
-                #            items += wants[tag]
-
-                #    if not items:
-                #        print 'oh'
-                #        return
-                #    wanted_by = items
-                #    generic_wants = None
+            if old.rule.target.has_generic:
+                # after specialising, make sure the new rule can itself be
+                # completed! (that is, somebody wants the specialised target).
+                for tag in lr0.rule.target.supertypes():
+                    if tag in left.start.wants:
+                        break
+                else:
+                    return
 
         new = self.add(left.start, lr0.advance)
+        assert right is not None
         new.add_derivation(left, right, lr0.rule)
-
-        #print ' ', new
-        #print
 
     def process(self):
         for item in self.items:
@@ -279,14 +260,14 @@ class Column:
                 self.predict(tag)
 
                 # sometimes we predict a nullable that's already been completed
-                if not isinstance(tag, Word) and self.grammar.is_nullable(tag):
+                if self.grammar.is_nullable(tag):
                     # TODO: check, has `other` already been processed?
                     other = self.has(self.index, tag)
-                    self._complete(item, other)
+                    if other is not None:
+                        self._complete(item, other)
 
             else:
                 self.complete(item)
-        self.print_()
 
     def evaluate(self):
         for item in self.items:
@@ -298,9 +279,9 @@ class Column:
         for item in self.items:
             print item
         print
-        from pprint import pprint
-        pprint(dict((k, list(v)) for k, v in self.wants.items()))
-        print
+        #from pprint import pprint
+        #pprint(dict((k, list(v)) for k, v in self.wants.items()))
+        #print
 
 
 class Grammar:
@@ -466,7 +447,6 @@ def grammar_parse(source, grammar, debug=DEBUG):
         column.print_()
     key = first, Type.PROGRAM
     if key not in column.unique:
-        pprint(column.unique)
         msg = "Unexpected EOF"
         if previous:
             for token in previous.wants:
