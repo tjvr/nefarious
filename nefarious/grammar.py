@@ -191,7 +191,7 @@ CMP = Function('cmp')
 class Cmp(Macro):
     def build(self, values):
         return Call(CMP, [values[0], values[4]])
-#grammar.add(Type.get('Bool'), [Generic.get(1), Word.WS, Word.word("<"), Word.WS, Generic.get(1)], Cmp)
+grammar.add(Type.get('Bool'), [Generic.get(1), Word.WS, Word.word("<"), Word.WS, Generic.get(1)], Cmp)
 
 
 

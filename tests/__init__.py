@@ -6,6 +6,7 @@ import sys
 import unittest
 
 from nefarious.types import *
+from nefarious.lex import Word
 from nefarious.grammar import grammar, parse
 
 SELF_PATH = os.path.dirname(os.path.abspath(__file__))
@@ -183,6 +184,29 @@ class TypesTests(unittest.TestCase):
 
     def test_grammar(self):
         Int = Type.get('Int')
+
+
+class GrammarTests(unittest.TestCase):
+    def setUp(self):
+        self.all_rules = []
+        for tag in grammar.scope.rule_sets:
+            self.all_rules += grammar.scope.rule_sets[tag]
+
+    def test_all(self):
+        """Check every rule gets inserted under Type.ANY
+
+        (except for Type.PROGRAM)
+
+        """
+        every_rule = list(self.all_rules)
+        for program_rule in grammar.scope.rule_sets[Type.PROGRAM]:
+            every_rule.remove(program_rule)
+
+        any_rules = grammar.scope.rule_sets[Type.ANY]
+        for rule in every_rule:
+            if isinstance(rule.target, Word):
+                continue
+            self.assertIn(rule, any_rules)
 
 
 # TODO move grammar into setUp()
