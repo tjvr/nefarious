@@ -203,6 +203,7 @@ class Column:
             self.unique[key] = item
 
         if isinstance(tag, LR0):
+            # Remember, we predict anything that's a *subtype* of tag.wants.
             for type_ in tag.wants.subtypes():
                 if type_ in self.wants:
                     wanted_by = self.wants[type_]

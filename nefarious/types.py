@@ -235,7 +235,7 @@ class Wild(Type):
         return [Type.WILD]
 
     def subtypes(self):
-        assert False # only hit by tests...
+        #assert False # only hit by tests...
         return []
 
 
