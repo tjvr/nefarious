@@ -3,7 +3,7 @@
 
 from .types import *
 from .lex import Word, Lexer
-from .grammar import Function, CoerceMacro
+from .grammar import Function
 
 
 DEBUG = False

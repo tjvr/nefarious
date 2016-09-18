@@ -7,7 +7,8 @@ import unittest
 
 from nefarious.types import *
 from nefarious.lex import Word
-from nefarious.grammar import grammar, parse
+from nefarious.grammar import *
+del grammar
 
 SELF_PATH = os.path.dirname(os.path.abspath(__file__))
 
@@ -23,7 +24,93 @@ def captured_output():
         sys.stdout, sys.stderr = old_out, old_err
 
 
-class TypesTests(unittest.TestCase):
+class TestGrammar(unittest.TestCase):
+    """Set up grammar used for Generic tests."""
+
+    def setUp(self):
+        self.grammar = grammar = Grammar()
+
+        def singleton(cls):
+            return cls(cls.__name__)
+
+        DEFINE = Function('define')
+
+        @singleton
+        class Null(Macro):
+            def build(self, values):
+                return Word.NULL_WS
+        grammar.add(Word.WS, [], Null)
+
+        LIST = Function('list')
+
+        @singleton
+        class PairList(Macro):
+            def build(self, values):
+                return Call(LIST, [values[0], values[-1]])
+
+        @singleton
+        class ContinueList(Macro):
+            def build(self, values):
+                list_ = values[0]
+                assert isinstance(list_, Call)
+                assert list_.func is LIST
+                list_.args.append(values[-1])
+                return list_
+
+        @singleton
+        class Identity(Macro):
+            def build(self, values):
+                assert len(values) == 1
+                return values[0]
+
+        Int = Type.get('Int')
+        Text = Type.get('Text')
+        Bool = Type.get('Bool')
+        grammar.add_type(Int)
+        grammar.add_type(Text)
+        grammar.add_type(Bool)
+        grammar.add_type(List.get(Type.ANY))
+
+        alpha = Generic.get(1)
+        grammar.add(List.get(alpha), [alpha, Word.WS, Word.word(","), Word.WS, alpha], PairList)
+        grammar.add(List.get(alpha), [List.get(alpha), Word.WS, Word.word(","), Word.WS, alpha, Word.WS], ContinueList)
+
+        @singleton
+        class Parens(Macro):
+            def build(self, values):
+                return values[2]
+        grammar.add(Generic.get(1), [Word.word("("), Word.WS, Generic.get(1), Word.WS, Word.word(")")], Parens)
+
+        CHOICE = Function('choice')
+        @singleton
+        class Choice(Macro):
+            def build(self, values):
+                return Call(CHOICE, [values[2], values[6]])
+        grammar.add(Generic.get(1), [Word.word("choose"), Word.WS, Generic.get(1), Word.WS, Word.word("or"), Word.WS, Generic.get(1)], Choice)
+
+        CMP = Function('cmp')
+        @singleton
+        class Cmp(Macro):
+            def build(self, values):
+                return Call(CMP, [values[0], values[4]])
+        grammar.add(Type.get('Bool'), [Generic.get(1), Word.WS, Word.word("<"), Word.WS, Generic.get(1)], Cmp)
+
+        grammar.add(Type.PROGRAM, [Type.ANY, Word.NL], Identity)
+
+        grammar.add(Int, [Word.word('hello')], Identity)
+        grammar.add(Text, [Word.word('goodbye')], Identity)
+        grammar.add(Bool, [Word.word('false')], Identity)
+
+        grammar.add(Int, [Int, Word.WS, Word.word("+"), Word.WS, Int], CallMacro(Function('+'), [0, 4]))
+
+        grammar.add(Generic.ALPHA, [Word.word('foo')], Identity)
+
+        grammar.add(List.get(Int), [Word.word('range'), Word.WS, Int, Word.WS, Word.word('to'), Word.WS, Int], CallMacro(Function('range'), [2, 6]))
+
+    def _grammar_parse(self, source, debug=False):
+        return grammar_parse(source, self.grammar, debug)
+
+class TypesTests(TestGrammar):
 
     # Let's see:
     # We want to predict any production whose LHS is a subtype of `tag`.
@@ -45,6 +132,7 @@ class TypesTests(unittest.TestCase):
 
 
     def setUp(self):
+        super(TypesTests, self).setUp()
         self.all_types = [
             Generic.ALPHA,
             List.get(Type.ANY),
@@ -53,7 +141,7 @@ class TypesTests(unittest.TestCase):
             List.get(List.get(Generic.ALPHA)),
             List.get(List.get(Type.get('Int'))),
             List.get(List.get(Type.get('Int'))),
-        ] + grammar.scope.types
+        ] + self.grammar.scope.types
 
     def test_types(self):
         list_int = List.get(Type.get('Int'))
@@ -172,13 +260,13 @@ class TypesTests(unittest.TestCase):
         self._does_accept(Type.ANY, List(Generic(1)), True)
 
     def test_accepts_all(self):
-        for a in grammar.scope.types:
-            for b in grammar.scope.types:
+        for a in self.grammar.scope.types:
+            for b in self.grammar.scope.types:
                 self.assertEqual(bool(a.is_super(b)), self._accepts(a, b))
 
-        for a in grammar.scope.types:
+        for a in self.grammar.scope.types:
             la = List.get(a)
-            for b in grammar.scope.types:
+            for b in self.grammar.scope.types:
                 lb = List.get(b)
                 self.assertEqual(bool(la.is_super(lb)), self._accepts(la, lb))
 
@@ -189,11 +277,12 @@ class TypesTests(unittest.TestCase):
         self.assertEqual(list_alpha.specialise(unification), list_int)
 
 
-class GrammarTests(unittest.TestCase):
+class GrammarTests(TestGrammar):
     def setUp(self):
+        super(GrammarTests, self).setUp()
         self.all_rules = []
-        for tag in grammar.scope.rule_sets:
-            self.all_rules += grammar.scope.rule_sets[tag]
+        for tag in self.grammar.scope.rule_sets:
+            self.all_rules += self.grammar.scope.rule_sets[tag]
 
     def test_all(self):
         """Check every rule gets inserted under Type.ANY
@@ -202,10 +291,10 @@ class GrammarTests(unittest.TestCase):
 
         """
         every_rule = list(self.all_rules)
-        for program_rule in grammar.scope.rule_sets[Type.PROGRAM]:
+        for program_rule in self.grammar.scope.rule_sets[Type.PROGRAM]:
             every_rule.remove(program_rule)
 
-        any_rules = grammar.scope.rule_sets[Type.ANY]
+        any_rules = self.grammar.scope.rule_sets[Type.ANY]
         for rule in every_rule:
             if isinstance(rule.target, Word):
                 continue
@@ -214,12 +303,12 @@ class GrammarTests(unittest.TestCase):
 
 # TODO move grammar into setUp()
 
-class ParserTests(unittest.TestCase):
+class ParserTests(TestGrammar):
     # Enable stdout
     DEBUG = False
 
     def _execute(self, source):
-        return parse(source + "\n", debug=self.DEBUG)
+        return self._grammar_parse(source + "\n", debug=self.DEBUG)
 
     def _parse(self, source, sexpr):
         # nb. debug reprs / capturing stdout is slow!

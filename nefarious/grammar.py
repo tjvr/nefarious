@@ -48,15 +48,15 @@ class Call(Tree):
     def sexpr(self):
         return "(" + self.func.sexpr() + " " + " ".join([a.sexpr() for a in self.args]) + ")"
 
-
-
-COERCE = Function('coerce')
-class CoerceMacro(Macro):
-    def __init__(self, type_):
-        self.type = type_
+class CallMacro(Macro):
+    def __init__(self, call, arg_indexes):
+        assert isinstance(call, Function) and not isinstance(call, Macro)
+        self.call = call
+        self.arg_indexes = arg_indexes
     def build(self, values):
-        assert len(values) == 1
-        return Call(COERCE, [self.type, values[0]])
+        args = [values[i] for i in self.arg_indexes]
+        return Call(self.call, args)
+
 
 from .parser import Grammar, Rule, grammar_parse
 
@@ -65,30 +65,23 @@ grammar = Grammar()
 def singleton(cls):
     return cls(cls.__name__)
 
+
+# Define -- the most important function (!)
 DEFINE = Function('define')
-# MACRO = Function('macro') # macro definitions do not get sent to the compiler!
 
-# nullable whitespace derivation -- whitespace is always optional.
-# note however that whitespace has to be explicitly allowed, eg. "Int <> Int"
-# would not allow a space between < and >.
-# ie. whitespace is only permitted if it appears in the definition.
 
+# Whitespace
 @singleton
 class Null(Macro):
     def build(self, values):
         return Word.NULL_WS
+# whitespace is always optional, but only permitted if it appears in the defition.
+# eg. "Int <> Int" would not allow a space between < and >.
 grammar.add(Word.WS, [], Null)
 
-# For, um, lists.
-# After all, this is "Nefarious Scheme"
-LIST = Function('list')
 
-@singleton
-class StartList(Macro):
-    def build(self, values):
-        assert len(values) == 1
-        child = values[0]
-        return Call(LIST, [child])
+# List -- After all, this is "Nefarious Scheme"
+LIST = Function('list')
 
 @singleton
 class PairList(Macro):
@@ -111,12 +104,7 @@ class Identity(Macro):
         assert len(values) == 1
         return values[0]
 
-
-def add_list(target, cont):
-    symbols = [target] + cont
-    grammar.add(target, symbols, ContinueList)
-    item = cont[-1]
-    grammar.add(target, [item], StartList)
+#grammar.add(Type.get('Definition'), [])
 
 #add_list(Type.get('SpecList'), [Type.get('Spec')])
 #add_list(Type.get('Block'), [Type.get('Line')])
