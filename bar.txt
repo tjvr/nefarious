@@ -1,1 +1,1 @@
-choose false or foo
+foo

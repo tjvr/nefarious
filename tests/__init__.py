@@ -28,6 +28,22 @@ class TestGrammar(unittest.TestCase):
     """Set up grammar used for Generic tests."""
 
     def setUp(self):
+        self.setup_grammar()
+        self.setup_types()
+
+        # Monkey-patch to get old Call sexpr()
+        def sexpr(self):
+            return "(" + self.func.sexpr() + " " + " ".join([a.sexpr() for a in self.args]) + ")"
+        Call.sexpr = sexpr
+
+        # Get old Call init, too
+        def init(self, func, t, args=None):
+            if args is None: args = t
+            self.func = func
+            self.args = args
+        Call.__init__ = init
+
+    def setup_grammar(self):
         self.grammar = grammar = Grammar()
 
         def singleton(cls):
@@ -37,7 +53,7 @@ class TestGrammar(unittest.TestCase):
 
         @singleton
         class Null(Macro):
-            def build(self, values):
+            def build(self, values, t):
                 return Word.NULL_WS
         grammar.add(Word.WS, [], Null)
 
@@ -45,12 +61,12 @@ class TestGrammar(unittest.TestCase):
 
         @singleton
         class PairList(Macro):
-            def build(self, values):
+            def build(self, values, t):
                 return Call(LIST, [values[0], values[-1]])
 
         @singleton
         class ContinueList(Macro):
-            def build(self, values):
+            def build(self, values, t):
                 list_ = values[0]
                 assert isinstance(list_, Call)
                 assert list_.func is LIST
@@ -59,17 +75,13 @@ class TestGrammar(unittest.TestCase):
 
         @singleton
         class Identity(Macro):
-            def build(self, values):
+            def build(self, values, t):
                 assert len(values) == 1
                 return values[0]
 
         Int = Type.get('Int')
         Text = Type.get('Text')
         Bool = Type.get('Bool')
-        grammar.add_type(Int)
-        grammar.add_type(Text)
-        grammar.add_type(Bool)
-        grammar.add_type(List.get(Type.ANY))
 
         alpha = Generic.get(1)
         grammar.add(List.get(alpha), [alpha, Word.WS, Word.word(","), Word.WS, alpha], PairList)
@@ -77,21 +89,21 @@ class TestGrammar(unittest.TestCase):
 
         @singleton
         class Parens(Macro):
-            def build(self, values):
+            def build(self, values, t):
                 return values[2]
         grammar.add(Generic.get(1), [Word.word("("), Word.WS, Generic.get(1), Word.WS, Word.word(")")], Parens)
 
         CHOICE = Function('choice')
         @singleton
         class Choice(Macro):
-            def build(self, values):
+            def build(self, values, t):
                 return Call(CHOICE, [values[2], values[6]])
         grammar.add(Generic.get(1), [Word.word("choose"), Word.WS, Generic.get(1), Word.WS, Word.word("or"), Word.WS, Generic.get(1)], Choice)
 
         CMP = Function('cmp')
         @singleton
         class Cmp(Macro):
-            def build(self, values):
+            def build(self, values, t):
                 return Call(CMP, [values[0], values[4]])
         grammar.add(Type.get('Bool'), [Generic.get(1), Word.WS, Word.word("<"), Word.WS, Generic.get(1)], Cmp)
 
@@ -106,6 +118,22 @@ class TestGrammar(unittest.TestCase):
         grammar.add(Generic.ALPHA, [Word.word('foo')], Identity)
 
         grammar.add(List.get(Int), [Word.word('range'), Word.WS, Int, Word.WS, Word.word('to'), Word.WS, Int], CallMacro(Function('range'), [2, 6]))
+
+    def setup_types(self):
+        self.some_types = [
+            Type.get('Int'),
+            Type.get('Text'),
+            Type.get('Bool'),
+            List.get(Type.ANY),
+        ]
+        self.all_types = self.some_types + [
+            Generic.ALPHA,
+            List.get(Type.ANY),
+            List.get(Generic.ALPHA),
+            List.get(List.get(Generic.ALPHA)),
+            List.get(List.get(Type.get('Int'))),
+            List.get(List.get(Type.get('Int'))),
+        ]
 
     def _grammar_parse(self, source, debug=False):
         return grammar_parse(source, self.grammar, debug)
@@ -133,15 +161,6 @@ class TypesTests(TestGrammar):
 
     def setUp(self):
         super(TypesTests, self).setUp()
-        self.all_types = [
-            Generic.ALPHA,
-            List.get(Type.ANY),
-            List.get(Generic.ALPHA),
-            List.get(Type.ANY),
-            List.get(List.get(Generic.ALPHA)),
-            List.get(List.get(Type.get('Int'))),
-            List.get(List.get(Type.get('Int'))),
-        ] + self.grammar.scope.types
 
     def test_types(self):
         list_int = List.get(Type.get('Int'))
@@ -260,13 +279,13 @@ class TypesTests(TestGrammar):
         self._does_accept(Type.ANY, List(Generic(1)), True)
 
     def test_accepts_all(self):
-        for a in self.grammar.scope.types:
-            for b in self.grammar.scope.types:
+        for a in self.some_types:
+            for b in self.some_types:
                 self.assertEqual(bool(a.is_super(b)), self._accepts(a, b))
 
-        for a in self.grammar.scope.types:
+        for a in self.some_types:
             la = List.get(a)
-            for b in self.grammar.scope.types:
+            for b in self.some_types:
                 lb = List.get(b)
                 self.assertEqual(bool(la.is_super(lb)), self._accepts(la, lb))
 

@@ -3,13 +3,12 @@
 
 from .types import *
 from .lex import Word, Lexer
-from .grammar import Function
 
 
 DEBUG = False
 
 class Rule:
-    def __init__(self, target, symbols, call=None):
+    def __init__(self, target, symbols, call):
         assert isinstance(symbols, list)
         for s in symbols:
             assert isinstance(s, Tag)
@@ -35,6 +34,7 @@ class Rule:
             self.first = target
 
         self.priority = 0
+        from .grammar import Function
         assert isinstance(call, Function)
         self.call = call
 
@@ -124,7 +124,7 @@ class Item:
         if rule.target == Type.PROGRAM:
             value = children[0]
         else:
-            value = rule.call.build(children)
+            value = rule.call.build(children, rule.target)
             # TODO pass item.tag into build()
 
         self.value = value
@@ -295,13 +295,14 @@ class Grammar:
 
     # Rules
 
-    def add(self, target, symbols, call=None):
+    def add(self, target, symbols, call):
         rule = Rule(target, symbols, call)
         self.highest_priority += 1
         rule.priority = self.highest_priority
 
         for target in rule.target.supertypes():
             self.scope.add(target, rule)
+        return rule
 
     def remove(self, rule):
         for scope in reversed(self.stack):
@@ -342,31 +343,11 @@ class Grammar:
             for rule in scope.generics:
                 yield rule
 
-    # Types
-
-    def add_type(self, type_):
-        self.scope.types.append(type_)
-        # TODO Type rules
-        #self.add(Type.TYPE, [Word.word(type_.name)], TypeMacro)
-
-    def expand(self, tag):
-        assert isinstance(tag, Tag)
-        if isinstance(tag, Generic):
-            return self.all_types()
-        return [tag]
-
-    def all_types(self):
-        types = []
-        for scope in self.stack:
-            types.extend(scope.types)
-        return types
-
 
 class Scope:
     def __init__(self):
         self.rule_sets = {}
         self.nullables = {}
-        self.types = []
 
     def add(self, target, rule):
         if target not in self.rule_sets:
@@ -449,4 +430,6 @@ def grammar_parse(source, grammar, debug=DEBUG):
     value = start.evaluate()
 
     return value.sexpr()
+
+
 

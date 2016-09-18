@@ -149,6 +149,49 @@ class List(Type):
         l.append(Generic.ALPHA)
         return l
 
+class Seq(Type):
+    _cache = {}
+
+    def __init__(self, child):
+        self.child = child
+        self._union = {}
+        self.has_generic = child.has_generic
+
+    @staticmethod
+    def get(child):
+        assert isinstance(child, Type)
+        if child in Seq._cache:
+            type_ = Seq._cache[child]
+        else:
+            type_ = Seq._cache[child] = Seq(child)
+        return type_
+
+    def __repr__(self):
+        return 'Seq({!r})'.format(self.child)
+
+    def _str(self):
+        return "Seq " + self.child._str()
+
+    def _is_super(self, other):
+        if isinstance(other, Seq):
+            return self.child.is_super(other.child)
+
+    def specialise(self, unification):
+        return Seq.get(self.child.specialise(unification))
+
+    def supertypes(self):
+        l = [] #Type.ANY]
+        for t in self.child.supertypes():
+            l.append(Seq.get(t))
+        return l
+
+    def subtypes(self):
+        l = []
+        for t in self.child.subtypes():
+            l.append(Seq.get(t))
+        l.append(Generic.ALPHA)
+        return l
+
 class Generic(Type):
     _cache = {}
 

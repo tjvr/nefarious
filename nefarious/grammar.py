@@ -1,6 +1,7 @@
 
 from .types import *
 from .lex import Word, Lexer
+from .parser import Grammar, Rule, grammar_parse
 
 # two kinds of factories--
 # * a Function pointer. From which, we build an AST node. This gets evaluated at runtime.
@@ -22,58 +23,62 @@ class Function:
         assert isinstance(body, Body)
         self.body = body
 
-    def build(self, children):
-        return Call(self, children)
+    def build(self, children, type_):
+        return Call(self, type_, children)
 
     def call_immediate(self, children):
         assert self.body is not None
-        pass # TODO
+        # TODO
 
 class Macro(Function):
-    def build(self, children):
+    def build(self, children, type_):
         return self.call_immediate(children)
 
     def sexpr(self):
         assert False # macros should never be in the AST!
 
 class Call(Tree):
-    def __init__(self, func, args):
+    def __init__(self, func, type_, args):
         assert isinstance(func, Function)
-        self.func = func
+        assert isinstance(type_, Type)
         assert isinstance(args, list)
         for arg in args:
             assert isinstance(arg, Tree)
+        self.func = func
+        self.type = type_
         self.args = args
 
     def sexpr(self):
-        return "(" + self.func.sexpr() + " " + " ".join([a.sexpr() for a in self.args]) + ")"
+        return "(" + self.type.sexpr() + " " + self.func.sexpr() + " " + " ".join([a.sexpr() for a in self.args]) + ")"
 
 class CallMacro(Macro):
     def __init__(self, call, arg_indexes):
         assert isinstance(call, Function) and not isinstance(call, Macro)
         self.call = call
         self.arg_indexes = arg_indexes
-    def build(self, values):
+
+    def build(self, values, type_):
         args = [values[i] for i in self.arg_indexes]
-        return Call(self.call, args)
+        return Call(self.call, type_, args)
 
 
-from .parser import Grammar, Rule, grammar_parse
 
 grammar = Grammar()
 
 def singleton(cls):
     return cls(cls.__name__)
 
-
-# Define -- the most important function (!)
-DEFINE = Function('define')
+@singleton
+class Identity(Macro):
+    def build(self, values, type_):
+        assert len(values) == 1
+        return values[0]
 
 
 # Whitespace
 @singleton
 class Null(Macro):
-    def build(self, values):
+    def build(self, values, type_):
         return Word.NULL_WS
 # whitespace is always optional, but only permitted if it appears in the defition.
 # eg. "Int <> Int" would not allow a space between < and >.
@@ -84,105 +89,84 @@ grammar.add(Word.WS, [], Null)
 LIST = Function('list')
 
 @singleton
+class StartList(Macro):
+    def build(self, values, type_):
+        return Call(LIST, type_, [values[0]])
+
+@singleton
 class PairList(Macro):
-    def build(self, values):
-        return Call(LIST, [values[0], values[-1]])
+    def build(self, values, type_):
+        return Call(LIST, type_, [values[0], values[-1]])
 
 @singleton
 class ContinueList(Macro):
-    def build(self, values):
+    def build(self, values, type_):
         list_ = values[0]
-        assert isinstance(list_, Call)
-        assert list_.func is LIST
+        assert isinstance(list_, Call) and list_.func is LIST
         list_.args.append(values[-1])
         return list_
 
-# For, um, subtypes and stuff.
-@singleton
-class Identity(Macro):
-    def build(self, values):
-        assert len(values) == 1
-        return values[0]
 
-#grammar.add(Type.get('Definition'), [])
-
-#add_list(Type.get('SpecList'), [Type.get('Spec')])
-#add_list(Type.get('Block'), [Type.get('Line')])
+# Define -- the most important function (!)
+DEFINE = Function('define')
+Spec = Type.get('Spec')
 
 # We want to--
 # - allow for scoping the inside of blocks.
 #   so eg. an `sql _` statement that accepts a block -- `sql { select * from ... }`
-# - allow recursive definitions. `define fib Int:n { return fib ... }`
-# - allow generic types. eg. (List 'a) -> (List 'a) "," 'a
 #
 # when *does* evaluation happen?
-# is there a way to let evaluation affect prediction? That seems *somewhat*
-# what we want to allow for here...
 #
-# Aside from generics, it would be fine if evaluation/scoping was hard-bound to
-# { }...
-
-# Generics.
-# =========
-#
-# Prediction: ask Grammar for all subtypes of T.
-# Always include "Wild".
-# Generics expand to any type.   'a -> Wild, Int, Frac, Text ...
-#
-# Completion: unify right with left.wants.
-# Create new (but uniqued!) LR0s.
-# right must be a *subtype* of left.wants!
-# and target must be a *subtype* of the original wanted_by ~ target.
-# Unification can fail!
-
-#grammar.add_type(Generic.ALPHA)
-# Don't need to add the Wild type -- grammar.expand() always returns it.
+# it would be fine if evaluation/scoping was hard-bound to { }...
 
 @singleton
-class TypeMacro(Macro):
-    def build(self, values):
-        return Type.get(values[0].value)
+class Define(Macro):
+    def build(self, values, type_):
+        return Call(DEFINE, type_, [values[2]])
 
-# add_type: what should Type.ANY expand to?
-grammar.add_type(Type.get('Int'))
-grammar.add_type(Type.get('Text'))
-grammar.add_type(Type.get('Bool'))
-grammar.add_type(List.get(Type.ANY))
+grammar.add(Type.ANY, [
+    Word.word('define'), Word.WS, Seq.get(Type.get('Spec')), Word.WS, Word.word("{"),
+], Define)
 
-class CallMacro(Macro):
-    def __init__(self, call, arg_indexes):
-        assert isinstance(call, Function) and not isinstance(call, Macro)
-        self.call = call
-        self.arg_indexes = arg_indexes
-    def build(self, values):
-        args = [values[i] for i in self.arg_indexes]
-        return Call(self.call, args)
+WORD = Function('word')
+@singleton
+class WordMacro(Macro):
+    def build(self, values, type_):
+        return Call(WORD, type_, values)
+grammar.add(Spec, [Word.WORD], WordMacro)
+
+grammar.add(Seq.get(Spec), [Spec], StartList)
+grammar.add(Seq.get(Spec), [Seq.get(Spec), Word.WS, Spec], ContinueList)
 
 
+# Lists
 
 alpha = Generic.get(1)
 grammar.add(List.get(alpha), [alpha, Word.WS, Word.word(","), Word.WS, alpha], PairList)
-grammar.add(List.get(alpha), [List.get(alpha), Word.WS, Word.word(","), Word.WS, alpha, Word.WS], ContinueList)
+grammar.add(List.get(alpha), [List.get(alpha), Word.WS, Word.word(","), Word.WS, alpha], ContinueList)
+
 
 # Generic parentheses!
 
 @singleton
 class Parens(Macro):
-    def build(self, values):
-        return values[2]
+    def build(self, values, type_):
+        child = values[2]
+        assert type_ == child.type
+        return child
 grammar.add(Generic.get(1), [Word.word("("), Word.WS, Generic.get(1), Word.WS, Word.word(")")], Parens)
 
 CHOICE = Function('choice')
 @singleton
 class Choice(Macro):
-    def build(self, values):
+    def build(self, values, type_):
         return Call(CHOICE, [values[2], values[6]])
 grammar.add(Generic.get(1), [Word.word("choose"), Word.WS, Generic.get(1), Word.WS, Word.word("or"), Word.WS, Generic.get(1)], Choice)
 
 CMP = Function('cmp')
 @singleton
 class Cmp(Macro):
-    def build(self, values):
+    def build(self, values, type_):
         return Call(CMP, [values[0], values[4]])
 grammar.add(Type.get('Bool'), [Generic.get(1), Word.WS, Word.word("<"), Word.WS, Generic.get(1)], Cmp)
 
@@ -195,20 +179,6 @@ Text = Type.get('Text')
 Bool = Type.get('Bool')
 
 grammar.add(Type.PROGRAM, [Type.ANY, Word.NL], Identity)
-#grammar.add(Type.ANY, [Int], Identity)
-#grammar.add(Type.PROGRAM, [Int, Word.NL], Identity)
-#grammar.add(Type.PROGRAM, [Text, Word.NL], Identity)
-#grammar.add(Type.PROGRAM, [Bool, Word.NL], Identity)
-
-grammar.add(Int, [Word.word('hello')], Identity)
-grammar.add(Text, [Word.word('goodbye')], Identity)
-grammar.add(Bool, [Word.word('false')], Identity)
-
-grammar.add(Int, [Int, Word.WS, Word.word("+"), Word.WS, Int], CallMacro(Function('+'), [0, 4]))
-
-grammar.add(Generic.ALPHA, [Word.word('foo')], Identity)
-
-grammar.add(List.get(Int), [Word.word('range'), Word.WS, Int, Word.WS, Word.word('to'), Word.WS, Int], CallMacro(Function('range'), [2, 6]))
 
 
 #grammar.add_list(List(Generic(0)), [Word.get(","), Generic(0)])
