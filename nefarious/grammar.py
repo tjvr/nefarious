@@ -49,7 +49,8 @@ class Call(Tree):
         self.args = args
 
     def sexpr(self):
-        return "(" + self.type.sexpr() + " " + self.func.sexpr() + " " + " ".join([a.sexpr() for a in self.args]) + ")"
+        #return "(" + self.func.sexpr() + " " + " ".join([a.sexpr() for a in self.args]) + ")"
+        return self.type.sexpr() + ":(" + self.func.sexpr() + " " + " ".join([a.sexpr() for a in self.args]) + ")"
 
 class CallMacro(Macro):
     def __init__(self, call, arg_indexes):
@@ -88,28 +89,74 @@ grammar.add(Word.WS, [], Null)
 # List -- After all, this is "Nefarious Scheme"
 LIST = Function('list')
 
-@singleton
 class StartList(Macro):
+    def __init__(self, call):
+        self.call = call
     def build(self, values, type_):
-        return Call(LIST, type_, [values[0]])
+        return Call(self.call, type_, [values[0]])
 
-@singleton
 class PairList(Macro):
+    def __init__(self, call):
+        self.call = call
     def build(self, values, type_):
-        return Call(LIST, type_, [values[0], values[-1]])
+        return Call(self.call, type_, [values[0], values[-1]])
 
-@singleton
 class ContinueList(Macro):
+    def __init__(self, call):
+        self.call = call
     def build(self, values, type_):
         list_ = values[0]
-        assert isinstance(list_, Call) and list_.func is LIST
+        assert isinstance(list_, Call) and list_.func is self.call
         list_.args.append(values[-1])
         return list_
 
+# Generic lists
+ALPHA = Generic.ALPHA
+grammar.add(List.get(ALPHA), [ALPHA, Word.WS, Word.word(","), Word.WS, ALPHA], PairList(LIST))
+grammar.add(List.get(ALPHA), [List.get(ALPHA), Word.WS, Word.word(","), Word.WS, ALPHA], ContinueList(LIST))
+
+# TODO revisit this... --require square brackets?
+
+
+# Parentheses
+
+@singleton
+class Parens(Macro):
+    def build(self, values, type_):
+        child = values[2]
+        return child
+grammar.add(Generic.get(1), [Word.word("("), Word.WS, Generic.get(1), Word.WS, Word.word(")")], Parens)
+
+
+# Program
+
+Line = Type.get('Line')
+
+grammar.add(Type.PROGRAM, [Line, Word.NL], Identity)
+
+# TODO lines
+grammar.add(Line, [Type.ANY], Identity)
+
+
+# Types
+
+class Literal(Macro):
+    def __init__(self, value):
+        self.value = value
+    def build(self, values, type_):
+        return self.value
+
+def add_type(type_):
+    name = type_._str()
+    assert len(name.split(" ")) == 1
+    grammar.add(Type.TYPE, [Word.word(name)], Literal(type_))
+
 
 # Define -- the most important function (!)
+
 DEFINE = Function('define')
-Spec = Type.get('Spec')
+Spec = Internal.get('Spec')
+DefSpec = Internal.get('DefSpec')
 
 # We want to--
 # - allow for scoping the inside of blocks.
@@ -124,8 +171,8 @@ class Define(Macro):
     def build(self, values, type_):
         return Call(DEFINE, type_, [values[2]])
 
-grammar.add(Type.ANY, [
-    Word.word('define'), Word.WS, Seq.get(Type.get('Spec')), Word.WS, Word.word("{"),
+grammar.add(Line, [
+    Word.word('define'), Word.WS, DefSpec, Word.WS, Word.word("{"),
 ], Define)
 
 WORD = Function('word')
@@ -135,69 +182,47 @@ class WordMacro(Macro):
         return Call(WORD, type_, values)
 grammar.add(Spec, [Word.WORD], WordMacro)
 
-grammar.add(Seq.get(Spec), [Spec], StartList)
-grammar.add(Seq.get(Spec), [Seq.get(Spec), Word.WS, Spec], ContinueList)
+ARG = Function('arg')
+@singleton
+class ArgMacro(Macro):
+    def build(self, values, type_):
+        return Call(ARG, type_, values)
+grammar.add(Spec, [Type.TYPE], ArgMacro)
 
-
-# Lists
-
-alpha = Generic.get(1)
-grammar.add(List.get(alpha), [alpha, Word.WS, Word.word(","), Word.WS, alpha], PairList)
-grammar.add(List.get(alpha), [List.get(alpha), Word.WS, Word.word(","), Word.WS, alpha], ContinueList)
-
-
-# Generic parentheses!
+grammar.add(Seq.get(Spec), [Spec], StartList(LIST))
+grammar.add(Seq.get(Spec), [Seq.get(Spec), Word.WS, Spec], ContinueList(LIST))
 
 @singleton
-class Parens(Macro):
+class DefSpecMacro(Macro):
     def build(self, values, type_):
-        child = values[2]
-        assert type_ == child.type
-        return child
-grammar.add(Generic.get(1), [Word.word("("), Word.WS, Generic.get(1), Word.WS, Word.word(")")], Parens)
+        assert values[0].func == LIST
+        values = values[0].args
 
-CHOICE = Function('choice')
-@singleton
-class Choice(Macro):
-    def build(self, values, type_):
-        return Call(CHOICE, [values[2], values[6]])
-grammar.add(Generic.get(1), [Word.word("choose"), Word.WS, Generic.get(1), Word.WS, Word.word("or"), Word.WS, Generic.get(1)], Choice)
+        symbols = []
+        names = []
+        for v in values:
+            if v.func == ARG:
+                names.append(v.args[0])
+                symbols.append(v.args[0])
+            elif v.func == WORD:
+                symbols.append(v.args[0])
 
-CMP = Function('cmp')
-@singleton
-class Cmp(Macro):
-    def build(self, values, type_):
-        return Call(CMP, [values[0], values[4]])
-grammar.add(Type.get('Bool'), [Generic.get(1), Word.WS, Word.word("<"), Word.WS, Generic.get(1)], Cmp)
+        symbols = Call(LIST, List.get(Type.get('Tag')), symbols)
+        names = Call(LIST, List.get(Text), names)
+        return Call(DEFINE, type_, [symbols, names])
 
+grammar.add(DefSpec, [Seq.get(Spec)], DefSpecMacro)
 
 
-#grammar.add(Type.PROGRAM, [Word.word('hello'), Word.NL], Function('hello'))
+# Built-ins.
 
 Int = Type.get('Int')
 Text = Type.get('Text')
 Bool = Type.get('Bool')
+add_type(Int)
+add_type(Text)
+add_type(Bool)
 
-grammar.add(Type.PROGRAM, [Type.ANY, Word.NL], Identity)
-
-
-#grammar.add_list(List(Generic(0)), [Word.get(","), Generic(0)])
-
-# grammar.add(Type.get('_PreDef'), [
-#     Type.get('_PreDef'),
-#     Type.get('Block'),
-#     Word.get('{'),
-# ], PreDef)
-#
-# grammar.add(Type.get('Line'), [
-#     Type.get('_PreDef'),
-#     Type.get('Block'),
-#     Word.get('}'),
-# ], PostDef)
-
-#from pprint import pprint
-#pprint(grammar.scope.rule_sets)
-#print
 
 def parse(source, debug=False):
     return grammar_parse(source, grammar, debug)

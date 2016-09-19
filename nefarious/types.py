@@ -149,49 +149,6 @@ class List(Type):
         l.append(Generic.ALPHA)
         return l
 
-class Seq(Type):
-    _cache = {}
-
-    def __init__(self, child):
-        self.child = child
-        self._union = {}
-        self.has_generic = child.has_generic
-
-    @staticmethod
-    def get(child):
-        assert isinstance(child, Type)
-        if child in Seq._cache:
-            type_ = Seq._cache[child]
-        else:
-            type_ = Seq._cache[child] = Seq(child)
-        return type_
-
-    def __repr__(self):
-        return 'Seq({!r})'.format(self.child)
-
-    def _str(self):
-        return "Seq " + self.child._str()
-
-    def _is_super(self, other):
-        if isinstance(other, Seq):
-            return self.child.is_super(other.child)
-
-    def specialise(self, unification):
-        return Seq.get(self.child.specialise(unification))
-
-    def supertypes(self):
-        l = [] #Type.ANY]
-        for t in self.child.supertypes():
-            l.append(Seq.get(t))
-        return l
-
-    def subtypes(self):
-        l = []
-        for t in self.child.subtypes():
-            l.append(Seq.get(t))
-        l.append(Generic.ALPHA)
-        return l
-
 class Generic(Type):
     _cache = {}
 
@@ -241,48 +198,92 @@ class Generic(Type):
 Generic.ALPHA = Generic.get(1)
 
 
-class Any(Type):
-    def __init__(self):
-        self._union = {}
-        self.has_generic = False
+class Internal(Type):
+    """A type that is *not* a subclass of Any.
 
+    Useful for defining core language built-in stuff, when you want rules that
+    can't occur in arbitrary expressions and can't unify with generics.
+
+    """
+
+    @staticmethod
+    def get(name):
+        assert isinstance(name, str), name
+        if name in Type._cache:
+            symbol = Type._cache[name]
+            assert isinstance(symbol, Internal)
+        else:
+            symbol = Type._cache[name] = Internal(name)
+        return symbol
+
+    def supertypes(self):
+        # Don't derive "Any"
+        return [self]
+
+    def subtypes(self):
+        # Don't unify with generics
+        # TODO is that actually the effect of this?
+        return [self] #, Generic.ALPHA]
+
+
+class Any(Internal):
     def __repr__(self):
         return "Type.ANY"
-
-    def _str(self):
-        return "Any"
 
     def _is_super(self, other):
         return Unification.EMPTY
 
-    def supertypes(self):
-        return [Type.ANY]
 
-    def subtypes(self):
-        return [Type.ANY]
-
-
-
-class Program(Type):
-    def __init__(self):
-        self._union = {}
-        self.has_generic = False
-
+class Program(Internal):
     def __repr__(self):
         return "Type.PROGRAM"
 
+
+class Seq(Internal):
+    _cache = {}
+
+    def __init__(self, child):
+        self.child = child
+        self._union = {}
+        self.has_generic = child.has_generic
+
+    @staticmethod
+    def get(child):
+        assert isinstance(child, Type)
+        if child in Seq._cache:
+            type_ = Seq._cache[child]
+        else:
+            type_ = Seq._cache[child] = Seq(child)
+        return type_
+
+    def __repr__(self):
+        return 'Seq({!r})'.format(self.child)
+
     def _str(self):
-        return "Program"
+        return "Seq " + self.child._str()
+
+    def _is_super(self, other):
+        if isinstance(other, Seq):
+            return self.child.is_super(other.child)
+
+    def specialise(self, unification):
+        return Seq.get(self.child.specialise(unification))
 
     def supertypes(self):
-        return [Type.PROGRAM]
+        l = [] #Type.ANY]
+        for t in self.child.supertypes():
+            l.append(Seq.get(t))
+        return l
 
     def subtypes(self):
-        return [Type.PROGRAM]
+        l = []
+        for t in self.child.subtypes():
+            l.append(Seq.get(t))
+        l.append(Generic.ALPHA)
+        return l
 
 
-
-Type.PROGRAM = Type._cache['Program'] = Program()
+Type.PROGRAM = Internal._cache['Program'] = Program('Program')
 
 # Wild -- a value which can fit into any slot
 # REMOVED -- use Generics instead.
@@ -291,7 +292,7 @@ Type.PROGRAM = Type._cache['Program'] = Program()
 Type.TYPE = Type.get('Type')
 
 # Any -- a slot which accepts any expression.
-Type.ANY = Type._cache['Any'] = Any()
+Type.ANY = Type._cache['Any'] = Any('Any')
 
 
 # make sure Type.get('List') fails!

@@ -192,6 +192,9 @@ class TypesTests(TestGrammar):
         self.assertEqual(Type.ANY.supertypes(),
             [Type.ANY]
         )
+        self.assertEqual(Type.PROGRAM.supertypes(),
+            [Type.PROGRAM]
+        )
         self.assertEqual(Generic.get(1).supertypes(),
             [Type.ANY, Generic.ALPHA]
         )
@@ -216,6 +219,9 @@ class TypesTests(TestGrammar):
         )
         self.assertEqual(Type.ANY.subtypes(),
             [Type.ANY]
+        )
+        self.assertEqual(Type.PROGRAM.subtypes(),
+            [Type.PROGRAM]
         )
         self.assertEqual(Int.subtypes(),
             [Int, Generic.ALPHA]
