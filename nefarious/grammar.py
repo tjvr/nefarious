@@ -32,11 +32,9 @@ class Macro(Function):
         return self.call_immediate(children)
 
     def enter(self, children, type_):
-        global grammar
         grammar.save()
 
     def exit(self, children, type_):
-        global grammar
         grammar.restore()
 
     def sexpr(self):
@@ -223,10 +221,10 @@ grammar.add(Seq.get(Spec), [Seq.get(Spec), Spec], ContinueList(LIST))
 
 DEFINE = Function('define')
 
-current_definitions = []
-
 @singleton
 class Define(Macro):
+    current_definitions = []
+
     def _is_arg(self, word):
         return isinstance(word, Call) and word.func == ARG
 
@@ -259,7 +257,7 @@ class Define(Macro):
             else:
                 assert False, s
         func = Function(debug_name)
-        current_definitions.append(func)
+        Define.current_definitions.append(func)
 
         # Add internal (recursive) rule
         symbols = [(s.args[0] if self._is_arg(s) else s) for s in spec]
@@ -276,14 +274,13 @@ class Define(Macro):
         type_ = Int
 
         # Define rule
-        assert len(current_definitions)
-        func = current_definitions[-1]
+        func = Define.current_definitions[-1]
         symbols = [(s.args[0] if self._is_arg(s) else s) for s in spec]
         arg_indexes = [index for index, s in enumerate(spec) if self._is_arg(s)]
-        print grammar.add(type_, symbols, CallMacro(func, arg_indexes))
+        grammar.add(type_, symbols, CallMacro(func, arg_indexes))
 
     def build(self, values, type_):
-        func = current_definitions.pop()
+        func = Define.current_definitions.pop()
         return Call(DEFINE, type_, [func, values[4]])
 
 grammar.add(Line, [Word.word("define"), Word.WS, Seq.get(Spec), Word.WS, Type.BLOCK], Define)

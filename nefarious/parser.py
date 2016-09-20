@@ -280,7 +280,7 @@ class Column:
                 item.evaluate([])
 
     def eval_enter(self):
-        for item in self.wants.get(Type.BLOCK, {}):
+        for item in self.wants[Type.BLOCK]:
             assert isinstance(item.tag, LR0)
             assert item.tag.wants == Type.BLOCK
             item.eval_enter()
