@@ -2,9 +2,9 @@ import os
 import sys
 from subprocess import Popen, PIPE
 
-from . import ParserTests
+from . import LanguageTests
 
-class CompiledTests(ParserTests):
+class CompiledTests(LanguageTests):
     """Check the compiled binary behaves correctly"""
 
     BINARY = './nfs'
@@ -23,5 +23,5 @@ class CompiledTests(ParserTests):
         sys.stderr.write(p.stderr.read())
         return output
 
-del ParserTests
+del LanguageTests
 

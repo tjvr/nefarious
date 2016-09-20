@@ -8,6 +8,7 @@ import unittest
 from nefarious.types import *
 from nefarious.lex import Word
 from nefarious.grammar import *
+from nefarious.grammar import parse as language_parse
 del grammar
 
 SELF_PATH = os.path.dirname(os.path.abspath(__file__))
@@ -141,6 +142,7 @@ class TestGrammar(unittest.TestCase):
 
     def _grammar_parse(self, source, debug=False):
         return grammar_parse(source, self.grammar, debug)
+
 
 class TypesTests(TestGrammar):
 
@@ -332,8 +334,8 @@ class GrammarTests(TestGrammar):
 
 # TODO move grammar into setUp()
 
-class ParserTests(TestGrammar):
-    # Enable stdout
+class BaseParser(unittest.TestCase):
+    # Enable stdout of columns
     DEBUG = False
 
     def _execute(self, source):
@@ -351,10 +353,20 @@ class ParserTests(TestGrammar):
         print sexpr
         self.assertEqual(result, sexpr)
 
+    def _success(self, source):
+        result = self._execute(source)
+        self.assertNotIn("Unexpected", result)
+        self.assertNotIn("\n>>", result)
+        self.assertEqual(result[0], "(")
+
     def _error(self, source):
         result = self._execute(source)
         self.assertIn("Unexpected", result)
         self.assertIn("\n>>", result)
+
+
+class ParserTests(TestGrammar, BaseParser):
+    DEBUG = False
 
     def test_00(self): self._parse("hello + hello", "(+ hello hello)")
     def test_01(self): self._parse("hello", "hello")
@@ -379,4 +391,15 @@ class ParserTests(TestGrammar):
 
     def test_15(self): self._error("hello + (choose hello or goodbye)")
     def test_16(self): self._error("choose hello or goodbye")
+
+
+class LanguageTests(BaseParser):
+
+    def _grammar_parse(self, source, debug):
+        return language_parse(source, debug)
+
+    def test_00(self): self._success("define fib { 123 }")
+    def test_01(self): self._success("define fib { 123 } 123")
+    def test_02(self): self._success("define fib { n }")
+    def test_03(self): self._error("define fib { n } n")
 

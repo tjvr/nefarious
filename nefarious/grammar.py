@@ -215,7 +215,7 @@ class Define(Macro):
     def build(self, values, type_):
         return Call(DEFINE, type_, [values[2], values[4]])
 
-grammar.add(Line, [Word.word("define"), Word.WS, Word.word("foo"), Word.WS,
+grammar.add(Line, [Word.word("define"), Word.WS, Word.word("fib"), Word.WS,
     Type.BLOCK], Define)
 
 
