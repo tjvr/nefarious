@@ -29,6 +29,7 @@ class TestGrammar(unittest.TestCase):
     """Set up grammar used for Generic tests."""
 
     def setUp(self):
+        super(TestGrammar, self).setUp()
         self.setup_grammar()
         self.setup_types()
 
@@ -163,10 +164,6 @@ class TypesTests(TestGrammar):
     #      Oops! I think we end up alpha-renaming though?
     #
     # What about List 'a ??
-
-
-    def setUp(self):
-        super(TypesTests, self).setUp()
 
     def test_types(self):
         list_int = List.get(Type.get('Int'))
@@ -332,11 +329,24 @@ class GrammarTests(TestGrammar):
             self.assertIn(rule, any_rules)
 
 
-# TODO move grammar into setUp()
+from nefarious.grammar import grammar
 
 class BaseParser(unittest.TestCase):
     # Enable stdout of columns
     DEBUG = False
+
+    def setUp(self):
+        super(BaseParser, self).setUp()
+        # Recover from previous failure
+        while len(grammar.stack) > 1:
+            grammar.restore()
+
+        # Isolate test grammars
+        grammar.save()
+
+    def tearDown(self):
+        assert len(grammar.stack) == 2
+        grammar.restore()
 
     def _execute(self, source):
         return self._grammar_parse(source + "\n", debug=self.DEBUG)
@@ -403,4 +413,18 @@ class LanguageTests(BaseParser):
     def test_02(self): self._error("define fib n { n }")
     def test_02(self): self._success("define fib Int:n { n }")
     def test_03(self): self._error("define fib Int:n { n } n")
+
+    def test_04(self):
+        self._parse("""
+        define fib Int:n {
+            n
+            fib 123
+        }
+        fib 123
+        """, "(lines (define fib_Int (lines n (fib_Int 123))) (fib_Int 123))")
+
+    def test_04b(self):
+        self._parse(""" define fib Int:n { n
+            fib 123 } fib 123
+        """, "(lines (define fib_Int (lines n (fib_Int 123))) (fib_Int 123))")
 

@@ -1,6 +1,8 @@
 
 from .types import Tag
 
+# TODO Digit tokens
+
 
 class Word(Tag):
     _cache = {}

@@ -10,7 +10,7 @@ from .parser import Grammar, Rule, grammar_parse
 #   So, we invent Macros. These are just functions which are evaluated at
 #   compile-time, and return a piece of AST.
 
-class Function:
+class Function(Tree):
     def __init__(self, debug_name):
         assert isinstance(debug_name, str)
         self.debug_name = debug_name
@@ -203,8 +203,6 @@ grammar.add(Type.PROGRAM, [Internal.SEP, Seq.get(Line), Internal.SEP], Select(1)
 
 Spec = Internal.get('Spec')
 
-grammar.add(Spec, [Word.WORD], Identity)
-
 ARG = Function("arg")
 
 @singleton
@@ -216,31 +214,77 @@ class ArgSpec(Macro):
         return Call(ARG, type_, [type_, name])
 grammar.add(Spec, [Type.TYPE, Word.word(":"), Word.WORD], ArgSpec)
 
+grammar.add(Spec, [Word.WORD], Identity)
+grammar.add(Spec, [Word.PUNC], Identity)
+grammar.add(Spec, [Word.WS], Identity)
+
 grammar.add(Seq.get(Spec), [Spec], StartList(LIST))
-grammar.add(Seq.get(Spec), [Seq.get(Spec), Word.WS, Spec], ContinueList(LIST))
+grammar.add(Seq.get(Spec), [Seq.get(Spec), Spec], ContinueList(LIST))
 
 DEFINE = Function('define')
 
+current_definitions = []
+
 @singleton
 class Define(Macro):
-    def enter(self, values, type_):
-        global grammar
-        grammar.save()
+    def _is_arg(self, word):
+        return isinstance(word, Call) and word.func == ARG
 
-        # Define arguments
+    def _get_spec(self, values):
         spec = values[2]
         assert spec.func == LIST
-        for word in spec.args:
-            if isinstance(word, Call) and word.func == ARG:
+        symbols = list(spec.args)
+        assert symbols.pop(0) == Word.NULL_WS
+        return symbols
+
+    def enter(self, values, type_):
+        grammar.save()
+        spec = self._get_spec(values)
+
+        # Define arguments
+        for word in spec:
+            if self._is_arg(word):
                 type_, name = word.args
                 grammar.add(type_, [name], Identity) # TODO arg macro
 
+        # Build name
+        debug_name = ""
+        for s in spec:
+            if self._is_arg(s):
+                debug_name += s.args[0].name
+            elif s == Word.WS:
+                debug_name += "_"
+            elif isinstance(s, Word):
+                debug_name += s.value
+            else:
+                assert False, s
+        func = Function(debug_name)
+        current_definitions.append(func)
+
+        # Add internal (recursive) rule
+        symbols = [(s.args[0] if self._is_arg(s) else s) for s in spec]
+        arg_indexes = [index for index, s in enumerate(spec) if self._is_arg(s)]
+        grammar.add(Generic.ALPHA, symbols, CallMacro(func, arg_indexes))
+
     def exit(self, values, type_):
-        global grammar
         grammar.restore()
+        spec = self._get_spec(values)
+
+        # Type check
+        body = values[-1]
+        # TODO
+        type_ = Int
+
+        # Define rule
+        assert len(current_definitions)
+        func = current_definitions[-1]
+        symbols = [(s.args[0] if self._is_arg(s) else s) for s in spec]
+        arg_indexes = [index for index, s in enumerate(spec) if self._is_arg(s)]
+        print grammar.add(type_, symbols, CallMacro(func, arg_indexes))
 
     def build(self, values, type_):
-        return Call(DEFINE, type_, [values[2], values[4]])
+        func = current_definitions.pop()
+        return Call(DEFINE, type_, [func, values[4]])
 
 grammar.add(Line, [Word.word("define"), Word.WS, Seq.get(Spec), Word.WS, Type.BLOCK], Define)
 
