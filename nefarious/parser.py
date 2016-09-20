@@ -95,6 +95,7 @@ class Item:
         self.rule = None
 
         # evaluation
+        self.inside = False
         self.value = None
         self.children = None
 
@@ -107,29 +108,6 @@ class Item:
 
     def __repr__(self):
         return "<Item: {!r}, {!r})>".format(self.start.index, self.tag)
-
-    def evaluate(self, stack=None):
-        if self.value is not None:
-            return self.value
-
-        if stack is None:
-            stack = []
-        stack.append(self)
-        rule = self.rule
-        if not rule: # token
-            return self.value
-
-        children = self.evaluate_children(stack)
-
-        if rule.target == Type.PROGRAM:
-            value = children[0]
-        else:
-            value = rule.call.build(children, rule.target)
-            # TODO pass item.tag into build()
-
-        self.value = value
-        assert stack.pop() == self
-        return value
 
     def evaluate_children(self, stack):
         # nb. We don't cache children for intermediate nodes; we only cache the
@@ -155,6 +133,40 @@ class Item:
 
         return children
 
+    def evaluate(self, stack):
+        if self.value is not None:
+            return self.value
+        stack.append(self)
+        rule = self.rule
+        if not rule: # token
+            return self.value
+
+        children = self.evaluate_children(stack)
+
+        value = rule.call.build(children, rule.target)
+
+        self.value = value
+        assert stack.pop() == self
+        return value
+
+    def eval_enter(self):
+        assert self.inside == False
+
+        children = self.evaluate_children([])
+        while len(children) < len(self.rule.symbols):
+            children.append(None)
+
+        self.rule.call.enter(children, self.rule.target)
+
+    def eval_exit(self):
+        assert self.inside == True
+        self.inside = False
+
+        children = self.evaluate_children([])
+        while len(children) < len(self.rule.symbols):
+            children.append(None)
+
+        self.rule.call.exit(children, self.rule.target)
 
 
 class Column:
@@ -252,6 +264,8 @@ class Column:
         new = self.add(left.start, lr0.advance)
         assert right is not None
         new.add_derivation(left, right, lr0.rule)
+        if right.tag == Type.BLOCK:
+            new.inside = True
 
     def process(self):
         for item in self.items:
@@ -262,8 +276,19 @@ class Column:
 
     def evaluate(self):
         for item in self.items:
-            if not isinstance(item.tag, LR0):
-                item.evaluate()
+            if not isinstance(item.tag, LR0): # complete
+                item.evaluate([])
+
+    def eval_enter(self):
+        for item in self.wants[Type.BLOCK]:
+            assert isinstance(item.tag, LR0)
+            assert item.tag.wants == Type.BLOCK
+            item.eval_enter()
+
+    def eval_exit(self):
+        for item in self.items:
+            if item.inside:
+                item.eval_exit()
 
     def print_(self):
         print self.index
@@ -392,6 +417,9 @@ def grammar_parse(source, grammar, debug=DEBUG):
         if debug:
             column.print_()
 
+        if token == Word.ENTER:
+            column.eval_enter()
+
         previous, column = column, Column(grammar, index + 1)
         if not column.scan(token, previous):
             msg = "Unexpected " + token.kind + " @ " + str(index)
@@ -404,10 +432,8 @@ def grammar_parse(source, grammar, debug=DEBUG):
             return msg
         column.process()
 
-        if token == Word.word('{'):
-            column.evaluate()
-        elif token == Word.word('}'):
-            column.evaluate()
+        if token == Word.EXIT:
+            column.eval_exit()
 
         if token == Word.NL:
             line = ""
@@ -427,7 +453,7 @@ def grammar_parse(source, grammar, debug=DEBUG):
             msg += "\n>> " + line
         return msg
     start = column.unique[key]
-    value = start.evaluate()
+    value = start.evaluate([])
 
     return value.sexpr()
 

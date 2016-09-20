@@ -206,6 +206,9 @@ class Internal(Type):
 
     """
 
+    def __repr__(self):
+        return 'Internal({!r})'.format(self.name)
+
     @staticmethod
     def get(name):
         assert isinstance(name, str), name
@@ -298,4 +301,6 @@ Type.ANY = Type._cache['Any'] = Any('Any')
 # make sure Type.get('List') fails!
 Type._cache['List'] = None
 
+
+Type.BLOCK = Type.get('Block')
 

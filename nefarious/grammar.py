@@ -26,6 +26,14 @@ class Function:
     def build(self, children, type_):
         return Call(self, type_, children)
 
+    def enter(self, children, type_):
+        global grammar
+        grammar.save()
+
+    def exit(self, children, type_):
+        global grammar
+        grammar.restore()
+
     def call_immediate(self, children):
         assert self.body is not None
         # TODO
@@ -48,9 +56,12 @@ class Call(Tree):
         self.type = type_
         self.args = args
 
+    def __repr__(self):
+        return "<Call {!r} {!r}>".format(self.func.debug_name, self.args)
+
     def sexpr(self):
-        #return "(" + self.func.sexpr() + " " + " ".join([a.sexpr() for a in self.args]) + ")"
-        return self.type.sexpr() + ":(" + self.func.sexpr() + " " + " ".join([a.sexpr() for a in self.args]) + ")"
+        return "(" + self.func.sexpr() + " " + " ".join([a.sexpr() for a in self.args]) + ")"
+        #return self.type.sexpr() + ":(" + self.func.sexpr() + " " + " ".join([a.sexpr() for a in self.args]) + ")"
 
 class CallMacro(Macro):
     def __init__(self, call, arg_indexes):
@@ -75,6 +86,12 @@ class Identity(Macro):
         assert len(values) == 1
         return values[0]
 
+class Select(Macro):
+    def __init__(self, index):
+        self.index = index
+    def build(self, values, type_):
+        return values[self.index]
+
 
 # Whitespace
 @singleton
@@ -88,6 +105,12 @@ grammar.add(Word.WS, [], Null)
 
 # List -- After all, this is "Nefarious Scheme"
 LIST = Function('list')
+
+class EmptyList(Macro):
+    def __init__(self, call):
+        self.call = call
+    def build(self, values, type_):
+        return Call(self.call, type_, [])
 
 class StartList(Macro):
     def __init__(self, call):
@@ -128,16 +151,6 @@ class Parens(Macro):
 grammar.add(Generic.get(1), [Word.word("("), Word.WS, Generic.get(1), Word.WS, Word.word(")")], Parens)
 
 
-# Program
-
-Line = Type.get('Line')
-
-grammar.add(Type.PROGRAM, [Line, Word.NL], Identity)
-
-# TODO lines
-grammar.add(Line, [Type.ANY], Identity)
-
-
 # Types
 
 class Literal(Macro):
@@ -152,66 +165,60 @@ def add_type(type_):
     grammar.add(Type.TYPE, [Word.word(name)], Literal(type_))
 
 
-# Define -- the most important function (!)
+# Lines
+
+Line = Type.get('Line')
+grammar.add(Line, [Type.ANY], Identity)
+grammar.add(Line, [Type.ANY], Identity)
+
+LINES = Function('lines')
+
+Internal.SEP = Internal.get("SEP")
+grammar.add(Internal.SEP, [], Null)
+grammar.add(Internal.SEP, [Internal.SEP, Word.WS], Null)
+grammar.add(Internal.SEP, [Internal.SEP, Word.NL], Null)
+
+grammar.add(Seq.get(Line), [], EmptyList(LINES))
+grammar.add(Seq.get(Line), [Line], StartList(LINES))
+grammar.add(Seq.get(Line), [Seq.get(Line), Internal.SEP, Line], ContinueList(LINES))
+
+
+# Blocks
+@singleton
+class Block(Macro):
+    def build(self, values, type_):
+        return values[2]
+grammar.add(Type.BLOCK, [Word.word("{"), Internal.SEP, Seq.get(Line), Internal.SEP, Word.word("}")], Block)
+
+
+# Program
+grammar.add(Type.PROGRAM, [Internal.SEP, Seq.get(Line), Internal.SEP], Select(1))
+
+
+# Definitions
 
 DEFINE = Function('define')
 Spec = Internal.get('Spec')
-DefSpec = Internal.get('DefSpec')
-
-# We want to--
-# - allow for scoping the inside of blocks.
-#   so eg. an `sql _` statement that accepts a block -- `sql { select * from ... }`
-#
-# when *does* evaluation happen?
-#
-# it would be fine if evaluation/scoping was hard-bound to { }...
 
 @singleton
 class Define(Macro):
+    def enter(self, values, type_):
+        global grammar
+        grammar.save()
+        # Push arguments.
+        grammar.add(Generic.ALPHA, [Word.word("n")], Identity)
+
+    def exit(self, values, type_):
+        global grammar
+        grammar.restore()
+
     def build(self, values, type_):
-        return Call(DEFINE, type_, [values[2]])
+        return Call(DEFINE, type_, [values[2], values[4]])
 
-grammar.add(Line, [
-    Word.word('define'), Word.WS, DefSpec, Word.WS, Word.word("{"),
-], Define)
+grammar.add(Line, [Word.word("define"), Word.WS, Word.word("foo"), Word.WS,
+    Type.BLOCK], Define)
 
-WORD = Function('word')
-@singleton
-class WordMacro(Macro):
-    def build(self, values, type_):
-        return Call(WORD, type_, values)
-grammar.add(Spec, [Word.WORD], WordMacro)
 
-ARG = Function('arg')
-@singleton
-class ArgMacro(Macro):
-    def build(self, values, type_):
-        return Call(ARG, type_, values)
-grammar.add(Spec, [Type.TYPE], ArgMacro)
-
-grammar.add(Seq.get(Spec), [Spec], StartList(LIST))
-grammar.add(Seq.get(Spec), [Seq.get(Spec), Word.WS, Spec], ContinueList(LIST))
-
-@singleton
-class DefSpecMacro(Macro):
-    def build(self, values, type_):
-        assert values[0].func == LIST
-        values = values[0].args
-
-        symbols = []
-        names = []
-        for v in values:
-            if v.func == ARG:
-                names.append(v.args[0])
-                symbols.append(v.args[0])
-            elif v.func == WORD:
-                symbols.append(v.args[0])
-
-        symbols = Call(LIST, List.get(Type.get('Tag')), symbols)
-        names = Call(LIST, List.get(Text), names)
-        return Call(DEFINE, type_, [symbols, names])
-
-grammar.add(DefSpec, [Seq.get(Spec)], DefSpecMacro)
 
 
 # Built-ins.
@@ -222,6 +229,8 @@ Bool = Type.get('Bool')
 add_type(Int)
 add_type(Text)
 add_type(Bool)
+
+grammar.add(Int, [Word.word("123")], Identity)
 
 
 def parse(source, debug=False):

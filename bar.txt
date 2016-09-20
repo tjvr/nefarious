@@ -1,2 +1,6 @@
-define foo (Int) {
-      
+
+define foo {
+    n
+}
+
+n

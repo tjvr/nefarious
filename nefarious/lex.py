@@ -55,20 +55,6 @@ class Word(Tag):
         return self.value if self.has_value else self.kind
 
 
-
-# Match token kind, eg. NL
-Word.EOF = Word.get('EOF')
-Word.NL = Word.get('NL')
-Word.WS = Word.get('WS', ' ')
-Word.NULL_WS = Word.get('WS', '')
-
-# Match token value, eg. `+` or `while`
-# nb. can *also* match on kind.
-Word.RESERVED = Word.get('RESERVED')
-Word.PUNC = Word.get('PUNC')
-Word.WORD = Word.get('WORD')
-Word.ERROR = Word.get('ERROR')
-
 class Lexer:
     def __init__(self, source):
         self.source = source
@@ -141,3 +127,19 @@ class Lexer:
             token = lexer.lex()
         return tokens
 
+
+# Match token kind, eg. NL
+Word.EOF = Word.get('EOF')
+Word.NL = Word.get('NL')
+Word.WS = Word.get('WS', ' ')
+Word.NULL_WS = Word.get('WS', '')
+
+# Match token value, eg. `+` or `while`
+# nb. can *also* match on kind.
+Word.RESERVED = Word.get('RESERVED')
+Word.PUNC = Word.get('PUNC')
+Word.WORD = Word.get('WORD')
+Word.ERROR = Word.get('ERROR')
+
+Word.ENTER = Word.word("{")
+Word.EXIT = Word.word("}")
