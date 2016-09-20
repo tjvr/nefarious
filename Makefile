@@ -1,11 +1,23 @@
-PYPY_EXECUTABLE := $(shell which pypy)
+
 PYPY_SOURCE := "pypy2-v5.4.1-src"
+PYPY_EXECUTABLE := $(shell which pypy)
+
+CPYTHON := $(shell which python2)
+ifeq ($(CPYTHON),)
+	CPYTHON = $(shell which python) 
+endif
 
 ifeq ($(PYPY_EXECUTABLE),)
-RUNINTERP = python
+	TESTINTERP = $(CPYTHON)
 else
-RUNINTERP = $(PYPY_EXECUTABLE)
+	TESTINTERP = $(PYPY_EXECUTABLE)
 endif
+
+# translation is supposed to be faster under pypy
+# but on my Mac/Linux machines, nefarious translates faster under CPython!
+BUILDINTERP = $(CPYTHON)
+
+#------------------------------------------------------------------------------
 
 all:
 	make test && make nfs
@@ -16,21 +28,29 @@ nfs: pypy \
 		nefarious/parser.py \
 		nefarious/grammar.py \
 		nefarious/nefarious.py
-	@echo Invoking RPython toolchain to build executable!
-	$(RUNINTERP) pypy/rpython/bin/rpython --gc=incminimark --output=nfs goal.py
-	# -Ojit --jit-backend=x86 --translation-jit
-	# --cc=afl-clang
+	@echo ============================================================
+	@echo Using CPython: $(CPYTHON)
+	@echo Invoking RPython toolchain to build executable...
+	@echo
+	$(BUILDINTERP) pypy/rpython/bin/rpython --gc=incminimark --output=nfs goal.py
+	@echo
+	@echo "Wrote 'nfs'"
+	@echo ============================================================
 	make test-nfs
+.TODO:
+	# -Ojit --jit-backend=x86 --translation-jit
+	#@rem --cc=afl-clang
 
 nfs-interp:
-	$(RUNINTERP) -m nefarious bar.txt
+	$(TESTINTERP) -m nefarious bar.txt
 
 test:
 	@echo Running tests...
-	$(RUNINTERP) -m unittest --buffer tests
+	$(TESTINTERP) -m unittest --buffer tests
+	@echo Tests passed!
 test-nfs:
 	@echo Testing compiled binary...
-	$(RUNINTERP) -m unittest --buffer tests.compiled
+	$(TESTINTERP) -m unittest --buffer tests.compiled
 
 # RPython toolchain is required to build nfs executable.
 pypy.zip:
@@ -48,4 +68,7 @@ clean:
 reallyclean: clean
 	rm pypy.zip
 	rm -r pypy/
+
+#------------------------------------------------------------------------------
+.PHONY: all nfs-interp test test-nfs clean reallyclean
 
