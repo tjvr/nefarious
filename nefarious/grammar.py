@@ -23,8 +23,13 @@ class Function:
         assert isinstance(body, Body)
         self.body = body
 
+    def call_immediate(self, children):
+        assert self.body is not None
+        # TODO
+
+class Macro(Function):
     def build(self, children, type_):
-        return Call(self, type_, children)
+        return self.call_immediate(children)
 
     def enter(self, children, type_):
         global grammar
@@ -33,14 +38,6 @@ class Function:
     def exit(self, children, type_):
         global grammar
         grammar.restore()
-
-    def call_immediate(self, children):
-        assert self.body is not None
-        # TODO
-
-class Macro(Function):
-    def build(self, children, type_):
-        return self.call_immediate(children)
 
     def sexpr(self):
         assert False # macros should never be in the AST!
@@ -164,6 +161,13 @@ def add_type(type_):
     assert len(name.split(" ")) == 1
     grammar.add(Type.TYPE, [Word.word(name)], Literal(type_))
 
+@singleton
+class ListTypeMacro(Macro):
+    def build(self, values, type_):
+        return List.get(values[4])
+
+grammar.add(Type.TYPE, [Word.word("("), Word.WS, Word.word("List"), Word.WS, Type.TYPE, Word.WS, Word.word(")")], ListTypeMacro)
+
 
 # Lines
 
@@ -197,16 +201,39 @@ grammar.add(Type.PROGRAM, [Internal.SEP, Seq.get(Line), Internal.SEP], Select(1)
 
 # Definitions
 
-DEFINE = Function('define')
 Spec = Internal.get('Spec')
+
+grammar.add(Spec, [Word.WORD], Identity)
+
+ARG = Function("arg")
+
+@singleton
+class ArgSpec(Macro):
+    def build(self, values, type_):
+        type_, _, name = values
+        assert isinstance(name, Word)
+        assert isinstance(type_, Type)
+        return Call(ARG, type_, [type_, name])
+grammar.add(Spec, [Type.TYPE, Word.word(":"), Word.WORD], ArgSpec)
+
+grammar.add(Seq.get(Spec), [Spec], StartList(LIST))
+grammar.add(Seq.get(Spec), [Seq.get(Spec), Word.WS, Spec], ContinueList(LIST))
+
+DEFINE = Function('define')
 
 @singleton
 class Define(Macro):
     def enter(self, values, type_):
         global grammar
         grammar.save()
-        # Push arguments.
-        grammar.add(Generic.ALPHA, [Word.word("n")], Identity)
+
+        # Define arguments
+        spec = values[2]
+        assert spec.func == LIST
+        for word in spec.args:
+            if isinstance(word, Call) and word.func == ARG:
+                type_, name = word.args
+                grammar.add(type_, [name], Identity) # TODO arg macro
 
     def exit(self, values, type_):
         global grammar
@@ -215,8 +242,7 @@ class Define(Macro):
     def build(self, values, type_):
         return Call(DEFINE, type_, [values[2], values[4]])
 
-grammar.add(Line, [Word.word("define"), Word.WS, Word.word("fib"), Word.WS,
-    Type.BLOCK], Define)
+grammar.add(Line, [Word.word("define"), Word.WS, Seq.get(Spec), Word.WS, Type.BLOCK], Define)
 
 
 

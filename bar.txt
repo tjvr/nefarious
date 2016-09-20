@@ -1,6 +1,8 @@
 
-define foo {
-    n
+define fib Int:x {
+    x
+    123
 }
 
-n
+x
+

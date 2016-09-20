@@ -34,8 +34,8 @@ class Rule:
             self.first = target
 
         self.priority = 0
-        from .grammar import Function
-        assert isinstance(call, Function)
+        from .grammar import Macro
+        assert isinstance(call, Macro)
         self.call = call
 
     def __repr__(self):

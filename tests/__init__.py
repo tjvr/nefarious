@@ -400,6 +400,7 @@ class LanguageTests(BaseParser):
 
     def test_00(self): self._success("define fib { 123 }")
     def test_01(self): self._success("define fib { 123 } 123")
-    def test_02(self): self._success("define fib { n }")
-    def test_03(self): self._error("define fib { n } n")
+    def test_02(self): self._error("define fib n { n }")
+    def test_02(self): self._success("define fib Int:n { n }")
+    def test_03(self): self._error("define fib Int:n { n } n")
 

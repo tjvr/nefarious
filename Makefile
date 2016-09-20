@@ -4,7 +4,7 @@ PYPY_EXECUTABLE := $(shell which pypy)
 
 CPYTHON := $(shell which python2)
 ifeq ($(CPYTHON),)
-	CPYTHON = $(shell which python) 
+	CPYTHON = $(shell which python)
 endif
 
 ifeq ($(PYPY_EXECUTABLE),)
