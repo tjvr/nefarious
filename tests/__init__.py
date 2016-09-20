@@ -421,10 +421,10 @@ class LanguageTests(BaseParser):
             fib 123
         }
         fib 123
-        """, "(lines (define fib_Int (lines n (fib_Int 123))) (fib_Int 123))")
+        """, "(program (define fib_Int (block n (fib_Int 123))) (fib_Int 123))")
 
     def test_04b(self):
         self._parse(""" define fib Int:n { n
             fib 123 } fib 123
-        """, "(lines (define fib_Int (lines n (fib_Int 123))) (fib_Int 123))")
+        """, "(program (define fib_Int (block n (fib_Int 123))) (fib_Int 123))")
 

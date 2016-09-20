@@ -173,7 +173,7 @@ Line = Type.get('Line')
 grammar.add(Line, [Type.ANY], Identity)
 grammar.add(Line, [Type.ANY], Identity)
 
-LINES = Function('lines')
+LINES = Function('Lines') # Internal
 
 Internal.SEP = Internal.get("SEP")
 grammar.add(Internal.SEP, [], Null)
@@ -186,15 +186,22 @@ grammar.add(Seq.get(Line), [Seq.get(Line), Internal.SEP, Line], ContinueList(LIN
 
 
 # Blocks
+BLOCK = Function('block')
 @singleton
 class Block(Macro):
     def build(self, values, type_):
+        values[2].func = BLOCK
         return values[2]
 grammar.add(Type.BLOCK, [Word.word("{"), Internal.SEP, Seq.get(Line), Internal.SEP, Word.word("}")], Block)
 
 
 # Program
-grammar.add(Type.PROGRAM, [Internal.SEP, Seq.get(Line), Internal.SEP], Select(1))
+PROGRAM = Function('program')
+@singleton
+class Program(Macro):
+    def build(self, values, type_):
+        return Call(PROGRAM, type_, values[1].args)
+grammar.add(Type.PROGRAM, [Internal.SEP, Seq.get(Line), Internal.SEP], Program)
 
 
 # Definitions
@@ -216,8 +223,9 @@ grammar.add(Spec, [Word.WORD], Identity)
 grammar.add(Spec, [Word.PUNC], Identity)
 grammar.add(Spec, [Word.WS], Identity)
 
-grammar.add(Seq.get(Spec), [Spec], StartList(LIST))
-grammar.add(Seq.get(Spec), [Seq.get(Spec), Spec], ContinueList(LIST))
+SPEC = Function('spec')
+grammar.add(Seq.get(Spec), [Spec], StartList(SPEC))
+grammar.add(Seq.get(Spec), [Seq.get(Spec), Spec], ContinueList(SPEC))
 
 DEFINE = Function('define')
 
@@ -230,7 +238,7 @@ class Define(Macro):
 
     def _get_spec(self, values):
         spec = values[2]
-        assert spec.func == LIST
+        assert spec.func == SPEC
         symbols = list(spec.args)
         assert symbols.pop(0) == Word.NULL_WS
         return symbols
