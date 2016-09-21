@@ -120,13 +120,13 @@ class Item:
             return list(self.children) # copy
 
         item = self
-        stack = []
+        subs = []
         while item.left:
-            stack.append(item)
+            subs.append(item)
             item = item.left
 
         self.children = children = []
-        for item in reversed(stack):
+        for item in reversed(subs):
             child = item.right.evaluate(stack)
             assert child is not None, "item RHS evaluated to None"
             children.append(child)
