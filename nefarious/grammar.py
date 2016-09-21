@@ -4,28 +4,11 @@ from .lex import Word, Lexer
 from .parser import Grammar, Rule, grammar_parse
 
 
-class Function(Tree):
-    def __init__(self, debug_name):
-        assert isinstance(debug_name, str)
-        self.debug_name = debug_name
-        self.body = None
-        self.args = []
-
-    def sexpr(self):
-        return self.debug_name.replace(" ", "_")
-
-    def set_body(self, body):
-        assert isinstance(body, Body)
-        self.body = body
-
-    def call_immediate(self, children):
-        assert self.body is not None
-        # TODO
-
 class Name(Tree):
+    """Symbol. Compared by identity, not value, so shadowing works."""
     def __init__(self, name):
         assert isinstance(name, str)
-        self.name = name # For debugging
+        self.name = name # String name really is just a debugging aid
 
     def __repr__(self):
         return "Name({!r})".format(self.name)
@@ -33,9 +16,10 @@ class Name(Tree):
     def sexpr(self):
         return self.name.replace(" ", "_")
 
+
 class Call(Tree):
     def __init__(self, func, type_, args):
-        assert isinstance(func, Function)
+        assert isinstance(func, Name)
         assert isinstance(type_, Type)
         assert isinstance(args, list)
         for arg in args:
@@ -57,6 +41,7 @@ class Call(Tree):
         return "(" + self.func.sexpr() + sep + inner + ")"
         #return self.type.sexpr() + ":(" + self.func.sexpr() + " " + " ".join([a.sexpr() for a in self.args]) + ")"
 
+
 class Value(Tree):
     def __init__(self, type_, value):
         assert isinstance(value, str)
@@ -66,6 +51,10 @@ class Value(Tree):
     def sexpr(self):
         assert isinstance(self.value, str)
         return self.value
+
+
+def Function(name):
+    return Name(name)
 
 
 #---------------
@@ -97,7 +86,7 @@ class Macro:
 
 class CallMacro(Macro):
     def __init__(self, call, arg_indexes):
-        assert isinstance(call, Function) and not isinstance(call, Macro)
+        assert isinstance(call, Name)
         self.call = call
         self.arg_indexes = arg_indexes
 
@@ -280,6 +269,7 @@ DEFINE = Function('define')
 @singleton
 class Define(Macro):
     current_definitions = []
+    current_definition_args = []
 
     def _is_arg(self, word):
         return isinstance(word, Call) and word.func == ARG
@@ -306,7 +296,7 @@ class Define(Macro):
         Define.current_definitions.append(func)
 
         # Define arguments
-        args = func.args
+        args = []
         for word in spec:
             if self._is_arg(word):
                 type_, name = word.args
@@ -316,6 +306,7 @@ class Define(Macro):
                 get_arg = Call(GET, type_, [arg])
                 grammar.add(type_, [name], Literal(get_arg))
                 args.append(arg)
+        Define.current_definition_args.append(args)
 
         # Add internal (recursive) rule
         symbols = [(s.args[0] if self._is_arg(s) else s) for s in spec]
@@ -341,7 +332,8 @@ class Define(Macro):
 
     def build(self, values, type_):
         func = Define.current_definitions.pop()
-        return Call(DEFINE, type_, [func] + func.args + [values[4]])
+        args = Define.current_definition_args.pop()
+        return Call(DEFINE, type_, [func] + args + [values[4]])
 
 grammar.add(Line, ws([Word.word("define"), Seq.get(Spec), Type.BLOCK]), Define)
 
