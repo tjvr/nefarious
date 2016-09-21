@@ -390,14 +390,34 @@ class Value(Tree):
     def sexpr(self):
         return self.value
 
+# Int
+
 Int = Type.get('Int')
+class W_Int(Value):
+    type = Int
+    def __init__(self, value):
+        assert isinstance(value, int)
+        self.value = value
+    def sexpr(self):
+        return str(self.value)
+
+@singleton
+class ParseInt(Macro):
+    def build(self, values, type_):
+        assert type_ == Int
+        return W_Int(int(values[0].value))
+grammar.add(Int, [Word.DIGITS], ParseInt)
+
+# Decimal
+
+#grammar.add(Int, [Word.DIGITS, Word.word("."), Word.DIGITS], ParseDecimal)
+# TODO W_Decimal
+
 Text = Type.get('Text')
 Bool = Type.get('Bool')
 add_type(Int)
 add_type(Text)
 add_type(Bool)
-
-grammar.add(Int, [Word.word("123")], Literal(Value(Int, "123")))
 
 
 def parse(source, debug=False):

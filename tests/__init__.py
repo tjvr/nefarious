@@ -443,7 +443,11 @@ class LanguageTests(BaseParser):
 
     def test_06(self):
         self._parse("""
-        let foo bar = 123
+        let foo bar = 2
         foo bar
-        """, "(program (let foo_bar 123) foo_bar)")
+        """, "(program (let foo_bar 2) foo_bar)")
+
+    def test_07(self):
+        self._success("let foo2 = 123")
+        self._error("let 4ducks = 123")
 

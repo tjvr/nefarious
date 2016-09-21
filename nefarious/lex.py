@@ -27,7 +27,7 @@ class Word(Tag):
         assert isinstance(kind, str)
         assert isinstance(value, str)
         if value:
-            assert kind in ('RESERVED', 'PUNC', 'WORD', 'ERROR', 'WS'), value
+            assert kind in ('RESERVED', 'PUNC', 'DIGITS', 'WORD', 'ERROR', 'WS'), value
         key = kind, value
         if key in Word._cache:
             word = Word._cache[key]
@@ -38,14 +38,20 @@ class Word(Tag):
     @staticmethod
     def word(value):
         for c in value:
-            if not (c.isalpha() or c.isdigit() or c == "_"):
+            if not c.isdigit():
+                is_digits = False
+                break
+        else:
+            return Word.get('DIGITS', value)
+
+        for c in value:
+            if not (c.isalpha() or c == "_"):
                 is_word = False
                 break
         else:
-            is_word = True
-        if is_word:
             return Word.get('WORD', value)
-        elif value in ":{}":
+
+        if value in ":{}":
             return Word.get('RESERVED', value)
         elif value in "-!\"#$%&\\'()*+,./;<=>?@[]^`|~":
             return Word.get('PUNC', value)
@@ -108,6 +114,14 @@ class Lexer:
             self.next()
             return Word.get('PUNC', c)
 
+        elif self.tok in "0123456789":
+            s = self.tok
+            self.next()
+            while self.tok in "0123456789":
+                s += self.tok
+                self.next()
+            return Word.get('DIGITS', s)
+
         # TODO _
         else:
             s = self.tok
@@ -141,8 +155,10 @@ Word.WS_NOT_NULL = Word.get('WS', '  ')
 # nb. can *also* match on kind.
 Word.RESERVED = Word.get('RESERVED')
 Word.PUNC = Word.get('PUNC')
+Word.DIGITS = Word.get('DIGITS')
 Word.WORD = Word.get('WORD')
 Word.ERROR = Word.get('ERROR')
 
 Word.ENTER = Word.word("{")
 Word.EXIT = Word.word("}")
+

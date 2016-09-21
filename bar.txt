@@ -3,6 +3,7 @@ let y = 123
 
 define potato Int:n {
     let foo bar = n
+    let foo2 = 123
 
     define zebra {
         foo bar
