@@ -12,7 +12,7 @@ class Function(Tree):
         self.args = []
 
     def sexpr(self):
-        return self.debug_name
+        return self.debug_name.replace(" ", "_")
 
     def set_body(self, body):
         assert isinstance(body, Body)
@@ -31,7 +31,7 @@ class Name(Tree):
         return "Name({!r})".format(self.name)
 
     def sexpr(self):
-        return self.name
+        return self.name.replace(" ", "_")
 
 class Call(Tree):
     def __init__(self, func, type_, args):
@@ -299,12 +299,9 @@ class Define(Macro):
         for s in spec:
             if self._is_arg(s):
                 debug_name += s.args[0].name
-            elif s == Word.WS: # TODO something
-                debug_name += "_"
-            elif isinstance(s, Word):
-                debug_name += s.value
             else:
-                assert False, s
+                assert isinstance(s, Word)
+                debug_name += s.value
         func = Function(debug_name)
         Define.current_definitions.append(func)
 
@@ -364,10 +361,7 @@ class Let(Macro):
         name = ""
         for iden in identifier:
             assert isinstance(iden, Word)
-            if iden == Word.WS:
-                name += "_"
-            else:
-                name += iden.value
+            name += iden.value
         var = Name(name)
         get_var = Call(GET, value.type, [var])
 
