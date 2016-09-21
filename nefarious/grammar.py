@@ -423,6 +423,24 @@ add_type(Text)
 add_type(Bool)
 
 
+
+# Language stuff.
+
+PLUS = Function("+")
+SUB = Function("-")
+grammar.add(Int, [Int, Word.WS, Word.word("+"), Word.WS, Int], CallMacro(PLUS, [0, 4])).priority = grammar.add(Int, [Int, Word.WS, Word.word("-"), Word.WS, Int], CallMacro(SUB, [0, 4])).priority
+
+LT = Function("<")
+grammar.add(Bool, [Int, Word.WS, Word.word("<"), Word.WS, Int], CallMacro(LT, [0, 4]))
+
+IF = Function("if")
+#grammar.add(Generic.ALPHA, [Generic.ALPHA, Word.WS, Word.word("if"), Word.WS, Bool, Word.WS, Word.word("else"), Word.WS, Generic.ALPHA], CallMacro(IF, [4, 0, 8]))
+# TODO: don't seem to support left-recursive generics.
+grammar.add(Generic.ALPHA, [Word.word("if"), Word.WS, Bool, Word.WS, Word.word("then"), Word.WS, Generic.ALPHA, Word.WS, Word.word("else"), Word.WS, Generic.ALPHA], CallMacro(IF, [2, 6, 10]))
+
+# TODO consider binding user functions with lower precedence...
+
+
 def parse(source, debug=False):
     return grammar_parse(source, grammar, debug)
 
