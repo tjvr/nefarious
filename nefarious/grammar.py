@@ -358,13 +358,13 @@ class Let(Macro):
         identifier = values[2].args
         name = ""
         for iden in identifier:
+            assert isinstance(iden, Word)
             if iden == Word.WS:
                 name += "_"
             else:
                 name += iden.value
         var = Name(value.type, name)
 
-        # TODO is substitution the right thing here?
         grammar.add(value.type, identifier, Literal(var))
 
         return Call(LET, type_, [var, value])
@@ -388,6 +388,7 @@ class Value(Tree):
         self.value = value
 
     def sexpr(self):
+        assert isinstance(self.value, str)
         return self.value
 
 # Int
@@ -405,7 +406,9 @@ class W_Int(Value):
 class ParseInt(Macro):
     def build(self, values, type_):
         assert type_ == Int
-        return W_Int(int(values[0].value))
+        digits, = values
+        assert isinstance(digits, Word)
+        return W_Int(int(digits.value))
 grammar.add(Int, [Word.DIGITS], ParseInt)
 
 # Decimal
