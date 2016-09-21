@@ -324,6 +324,23 @@ class Define(Macro):
 grammar.add(Line, [Word.word("define"), Word.WS, Seq.get(Spec), Word.WS, Type.BLOCK], Define)
 
 
+# Let
+LET = Function("let")
+@singleton
+class Let(Macro):
+    def build(self, values, type_):
+        value = values[6]
+
+        # TODO allow spaces in identifier names
+        name = values[2]
+
+        # TODO is substitution the right thing here?
+        grammar.add(value.type, [name], Literal(value))
+
+        return Call(LET, type_, [name, value])
+
+grammar.add(Line, [Word.word("let"), Word.WS, Word.WORD, Word.WS, Word.word("="), Word.WS, Type.ANY], Let)
+
 
 
 # Built-ins.

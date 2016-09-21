@@ -435,3 +435,9 @@ class LanguageTests(BaseParser):
             fib 123 } fib 123
         """, "(program (define fib_Int (list (arg n)) (block (arg n) (fib_Int 123))) (fib_Int 123))")
 
+    def test_05(self):
+        self._parse("""
+        let y = 123
+        y
+        """, "(program (let y 123) 123)")
+

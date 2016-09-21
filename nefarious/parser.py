@@ -420,6 +420,11 @@ def grammar_parse(source, grammar, debug=DEBUG):
         if token == Word.ENTER: # { -> start of block
             column.eval_enter()
 
+        if token == Word.NL: # end of line
+            line = ""
+            # Evaluate things here, so macros take effect
+            column.evaluate()
+
         previous, column = column, Column(grammar, index + 1)
         if not column.scan(token, previous):
             msg = "Unexpected " + token.kind + " @ " + str(index)
@@ -434,12 +439,6 @@ def grammar_parse(source, grammar, debug=DEBUG):
 
         if token == Word.EXIT: # } -> end of block
             column.eval_exit()
-
-        if token == Word.NL:
-            line = ""
-            # Evaluate things at the end of a line
-            # to make things not break
-            column.evaluate()
 
         token = lexer.lex()
         index += 1

@@ -292,7 +292,7 @@ Type.PROGRAM = Internal._cache['Program'] = Program('Program')
 # REMOVED -- use Generics instead.
 
 # Type -- a slot which wants a type name
-Type.TYPE = Type.get('Type')
+Type.TYPE = Internal.get('Type')
 
 # Any -- a slot which accepts any expression.
 Type.ANY = Type._cache['Any'] = Any('Any')
