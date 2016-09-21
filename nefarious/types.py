@@ -303,4 +303,5 @@ Type._cache['List'] = None
 
 
 Type.BLOCK = Type.get('Block')
+Type.FUNC = Type.get('Func')
 

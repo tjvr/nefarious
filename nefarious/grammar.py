@@ -6,12 +6,14 @@ from .parser import Grammar, Rule, grammar_parse
 
 class Name(Tree):
     """Symbol. Compared by identity, not value, so shadowing works."""
-    def __init__(self, name):
+    def __init__(self, type_, name):
+        assert isinstance(type_, Type)
         assert isinstance(name, str)
+        self.type = type_
         self.name = name # String name really is just a debugging aid
 
     def __repr__(self):
-        return "Name({!r})".format(self.name)
+        return "Name({!r}, {!r})".format(self.type, self.name)
 
     def sexpr(self):
         return self.name.replace(" ", "_")
@@ -20,6 +22,7 @@ class Name(Tree):
 class Call(Tree):
     def __init__(self, func, type_, args):
         assert isinstance(func, Name)
+        assert func.type == Type.FUNC
         assert isinstance(type_, Type)
         assert isinstance(args, list)
         for arg in args:
@@ -54,7 +57,7 @@ class Value(Tree):
 
 
 def Function(name):
-    return Name(name)
+    return Name(Type.FUNC, name)
 
 
 #---------------
@@ -302,9 +305,8 @@ class Define(Macro):
                 type_, name = word.args
                 index = len(args)
                 assert isinstance(name, Word)
-                arg = Name(name.value)
-                get_arg = Call(GET, type_, [arg])
-                grammar.add(type_, [name], Literal(get_arg))
+                arg = Name(type_, name.value)
+                grammar.add(type_, [name], Literal(arg))
                 args.append(arg)
         Define.current_definition_args.append(args)
 
@@ -342,7 +344,6 @@ grammar.add(Line, ws([Word.word("define"), Seq.get(Spec), Type.BLOCK]), Define)
 
 
 LET = Function("let")
-GET = Function("get")
 
 @singleton
 class Let(Macro):
@@ -354,10 +355,9 @@ class Let(Macro):
         for iden in identifier:
             assert isinstance(iden, Word)
             name += iden.value
-        var = Name(name)
-        get_var = Call(GET, value.type, [var])
+        var = Name(value.type, name)
 
-        grammar.add(value.type, identifier, Literal(get_var))
+        grammar.add(value.type, identifier, Literal(var))
 
         return Call(LET, type_, [var, value])
 
