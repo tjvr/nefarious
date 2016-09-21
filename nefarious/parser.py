@@ -216,6 +216,9 @@ class Column:
         if token in previous.wants:
             item = self.add(previous, token)
             item.value = word
+        if token == Word.WS:
+            item = self.add(previous, Word.WS_NOT_NULL)
+            item.value = word
         return len(self.items) > 0
 
     def predict(self, tag):

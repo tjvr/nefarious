@@ -212,6 +212,16 @@ class Program(Macro):
 grammar.add(Type.PROGRAM, [Internal.SEP, Seq.get(Line), Internal.SEP], Program)
 
 
+# Identifiers
+
+Iden = Internal.get('Iden')
+
+grammar.add(Iden, [Word.WORD], Identity)
+grammar.add(Iden, [Word.PUNC], Identity)
+grammar.add(Iden, [Word.WS_NOT_NULL], Identity)
+# TODO Word.DIGITS
+
+
 # Definitions
 
 Spec = Internal.get('Spec')
@@ -227,9 +237,7 @@ class ArgSpec(Macro):
         return Call(ARG, type_, [type_, name])
 grammar.add(Spec, [Type.TYPE, Word.word(":"), Word.WORD], ArgSpec)
 
-grammar.add(Spec, [Word.WORD], Identity)
-grammar.add(Spec, [Word.PUNC], Identity)
-grammar.add(Spec, [Word.WS], Identity)
+grammar.add(Spec, [Iden], Identity)
 
 SPEC = Function('spec')
 grammar.add(Seq.get(Spec), [Spec], StartList(SPEC))
@@ -262,7 +270,6 @@ class Define(Macro):
         spec = values[2]
         assert spec.func == SPEC
         symbols = list(spec.args)
-        assert symbols.pop(0) == Word.NULL_WS
         return symbols
 
     def enter(self, values, type_):
@@ -325,21 +332,50 @@ grammar.add(Line, [Word.word("define"), Word.WS, Seq.get(Spec), Word.WS, Type.BL
 
 
 # Let
+
+class Name(Tree):
+    # TODO merge with Arg?
+    # TODO merge with Function?
+    def __init__(self, type_, debug_name):
+        assert isinstance(type_, Type)
+        assert isinstance(debug_name, str)
+        self.type = type_
+        self.debug_name = debug_name
+
+    def __repr__(self):
+        return "Name({!r}, {!r})".format(self.type, self.debug_name)
+
+    def sexpr(self):
+        return self.debug_name
+
 LET = Function("let")
+
 @singleton
 class Let(Macro):
     def build(self, values, type_):
         value = values[6]
 
-        # TODO allow spaces in identifier names
-        name = values[2]
+        identifier = values[2].args
+        name = ""
+        for iden in identifier:
+            if iden == Word.WS:
+                name += "_"
+            else:
+                name += iden.value
+        var = Name(value.type, name)
 
         # TODO is substitution the right thing here?
-        grammar.add(value.type, [name], Literal(value))
+        grammar.add(value.type, identifier, Literal(var))
 
-        return Call(LET, type_, [name, value])
+        return Call(LET, type_, [var, value])
 
-grammar.add(Line, [Word.word("let"), Word.WS, Word.WORD, Word.WS, Word.word("="), Word.WS, Type.ANY], Let)
+IDEN = Function('iden')
+grammar.add(Seq.get(Iden), [Iden], StartList(IDEN))
+grammar.add(Seq.get(Iden), [Seq.get(Iden), Iden], ContinueList(IDEN))
+
+grammar.add(Line, [
+    Word.word("let"), Word.WS, Seq.get(Iden), Word.WS, Word.word("="), Word.WS, Type.ANY
+], Let)
 
 
 

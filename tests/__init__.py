@@ -439,5 +439,11 @@ class LanguageTests(BaseParser):
         self._parse("""
         let y = 123
         y
-        """, "(program (let y 123) 123)")
+        """, "(program (let y 123) y)")
+
+    def test_06(self):
+        self._parse("""
+        let foo bar = 123
+        foo bar
+        """, "(program (let foo_bar 123) foo_bar)")
 

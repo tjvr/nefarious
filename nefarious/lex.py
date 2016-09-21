@@ -135,6 +135,7 @@ Word.EOF = Word.get('EOF')
 Word.NL = Word.get('NL')
 Word.WS = Word.get('WS', ' ')
 Word.NULL_WS = Word.get('WS', '')
+Word.WS_NOT_NULL = Word.get('WS', '  ')
 
 # Match token value, eg. `+` or `while`
 # nb. can *also* match on kind.

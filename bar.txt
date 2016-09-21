@@ -2,10 +2,10 @@
 let y = 123
 
 define potato Int:n {
-    let x = n
+    let foo bar = n
 
     define zebra {
-        x
+        foo bar
     }
 }
 
