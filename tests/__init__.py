@@ -55,7 +55,7 @@ class TestGrammar(unittest.TestCase):
         self.grammar = grammar = Grammar()
 
         def singleton(cls):
-            return cls(cls.__name__)
+            return cls()
 
         DEFINE = Function('define')
 
@@ -428,24 +428,24 @@ class LanguageTests(BaseParser):
             fib 123
         }
         fib 123
-        """, "(program (define fib_Int (list (arg n)) (block (arg n) (fib_Int 123))) (fib_Int 123))")
+        """, "(program (define fib_Int n (block (get n) (fib_Int 123))) (fib_Int 123))")
 
     def test_04b(self):
         self._parse(""" define fib Int:n { n
             fib 123 } fib 123
-        """, "(program (define fib_Int (list (arg n)) (block (arg n) (fib_Int 123))) (fib_Int 123))")
+        """, "(program (define fib_Int n (block (get n) (fib_Int 123))) (fib_Int 123))")
 
     def test_05(self):
         self._parse("""
         let y = 123
         y
-        """, "(program (let y 123) y)")
+        """, "(program (let y 123) (get y))")
 
     def test_06(self):
         self._parse("""
         let foo bar = 2
         foo bar
-        """, "(program (let foo_bar 2) foo_bar)")
+        """, "(program (let foo_bar 2) (get foo_bar))")
 
     def test_07(self):
         self._success("let foo2 = 123")

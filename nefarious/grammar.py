@@ -3,14 +3,22 @@ from .types import *
 from .lex import Word, Lexer
 from .parser import Grammar, Rule, grammar_parse
 
-# two kinds of factories--
-# * a Function pointer. From which, we build an AST node. This gets evaluated at runtime.
-#
-# * But! Sometimes we want to evaluate a rule at compile-time.
-#   So, we invent Macros. These are just functions which are evaluated at
-#   compile-time, and return a piece of AST.
+class Macro:
+    # * Sometimes we want to evaluate a rule at compile-time.
+    #   So, we invent Macros. These are just functions which are evaluated at
+    #   compile-time, and return a piece of AST.
 
-# TODO common base class for Function and Macro
+    def build(self, children, type_):
+        raise NotImplementedError
+
+    def enter(self, children, type_):
+        grammar.save()
+
+    def exit(self, children, type_):
+        grammar.restore()
+
+#---------------
+
 class Function(Tree):
     def __init__(self, debug_name):
         assert isinstance(debug_name, str)
@@ -29,18 +37,16 @@ class Function(Tree):
         assert self.body is not None
         # TODO
 
-class Macro(Function):
-    def build(self, children, type_):
-        return self.call_immediate(children)
+class Name(Tree):
+    def __init__(self, name):
+        assert isinstance(name, str)
+        self.name = name # For debugging
 
-    def enter(self, children, type_):
-        grammar.save()
-
-    def exit(self, children, type_):
-        grammar.restore()
+    def __repr__(self):
+        return "Name({!r})".format(self.name)
 
     def sexpr(self):
-        assert False # macros should never be in the AST!
+        return self.name
 
 class Call(Tree):
     def __init__(self, func, type_, args):
@@ -76,12 +82,14 @@ class CallMacro(Macro):
         args = [values[i] for i in self.arg_indexes]
         return Call(self.call, type_, args)
 
+# TODO CustomMacros
+#    return self.call_immediate(children)
 
 
 grammar = Grammar()
 
 def singleton(cls):
-    return cls(cls.__name__)
+    return cls()
 
 @singleton
 class Identity(Macro):
@@ -226,7 +234,7 @@ grammar.add(Iden, [Word.WS_NOT_NULL], Identity)
 
 Spec = Internal.get('Spec')
 
-ARG = Function("arg")
+ARG = Function("arg_spec")
 
 @singleton
 class ArgSpec(Macro):
@@ -242,19 +250,6 @@ grammar.add(Spec, [Iden], Identity)
 SPEC = Function('spec')
 grammar.add(Seq.get(Spec), [Spec], StartList(SPEC))
 grammar.add(Seq.get(Spec), [Seq.get(Spec), Spec], ContinueList(SPEC))
-
-class Arg(Tree):
-    def __init__(self, type_, debug_name):
-        assert isinstance(type_, Type)
-        assert isinstance(debug_name, str)
-        self.type = type_
-        self.debug_name = debug_name
-
-    def __repr__(self):
-        return "Arg({!r}, {!r})".format(self.type, self.debug_name)
-
-    def sexpr(self):
-        return "(arg " + self.debug_name + ")"
 
 
 DEFINE = Function('define')
@@ -297,8 +292,9 @@ class Define(Macro):
                 type_, name = word.args
                 index = len(args)
                 assert isinstance(name, Word)
-                arg = Arg(type_, name.value)
-                grammar.add(type_, [name], Literal(arg)) # TODO arg macro
+                arg = Name(name.value)
+                get_arg = Call(GET, type_, [arg])
+                grammar.add(type_, [name], Literal(get_arg))
                 args.append(arg)
 
         # Add internal (recursive) rule
@@ -325,30 +321,16 @@ class Define(Macro):
 
     def build(self, values, type_):
         func = Define.current_definitions.pop()
-        args = Call(LIST, List.get(Type.ANY), func.args)
-        return Call(DEFINE, type_, [func, args, values[4]])
+        return Call(DEFINE, type_, [func] + func.args + [values[4]])
 
 grammar.add(Line, [Word.word("define"), Word.WS, Seq.get(Spec), Word.WS, Type.BLOCK], Define)
 
 
 # Let
 
-class Name(Tree):
-    # TODO merge with Arg?
-    # TODO merge with Function?
-    def __init__(self, type_, debug_name):
-        assert isinstance(type_, Type)
-        assert isinstance(debug_name, str)
-        self.type = type_
-        self.debug_name = debug_name
-
-    def __repr__(self):
-        return "Name({!r}, {!r})".format(self.type, self.debug_name)
-
-    def sexpr(self):
-        return self.debug_name
 
 LET = Function("let")
+GET = Function("get")
 
 @singleton
 class Let(Macro):
@@ -363,9 +345,10 @@ class Let(Macro):
                 name += "_"
             else:
                 name += iden.value
-        var = Name(value.type, name)
+        var = Name(name)
+        get_var = Call(GET, value.type, [var])
 
-        grammar.add(value.type, identifier, Literal(var))
+        grammar.add(value.type, identifier, Literal(get_var))
 
         return Call(LET, type_, [var, value])
 
