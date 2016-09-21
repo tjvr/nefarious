@@ -2,7 +2,15 @@
 define fib Int:x {
     x
     123
+
+    define internal {
+        x
+    }
 }
 
 fib 123
+
+define bar Int:y {
+    y
+}
 

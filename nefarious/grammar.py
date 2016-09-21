@@ -10,11 +10,13 @@ from .parser import Grammar, Rule, grammar_parse
 #   So, we invent Macros. These are just functions which are evaluated at
 #   compile-time, and return a piece of AST.
 
+# TODO common base class for Function and Macro
 class Function(Tree):
     def __init__(self, debug_name):
         assert isinstance(debug_name, str)
         self.debug_name = debug_name
         self.body = None
+        self.args = []
 
     def sexpr(self):
         return self.debug_name
@@ -55,7 +57,13 @@ class Call(Tree):
         return "<Call {!r} {!r}>".format(self.func.debug_name, self.args)
 
     def sexpr(self):
-        return "(" + self.func.sexpr() + " " + " ".join([a.sexpr() for a in self.args]) + ")"
+        indent = " "
+        is_lines = self.func == PROGRAM or self.func == BLOCK
+        sep = "\n" if is_lines else " "
+        inner = sep.join([a.sexpr() for a in self.args])
+        if is_lines:
+            inner = indent + ("\n" + indent).join(inner.split("\n"))
+        return "(" + self.func.sexpr() + sep + inner + ")"
         #return self.type.sexpr() + ":(" + self.func.sexpr() + " " + " ".join([a.sexpr() for a in self.args]) + ")"
 
 class CallMacro(Macro):
@@ -227,6 +235,20 @@ SPEC = Function('spec')
 grammar.add(Seq.get(Spec), [Spec], StartList(SPEC))
 grammar.add(Seq.get(Spec), [Seq.get(Spec), Spec], ContinueList(SPEC))
 
+class Arg(Tree):
+    def __init__(self, type_, debug_name):
+        assert isinstance(type_, Type)
+        assert isinstance(debug_name, str)
+        self.type = type_
+        self.debug_name = debug_name
+
+    def __repr__(self):
+        return "Arg({!r}, {!r})".format(self.type, self.debug_name)
+
+    def sexpr(self):
+        return "(arg " + self.debug_name + ")"
+
+
 DEFINE = Function('define')
 
 @singleton
@@ -247,12 +269,6 @@ class Define(Macro):
         grammar.save()
         spec = self._get_spec(values)
 
-        # Define arguments
-        for word in spec:
-            if self._is_arg(word):
-                type_, name = word.args
-                grammar.add(type_, [name], Identity) # TODO arg macro
-
         # Build name
         debug_name = ""
         for s in spec:
@@ -267,6 +283,17 @@ class Define(Macro):
         func = Function(debug_name)
         Define.current_definitions.append(func)
 
+        # Define arguments
+        args = func.args
+        for word in spec:
+            if self._is_arg(word):
+                type_, name = word.args
+                index = len(args)
+                assert isinstance(name, Word)
+                arg = Arg(type_, name.value)
+                grammar.add(type_, [name], Literal(arg)) # TODO arg macro
+                args.append(arg)
+
         # Add internal (recursive) rule
         symbols = [(s.args[0] if self._is_arg(s) else s) for s in spec]
         arg_indexes = [index for index, s in enumerate(spec) if self._is_arg(s)]
@@ -275,21 +302,24 @@ class Define(Macro):
     def exit(self, values, type_):
         grammar.restore()
         spec = self._get_spec(values)
+        func = Define.current_definitions[-1]
 
         # Type check
         body = values[-1]
-        # TODO
-        type_ = Int
+        assert body.func == BLOCK
+        type_ = body.args[-1].type
+        # TODO empty functions
+        # TODO check unification with `func` calls in body
 
         # Define rule
-        func = Define.current_definitions[-1]
         symbols = [(s.args[0] if self._is_arg(s) else s) for s in spec]
         arg_indexes = [index for index, s in enumerate(spec) if self._is_arg(s)]
         grammar.add(type_, symbols, CallMacro(func, arg_indexes))
 
     def build(self, values, type_):
         func = Define.current_definitions.pop()
-        return Call(DEFINE, type_, [func, values[4]])
+        args = Call(LIST, List.get(Type.ANY), func.args)
+        return Call(DEFINE, type_, [func, args, values[4]])
 
 grammar.add(Line, [Word.word("define"), Word.WS, Seq.get(Spec), Word.WS, Type.BLOCK], Define)
 
@@ -298,6 +328,15 @@ grammar.add(Line, [Word.word("define"), Word.WS, Seq.get(Spec), Word.WS, Type.BL
 
 # Built-ins.
 
+class Value(Tree):
+    def __init__(self, type_, value):
+        assert isinstance(value, str)
+        self.type = type_
+        self.value = value
+
+    def sexpr(self):
+        return self.value
+
 Int = Type.get('Int')
 Text = Type.get('Text')
 Bool = Type.get('Bool')
@@ -305,7 +344,7 @@ add_type(Int)
 add_type(Text)
 add_type(Bool)
 
-grammar.add(Int, [Word.word("123")], Identity)
+grammar.add(Int, [Word.word("123")], Literal(Value(Int, "123")))
 
 
 def parse(source, debug=False):

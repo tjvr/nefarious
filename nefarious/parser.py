@@ -417,7 +417,7 @@ def grammar_parse(source, grammar, debug=DEBUG):
         if debug:
             column.print_()
 
-        if token == Word.ENTER:
+        if token == Word.ENTER: # { -> start of block
             column.eval_enter()
 
         previous, column = column, Column(grammar, index + 1)
@@ -432,11 +432,14 @@ def grammar_parse(source, grammar, debug=DEBUG):
             return msg
         column.process()
 
-        if token == Word.EXIT:
+        if token == Word.EXIT: # } -> end of block
             column.eval_exit()
 
         if token == Word.NL:
             line = ""
+            # Evaluate things at the end of a line
+            # to make things not break
+            column.evaluate()
 
         token = lexer.lex()
         index += 1

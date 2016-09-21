@@ -28,17 +28,23 @@ def captured_output():
 class TestGrammar(unittest.TestCase):
     """Set up grammar used for Generic tests."""
 
+    def tearDown(self):
+        Call.sexpr = self.old_sexpr
+        Call.__init__ = self.old_init
+
     def setUp(self):
         super(TestGrammar, self).setUp()
         self.setup_grammar()
         self.setup_types()
 
         # Monkey-patch to get old Call sexpr()
+        self.old_sexpr = Call.sexpr
         def sexpr(self):
             return "(" + self.func.sexpr() + " " + " ".join([a.sexpr() for a in self.args]) + ")"
         Call.sexpr = sexpr
 
         # Get old Call init, too
+        self.old_init = Call.__init__
         def init(self, func, t, args=None):
             if args is None: args = t
             self.func = func
@@ -354,6 +360,7 @@ class BaseParser(unittest.TestCase):
     def _parse(self, source, sexpr):
         # nb. debug reprs / capturing stdout is slow!
         result = self._execute(source)
+        result = result.replace("\n ", " ").replace("  ", " ")
         print result
         print
         print "Test input:"
@@ -421,10 +428,10 @@ class LanguageTests(BaseParser):
             fib 123
         }
         fib 123
-        """, "(program (define fib_Int (block n (fib_Int 123))) (fib_Int 123))")
+        """, "(program (define fib_Int (list (arg n)) (block (arg n) (fib_Int 123))) (fib_Int 123))")
 
     def test_04b(self):
         self._parse(""" define fib Int:n { n
             fib 123 } fib 123
-        """, "(program (define fib_Int (block n (fib_Int 123))) (fib_Int 123))")
+        """, "(program (define fib_Int (list (arg n)) (block (arg n) (fib_Int 123))) (fib_Int 123))")
 
