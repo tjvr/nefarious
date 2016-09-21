@@ -3,21 +3,6 @@ from .types import *
 from .lex import Word, Lexer
 from .parser import Grammar, Rule, grammar_parse
 
-class Macro:
-    # * Sometimes we want to evaluate a rule at compile-time.
-    #   So, we invent Macros. These are just functions which are evaluated at
-    #   compile-time, and return a piece of AST.
-
-    def build(self, children, type_):
-        raise NotImplementedError
-
-    def enter(self, children, type_):
-        grammar.save()
-
-    def exit(self, children, type_):
-        grammar.restore()
-
-#---------------
 
 class Function(Tree):
     def __init__(self, debug_name):
@@ -71,6 +56,44 @@ class Call(Tree):
             inner = indent + ("\n" + indent).join(inner.split("\n"))
         return "(" + self.func.sexpr() + sep + inner + ")"
         #return self.type.sexpr() + ":(" + self.func.sexpr() + " " + " ".join([a.sexpr() for a in self.args]) + ")"
+
+class Value(Tree):
+    def __init__(self, type_, value):
+        assert isinstance(value, str)
+        self.type = type_
+        self.value = value
+
+    def sexpr(self):
+        assert isinstance(self.value, str)
+        return self.value
+
+
+#---------------
+
+
+def ws(symbols):
+    assert len(symbols)
+    out = []
+    out.append(symbols[0])
+    for tag in symbols[1:]:
+        out.append(Word.WS)
+        out.append(tag)
+    return out
+
+
+class Macro:
+    # * Sometimes we want to evaluate a rule at compile-time.
+    #   So, we invent Macros. These are just functions which are evaluated at
+    #   compile-time, and return a piece of AST.
+
+    def build(self, children, type_):
+        raise NotImplementedError
+
+    def enter(self, children, type_):
+        grammar.save()
+
+    def exit(self, children, type_):
+        grammar.restore()
 
 class CallMacro(Macro):
     def __init__(self, call, arg_indexes):
@@ -146,8 +169,8 @@ class ContinueList(Macro):
 
 # Generic lists
 ALPHA = Generic.ALPHA
-grammar.add(List.get(ALPHA), [ALPHA, Word.WS, Word.word(","), Word.WS, ALPHA], PairList(LIST))
-grammar.add(List.get(ALPHA), [List.get(ALPHA), Word.WS, Word.word(","), Word.WS, ALPHA], ContinueList(LIST))
+grammar.add(List.get(ALPHA), ws([ALPHA, Word.word(","), ALPHA]), PairList(LIST))
+grammar.add(List.get(ALPHA), ws([List.get(ALPHA), Word.word(","), ALPHA]), ContinueList(LIST))
 
 # TODO revisit this... --require square brackets?
 
@@ -159,7 +182,7 @@ class Parens(Macro):
     def build(self, values, type_):
         child = values[2]
         return child
-grammar.add(Generic.get(1), [Word.word("("), Word.WS, Generic.get(1), Word.WS, Word.word(")")], Parens)
+grammar.add(ALPHA, ws([Word.word("("), ALPHA, Word.word(")")]), Parens)
 
 
 # Types
@@ -180,7 +203,7 @@ class ListTypeMacro(Macro):
     def build(self, values, type_):
         return List.get(values[4])
 
-grammar.add(Type.TYPE, [Word.word("("), Word.WS, Word.word("List"), Word.WS, Type.TYPE, Word.WS, Word.word(")")], ListTypeMacro)
+grammar.add(Type.TYPE, ws([Word.word("("), Word.word("List"), Type.TYPE, Word.word(")")]), ListTypeMacro)
 
 
 # Lines
@@ -276,7 +299,7 @@ class Define(Macro):
         for s in spec:
             if self._is_arg(s):
                 debug_name += s.args[0].name
-            elif s == Word.WS:
+            elif s == Word.WS: # TODO something
                 debug_name += "_"
             elif isinstance(s, Word):
                 debug_name += s.value
@@ -300,7 +323,7 @@ class Define(Macro):
         # Add internal (recursive) rule
         symbols = [(s.args[0] if self._is_arg(s) else s) for s in spec]
         arg_indexes = [index for index, s in enumerate(spec) if self._is_arg(s)]
-        grammar.add(Generic.ALPHA, symbols, CallMacro(func, arg_indexes))
+        grammar.add(ALPHA, symbols, CallMacro(func, arg_indexes))
 
     def exit(self, values, type_):
         grammar.restore()
@@ -323,7 +346,7 @@ class Define(Macro):
         func = Define.current_definitions.pop()
         return Call(DEFINE, type_, [func] + func.args + [values[4]])
 
-grammar.add(Line, [Word.word("define"), Word.WS, Seq.get(Spec), Word.WS, Type.BLOCK], Define)
+grammar.add(Line, ws([Word.word("define"), Seq.get(Spec), Type.BLOCK]), Define)
 
 
 # Let
@@ -356,23 +379,13 @@ IDEN = Function('iden')
 grammar.add(Seq.get(Iden), [Iden], StartList(IDEN))
 grammar.add(Seq.get(Iden), [Seq.get(Iden), Iden], ContinueList(IDEN))
 
-grammar.add(Line, [
-    Word.word("let"), Word.WS, Seq.get(Iden), Word.WS, Word.word("="), Word.WS, Type.ANY
-], Let)
+grammar.add(Line, ws([
+    Word.word("let"), Seq.get(Iden), Word.word("="), Type.ANY
+]), Let)
 
 
 
 # Built-ins.
-
-class Value(Tree):
-    def __init__(self, type_, value):
-        assert isinstance(value, str)
-        self.type = type_
-        self.value = value
-
-    def sexpr(self):
-        assert isinstance(self.value, str)
-        return self.value
 
 # Int
 
@@ -411,15 +424,16 @@ add_type(Bool)
 
 PLUS = Function("+")
 SUB = Function("-")
-grammar.add(Int, [Int, Word.WS, Word.word("+"), Word.WS, Int], CallMacro(PLUS, [0, 4])).priority = grammar.add(Int, [Int, Word.WS, Word.word("-"), Word.WS, Int], CallMacro(SUB, [0, 4])).priority
+p = grammar.add(Int, ws([Int, Word.word("+"), Int]), CallMacro(PLUS, [0, 4])).priority
+grammar.add(Int, ws([Int, Word.word("-"), Int]), CallMacro(SUB, [0, 4])).priority = p
 
 LT = Function("<")
-grammar.add(Bool, [Int, Word.WS, Word.word("<"), Word.WS, Int], CallMacro(LT, [0, 4]))
+grammar.add(Bool, ws([Int, Word.word("<"), Int]), CallMacro(LT, [0, 4]))
 
 IF = Function("if")
-#grammar.add(Generic.ALPHA, [Generic.ALPHA, Word.WS, Word.word("if"), Word.WS, Bool, Word.WS, Word.word("else"), Word.WS, Generic.ALPHA], CallMacro(IF, [4, 0, 8]))
+#grammar.add(ALPHA, [ALPHA, Word.word("if"), Bool, Word.word("else"), ALPHA], CallMacro(IF, [4, 0, 8]))
 # TODO: don't seem to support left-recursive generics.
-grammar.add(Generic.ALPHA, [Word.word("if"), Word.WS, Bool, Word.WS, Word.word("then"), Word.WS, Generic.ALPHA, Word.WS, Word.word("else"), Word.WS, Generic.ALPHA], CallMacro(IF, [2, 6, 10]))
+grammar.add(ALPHA, ws([Word.word("if"), Bool, Word.word("then"), ALPHA, Word.word("else"), ALPHA]), CallMacro(IF, [2, 6, 10]))
 
 # TODO consider binding user functions with lower precedence...
 
