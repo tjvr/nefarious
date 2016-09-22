@@ -2,7 +2,7 @@
 import os
 import sys
 
-from .grammar import parse
+from .grammar import parse, parse_and_run
 
 
 try:
@@ -36,7 +36,7 @@ def jitpolicy(driver):
 def entry_point(argv):
     return entry_point, None
 
-def run(fp):
+def run(fp, parse_only):
     source = ""
     while True:
         read = os.read(fp, 4096)
@@ -44,12 +44,20 @@ def run(fp):
             break
         source += read
     os.close(fp)
-    msg = parse(source)
+    if parse_only:
+        msg = parse(source)
+    else:
+        msg = parse_and_run(source)
     os.write(1, msg)
     os.write(1, '\n')
     #mainloop(program)
 
 def entry_point(argv):
+    parse_only = False
+    if argv[1] == '--parse':
+        argv.pop(1)
+        parse_only = True
+
     try:
         filename = argv[1]
     except IndexError:
@@ -60,7 +68,7 @@ def entry_point(argv):
         fp = 0
     else:
         fp = os.open(filename, os.O_RDONLY, 0777)
-    run(fp)
+    run(fp, parse_only)
     return 0
 
 def target(*args):

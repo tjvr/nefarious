@@ -226,11 +226,11 @@ grammar.add(Seq.get(Line), [Seq.get(Line), Internal.SEP, Line], ContinueList(LIN
 BLOCK = Function('block')
 
 @singleton
-class Block(Macro):
+class BlockMacro(Macro):
     def build(self, values, type_):
         values[2].func = BLOCK
         return values[2]
-grammar.add(Type.BLOCK, [Word.word("{"), Internal.SEP, Seq.get(Line), Internal.SEP, Word.word("}")], Block)
+grammar.add(Type.BLOCK, [Word.word("{"), Internal.SEP, Seq.get(Line), Internal.SEP, Word.word("}")], BlockMacro)
 
 @singleton
 class EmptyBlock(Macro):
@@ -304,7 +304,9 @@ class Define(Macro):
         debug_name = ""
         for s in spec:
             if self._is_arg(s):
-                debug_name += s.args[0].name
+                type_ = s.args[0]
+                assert isinstance(type_, Type)
+                debug_name += type_.name
             else:
                 assert isinstance(s, Word)
                 debug_name += s.value
@@ -430,9 +432,9 @@ add_type(Bool)
 
 # Language stuff.
 
-PLUS = Function("+")
+ADD = Function("+")
 SUB = Function("-")
-p = grammar.add(Int, ws([Int, Word.word("+"), Int]), CallMacro(PLUS, [0, 4])).priority
+p = grammar.add(Int, ws([Int, Word.word("+"), Int]), CallMacro(ADD, [0, 4])).priority
 grammar.add(Int, ws([Int, Word.word("-"), Int]), CallMacro(SUB, [0, 4])).priority = p
 
 LT = Function("<")
@@ -442,23 +444,39 @@ IF = Function("if")
 #grammar.add(ALPHA, [ALPHA, Word.word("if"), Bool, Word.word("else"), ALPHA], CallMacro(IF, [4, 0, 8]))
 # TODO: don't seem to support left-recursive generics.
 grammar.add(ALPHA, ws([Word.word("if"), Bool, Word.word("then"), ALPHA, Word.word("else"), ALPHA]), CallMacro(IF, [2, 6, 10]))
+# TODO short-circuiting (uneval) `if`
 
 # TODO consider binding user functions with lower precedence...
 
 
 
-from .compile import compile, run
+from .compile import Block, Runtime
 
 # TODO
 
-
 def parse(source, debug=False):
     tree = grammar_parse(source, grammar, debug)
+    assert isinstance(tree, Tree)
+    if isinstance(tree, Error):
+        return tree.message
+    return tree.sexpr()
+
+
+def parse_and_run(source, debug=False):
+    tree = grammar_parse(source, grammar, debug)
+    assert isinstance(tree, Tree)
     if isinstance(tree, Error):
         return tree.message
 
-    assert isinstance(tree, Tree)
-    #bytecode = compile(tree)
-    #run(bytecode)
-    return tree.sexpr()
+    print tree.sexpr()
+    print
+
+    bytecode = Block('program')
+    env = bytecode.compile(tree)
+    bytecode._print()
+
+    r = Runtime()
+    r.run(bytecode, env)
+
+    return ""
 

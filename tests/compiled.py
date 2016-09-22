@@ -12,9 +12,9 @@ class CompiledTests(LanguageTests):
     @classmethod
     def setUpClass(cls):
         assert os.path.exists(cls.BINARY), "Can't find `nfs` executable"
-    
+
     def _execute(self, source):
-        p = Popen([self.BINARY, "-"], stdin=PIPE, stdout=PIPE, stderr=PIPE)
+        p = Popen([self.BINARY, "--parse", "-"], stdin=PIPE, stdout=PIPE, stderr=PIPE)
         p.stdin.write(source + "\n")
         p.stdin.close()
         output = p.stdout.read()
