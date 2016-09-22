@@ -32,7 +32,7 @@ class Call(Tree):
         self.args = args
 
     def __repr__(self):
-        return "<Call {!r} {!r}>".format(self.func.debug_name, self.args)
+        return "<Call {!r} {!r}>".format(self.func.name, self.args)
 
     def sexpr(self):
         indent = " "
@@ -218,12 +218,19 @@ grammar.add(Seq.get(Line), [Seq.get(Line), Internal.SEP, Line], ContinueList(LIN
 
 # Blocks
 BLOCK = Function('block')
+
 @singleton
 class Block(Macro):
     def build(self, values, type_):
         values[2].func = BLOCK
         return values[2]
 grammar.add(Type.BLOCK, [Word.word("{"), Internal.SEP, Seq.get(Line), Internal.SEP, Word.word("}")], Block)
+
+@singleton
+class EmptyBlock(Macro):
+    def build(self, values, type_):
+        return Call(BLOCK, type_, [])
+grammar.add(Type.BLOCK, [Word.word("{"), Word.word("}")], EmptyBlock)
 
 
 # Program
@@ -242,7 +249,7 @@ Iden = Internal.get('Iden')
 grammar.add(Iden, [Word.WORD], Identity)
 grammar.add(Iden, [Word.PUNC], Identity)
 grammar.add(Iden, [Word.WS_NOT_NULL], Identity)
-# TODO Word.DIGITS
+# TODO Word.DIGITS ?
 
 
 # Definitions
@@ -323,8 +330,13 @@ class Define(Macro):
         # Type check
         body = values[-1]
         assert body.func == BLOCK
-        type_ = body.args[-1].type
-        # TODO empty functions
+        if len(body.args) == 0: # empty block
+            type_ = Line # ??
+        elif len(body.args) == 1:
+            type_ = body.args[0].type
+        else:
+            # TODO walk AST for `return` statements
+            type_ = body.args[-1].type
         # TODO check unification with `func` calls in body
 
         # Define rule
@@ -381,6 +393,10 @@ class W_Int(Value):
     def __init__(self, value):
         assert isinstance(value, int)
         self.value = value
+
+    def __repr__(self):
+        return str(self.value)
+
     def sexpr(self):
         return str(self.value)
 

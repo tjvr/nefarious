@@ -451,3 +451,9 @@ class LanguageTests(BaseParser):
         self._success("let foo2 = 123")
         self._error("let 4ducks = 123")
 
+    def test_08(self):
+        self._success("define foo { }")
+
+    def test_08b(self):
+        self._success("define foo {}")
+
