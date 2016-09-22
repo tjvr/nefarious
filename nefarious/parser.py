@@ -396,6 +396,9 @@ class Scope:
         return False
 
 
+
+from .grammar import Error
+
 def grammar_parse(source, grammar, debug=DEBUG):
     lexer = Lexer(source)
 
@@ -437,7 +440,7 @@ def grammar_parse(source, grammar, debug=DEBUG):
                 if isinstance(token, Word):
                     msg += "\nExpected: " + token.sexpr()
             msg += "\n>> " + line
-            return msg
+            return Error(msg)
         column.process()
 
         if token == Word.EXIT: # } -> end of block
@@ -456,11 +459,9 @@ def grammar_parse(source, grammar, debug=DEBUG):
                 if isinstance(token, Word):
                     msg += "\nExpected: " + token.sexpr()
             msg += "\n>> " + line
-        return msg
+        return Error(msg)
     start = column.unique[key]
     value = start.evaluate([])
 
-    return value.sexpr()
-
-
+    return value
 

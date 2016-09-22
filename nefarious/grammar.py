@@ -1,7 +1,6 @@
 
 from .types import *
 from .lex import Word, Lexer
-from .parser import Grammar, Rule, grammar_parse
 
 
 class Name(Tree):
@@ -60,7 +59,14 @@ def Function(name):
     return Name(Type.FUNC, name)
 
 
+class Error(Tree):
+    def __init__(self, message):
+        self.message = message
+
+
 #---------------
+
+from .parser import Grammar, Rule, grammar_parse
 
 
 def ws(symbols):
@@ -440,6 +446,19 @@ grammar.add(ALPHA, ws([Word.word("if"), Bool, Word.word("then"), ALPHA, Word.wor
 # TODO consider binding user functions with lower precedence...
 
 
+
+from .compile import compile, run
+
+# TODO
+
+
 def parse(source, debug=False):
-    return grammar_parse(source, grammar, debug)
+    tree = grammar_parse(source, grammar, debug)
+    if isinstance(tree, Error):
+        return tree.message
+
+    assert isinstance(tree, Tree)
+    #bytecode = compile(tree)
+    #run(bytecode)
+    return tree.sexpr()
 
