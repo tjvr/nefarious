@@ -12,5 +12,9 @@ A programming language with:
 * an incremental hybrid GC.
 * ~~a fast tracing JIT bytecode VM (based on PyPy).~~ [not yet—compilers are hard!]
 
+Written in RPython; compiles to native code (via C), using the [RPython
+toolchain](https://rpython.rtfd.io/). But it can also run on top of a standard
+Python interpreter (albeit slower).
+
 **_Work in progress._**
 
