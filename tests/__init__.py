@@ -1,9 +1,11 @@
 # vim: tw=0
+
 from contextlib import contextmanager
 import os
 from StringIO import StringIO
-import sys
 import unittest
+import sys
+sys.path.append('./pypy/')
 
 from nefarious.types import *
 from nefarious.lex import Word

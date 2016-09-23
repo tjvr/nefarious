@@ -1,4 +1,10 @@
+
+from rpython.rlib import rbigint
+#from rpython.
+
 from .grammar import *
+
+
 
 def run(bytecode):
     print 'run'
@@ -74,6 +80,8 @@ class Block(Value):
         if args:
             self.get_args(args)
         self.compile_node(tree, env)
+        # TODO pop args
+        # TODO push return value
         return env
 
     def _print(self):
