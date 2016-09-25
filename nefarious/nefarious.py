@@ -5,20 +5,6 @@ import sys
 from .grammar import parse, parse_and_run
 
 
-try:
-    from rpython.rlib.jit import JitDriver, purefunction
-except ImportError:
-    # Dummy class for running under standard CPython
-    class JitDriver(object):
-        def __init__(self,**kw): pass
-        def jit_merge_point(self,**kw): pass
-        def can_enter_jit(self,**kw): pass
-    def purefunction(f): return f
-
-def jitpolicy(driver):
-    from rpython.jit.codewriter.policy import JitPolicy
-    return JitPolicy()
-
 
 
 # def get_location(pc, program, bracket_map):

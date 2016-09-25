@@ -1,8 +1,17 @@
 
-from rpython.rlib import rbigint
-#from rpython.
+import struct
+
+try:
+    from rpython.rlib.rarithmetic import r_uint, r_int, intmask
+    from rpython.rlib.objectmodel import we_are_translated
+    from rpython.rlib.rstruct.runpack import runpack
+except ImportError:
+    def we_are_translated(): return False
+    r_uint = r_int = intmask = lambda x: x
+# from rpython.rlib.rbigint import ...
 
 from .grammar import *
+
 
 
 
@@ -42,65 +51,96 @@ builtins.set(SUB, Builtin(SUB))
 
 
 class Op:
-    def __init__(self, name):
-        self.name = name
-Op.GET = Op('get') # lookup Name in env and push
-Op.SET = Op('set')  # pop stack and set name in env
-Op.LOAD = Op('load') # push literal Value pointer onto stack
-Op.CALL = Op('call')
-Op.RET = Op('ret')
-Op.HALT = Op('halt')
+    _ops = {}
 
-class Instruction:
-    def __init__(self, op, args):
-        assert isinstance(op, Op)
-        assert isinstance(args, list)
-        self.op = op
-        self.args = args
+    @staticmethod
+    def str(code):
+        return Op._ops[code]
 
-    def __repr__(self):
-        if self.op == Op.GET or self.op == Op.SET:
-            inner = '"' + self.args[0].name + '"'
-        elif self.op == Op.CALL:
-            inner = '"' + self.args[0].debug_name + '"'
-        else:
-            inner = " ".join([str(a) for a in self.args])
-        return "<" + self.op.name.upper() + " " + inner + ">"
+    @staticmethod
+    def is_op(code):
+        return code in Op._ops
+
+# No args.
+Op.HALT = 1
+Op.RET = 2
+Op.CALL = 3
+Op.JUMP_IF = 4
+Op.LOAD_CONSTANT = 5
+
+# Three args
+HAVE_OUTPUT = 24
+Op.MOV = 24         # MOV dest src [unused]
+Op.INT_ADD = 49     # INT_ADD result x y
+Op.INT_SUB = 50     # INT_SUB result x y
+
+for key in Op.__dict__:
+    if key.isalpha and key.isupper():
+        value = getattr(Op, key)
+        Op._ops[value] = key
 
 
 class Block(Value):
     def __init__(self, name):
         assert isinstance(name, str)
         self.debug_name = name
-        self.instructions = []
 
-    def compile(self, tree, env=None, args=None):
+        self.opcodes = []
+        self.code = None
+
+        # ohkayyyy. now there is *no stack*. have to invent temporaries.
+        self.locals = []
+        self.constants = []
+        self.num_args = 0
+        self.frame_size = 0 # num_args + num_locals
+        # constants
+        # locals
+
+    def compile(self, tree, env=None):
         if env is None:
             env = Env(builtins)
-        if args:
-            self.get_args(args)
         self.compile_node(tree, env)
         # TODO pop args
         # TODO push return value
+
+        self.code = b''.join(self.opcodes)
         return env
+
+    def emit(self, opcode, a, b, c=-1):
+        if (c is -1) != (opcode < HAVE_OUTPUT):
+            raise ValueError("wrong number of args: " + Op.str(opcode))
+        if c is -1:
+            b, c = a, b
+        assert Op.is_op(opcode), opcode
+        if opcode >= HAVE_OUTPUT:
+            self.opcodes.append(chr(a & 0xff))
+            self.opcodes.append(chr(b & 0xff))
+            self.opcodes.append(chr(c & 0xff))
+            self.opcodes.append(chr(opcode & 0xff))
+        else:
+            self.opcodes.append(chr((b >> 8) & 0xff))
+            self.opcodes.append(chr(b & 0xff))
+            self.opcodes.append(chr(c & 0xff))
+            self.opcodes.append(chr(opcode & 0xff))
 
     def _print(self):
         print self.debug_name
-        for ins in self.instructions:
-            print ins
+        #for ins in self.instructions:
+        #    print ins
         print
 
-    def emit(self, op, *args):
-        ins = Instruction(op, list(args))
-        self.instructions.append(ins)
-
-    def get_args(self, args):
-        for arg in reversed(args):
-            self.emit(Op.SET, arg)
-
     def compile_node(self, node, env):
+        self.emit(Op.INT_ADD, 1, 2, 3)
+        self.emit(Op.INT_SUB, -256, 255, 255)
+        self.emit(Op.MOV, 2, 0, 0)
+        self.emit(Op.MOV, 3, 0, 0)
+        self.emit(Op.RET, 12345, 1)
+        self.emit(Op.RET, -12345, 1)
+        self.emit(Op.HALT, 0, 0)
+        return
+
         if isinstance(node, Name):
-            self.emit(Op.GET, node)
+            self.emit(Op.STORE, node)
         elif isinstance(node, Value):
             self.emit(Op.LOAD, node)
         elif isinstance(node, Call):
@@ -126,7 +166,8 @@ class Block(Value):
         assert isinstance(name, Name)
         func = Block(name.name)
         env.set(name, func)
-        func.compile(block, Env(env), args)
+        # TODO args
+        func.compile(block, Env(env))
 
     def call(self, name, args, env):
         func = env.lookup(name)
@@ -145,6 +186,30 @@ class Closure:
         self.block = block
         self.env = env
 
+#------------------------------------------------------------------------------
+
+try:
+    from rpython.rlib.jit import JitDriver, purefunction
+except ImportError:
+    # Dummy class for running under standard CPython
+    class JitDriver(object):
+        def __init__(self,**kw): pass
+        def jit_merge_point(self,**kw): pass
+        def can_enter_jit(self,**kw): pass
+    def purefunction(f): return f
+
+def jitpolicy(driver):
+    from rpython.jit.codewriter.policy import JitPolicy
+    return JitPolicy()
+
+
+# For decoding 16-bit signed int
+def sint_16(chars):
+    if we_are_translated():
+        return runpack('>h', chars)
+    else:
+        return struct.unpack('>h', chars)[0]
+
 
 class Runtime: # TODO -> Thread?
     def __init__(self):
@@ -158,28 +223,104 @@ class Runtime: # TODO -> Thread?
         self.execute()
 
     def execute(self):
-        stack = self.stack
+        self.dispatch_bytecode(self.frame.block.code, 0)
+
+    #    stack = self.stack
+    #    while True:
+    #        frame = self.frame
+    #        ins = frame.block.instructions[frame.index]
+    #        first = ins.args[0]
+    #        if ins.op == Op.LOAD:
+    #            stack.append(first)
+    #        elif ins.op == Op.GET:
+    #            stack.append(frame.env.lookup(first))
+    #        elif ins.op == Op.SET:
+    #            frame.env.set(first, stack.pop())
+    #        elif ins.op == Op.CALL:
+    #            if isinstance(first, Builtin): # TODO separate opcodes
+    #                self.call_builtin(first.name)
+    #            else:
+    #                assert False, first
+    #        elif ins.op == Op.HALT:
+    #            print self.stack.pop().sexpr()
+    #            return
+    #        else:
+    #            assert False, ins
+    #        frame.index += 1
+
+    def handle_bytecode(self, code, next_instr):
+        next_instr = self.dispatch_bytecode(code, next_instr)
+        # except KeyboardInterrupt:
+        # except MemoryError:
+        # except rstackovf.StackOverflow as e:
+        #     Note that this case catches AttributeError!
+        return next_instr
+
+    #@jit.unroll_safe
+    def dispatch_bytecode(self, code, next_instr):
+        #stack = self.stack
+        stack = [20, 30, 40, 50]
+        top = 0
+        a = b = bx = c = 0
         while True:
-            frame = self.frame
-            ins = frame.block.instructions[frame.index]
-            first = ins.args[0]
-            if ins.op == Op.LOAD:
-                stack.append(first)
-            elif ins.op == Op.GET:
-                stack.append(frame.env.lookup(first))
-            elif ins.op == Op.SET:
-                frame.env.set(first, stack.pop())
-            elif ins.op == Op.CALL:
-                if isinstance(first, Builtin): # TODO separate opcodes
-                    self.call_builtin(first.name)
-                else:
-                    assert False, first
-            elif ins.op == Op.HALT:
-                print self.stack.pop().sexpr()
-                return
+            print '   ', stack
+            next_instr = r_uint(intmask(next_instr))
+            opcode = ord(code[next_instr + 3])
+
+            if opcode >= HAVE_OUTPUT:
+                a = ord(code[next_instr])
+                b = ord(code[next_instr + 1])
+                c = ord(code[next_instr + 2])
+                print Op.str(opcode), a, b, c
             else:
-                assert False, ins
-            frame.index += 1
+                bx = sint_16(code[next_instr:next_instr + 2])
+                c = ord(code[next_instr + 2])
+                print Op.str(opcode), bx, c
+            next_instr += 4
+
+            if opcode == Op.HALT:
+                return
+            elif opcode == Op.INT_ADD:
+                stack[top + a] = self.INT_ADD(stack[top + b], stack[top + c])
+            elif opcode == Op.MOV:
+                stack[top + a] = stack[top + b]
+
+            # nb. translates into a switch()
+
+            #print opcode
+
+            #if opcode == Op.RETURN_VALUE.index:
+            #    w_returnvalue = self.popvalue()
+            #    block = self.unrollstack(SReturnValue.kind)
+            #    self.pushvalue(w_returnvalue)   # XXX ping pong
+            #    raise Return
+            #elif opcode == opcodedesc.JUMP_ABSOLUTE.index:
+            #    return self.jump_absolute(oparg, ec)
+            #elif opcode == opcodedesc.BREAK_LOOP.index:
+            #    next_instr = self.BREAK_LOOP(oparg, next_instr)
+
+            #if jit.we_are_jitted():
+            #    return next_instr
+    
+    def INT_ADD(self, x, y):
+        # TODO bigints
+        return x + y
+
+    #@jit.unroll_safe
+    def unrollstack(self, unroller_kind):
+        while self.blockstack_non_empty():
+            block = self.pop_block()
+            if (block.handling_mask & unroller_kind) != 0:
+                return block
+            block.cleanupstack(self)
+        self.frame_finished_execution = True  # for generators
+        return None
+
+    def unrollstack_and_jump(self, unroller):
+        block = self.unrollstack(unroller.kind)
+        if block is None:
+            raise BytecodeCorruption("misplaced bytecode - should not return")
+        return block.handle(self, unroller)
 
     def call_builtin(self, name):
         if name == ADD:
