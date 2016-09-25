@@ -87,17 +87,20 @@ class Block(Value):
         # ohkayyyy. now there is *no stack*. have to invent temporaries.
         self.num_locals = 0
         self.constants = []
-        self.arg_names = []
+        self.local_names = []
         self.frame_size = 0 # num_args + num_locals
         # constants
         # locals
+
+    def __repr__(self):
+        return "<Block {!r}>".format(self.debug_name)
 
     def compile(self, tree, env=None, args=None):
         if env is None:
             env = Env()
 
         if args:
-            self.arg_names = args
+            self.local_names = args
             self.num_locals = max(0, len(args))
 
         self.compile_node(tree, env)
@@ -135,7 +138,11 @@ class Block(Value):
         assert False, node.__class__
 
     def get(self, name, env):
-        return self.arg_names.index(name)
+        if name in self.local_names:
+            return self.local_names.index(name)
+
+        # TODO non-arg names
+        return self.constant(env.lookup(name))
 
     def constant(self, value):
         n = len(self.constants)
@@ -148,7 +155,7 @@ class Block(Value):
         name = call.func
         if name == PROGRAM or name == BLOCK:
             last = self.seq(call.args, env)
-            self.emit(Op.RET, 0, last, 0)
+            self.emit(Op.RET, 0, last + 1, 0)
             return -1
         elif name == DEFINE:
             return self.define(call.args, env)
@@ -172,7 +179,7 @@ class Block(Value):
         args = [self.compile_node(arg, env) for arg in args]
         out = self._tmp()
         for value in args:
-            self.emit(Op.ARG, 0, value)
+            self.emit(Op.ARG, 0, value, 0)
         self.emit(Op.CALL, out, name, 0)
         return out
 
@@ -250,9 +257,13 @@ class Runtime: # TODO -> Thread?
                 if len(self.frames) == 0:
                     return
                 frame = self.frames.pop()
+                print
+                print '--ret--'
             elif next_ != frame: # CALL
                 self.frames.append(frame)
                 frame = next_
+                print
+                print '--call--'
 
     def handle_bytecode(self, code, next_instr):
         next_instr = self.dispatch_bytecode(code, next_instr)
@@ -278,7 +289,7 @@ class Frame:
         code = self.code
         top = self.top
 
-        print '   ', stack
+        print '   ', stack[top:]
         next_instr = r_uint(intmask(self.next_instr))
         opcode = ord(code[next_instr + 3])
 
@@ -296,13 +307,16 @@ class Frame:
         # nb. should translate into a switch()
 
         if opcode == Op.RET:
-            stack[self.result] = stack[top + b]
+            if b == 0:
+                stack[self.result] = None
+            else:
+                stack[self.result] = stack[top + b - 1]
             while len(stack) > top:
                 stack.pop()
             return None
 
         elif opcode == Op.ARG:
-            stack.append(stack[a])
+            stack.append(stack[top + b])
 
         elif opcode == Op.CALL:
             out = top + a
