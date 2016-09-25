@@ -473,7 +473,6 @@ def parse_and_run(source, debug=False):
 
     bytecode = Block('program')
     env = bytecode.compile(tree)
-    bytecode._print()
 
     r = Runtime()
     r.run(bytecode, env)
