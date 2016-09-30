@@ -68,15 +68,20 @@ class Error(Tree):
 
 from .parser import Grammar, Rule, grammar_parse
 
-
-def ws(symbols):
+def between(thing, symbols):
     assert len(symbols)
     out = []
     out.append(symbols[0])
     for tag in symbols[1:]:
-        out.append(Word.WS)
+        out.append(thing)
         out.append(tag)
     return out
+
+def ws(symbols):
+    return between(Word.WS, symbols)
+
+def ws_not_null(symbols):
+    return between(Word.WS_NOT_NULL, symbols)
 
 
 class Macro:
@@ -357,7 +362,9 @@ class Define(Macro):
         args = Define.current_definition_args.pop()
         return Call(DEFINE, type_, [func] + args + [values[4]])
 
-grammar.add(Line, ws([Word.word("define"), Seq.get(Spec), Type.BLOCK]), Define)
+grammar.add(Line, ws_not_null([
+    Word.word("define"), Seq.get(Spec), Type.BLOCK,
+]), Define)
 
 
 # Let
@@ -385,7 +392,7 @@ IDEN = Function('iden')
 grammar.add(Seq.get(Iden), [Iden], StartList(IDEN))
 grammar.add(Seq.get(Iden), [Seq.get(Iden), Iden], ContinueList(IDEN))
 
-grammar.add(Line, ws([
+grammar.add(Line, ws_not_null([
     Word.word("let"), Seq.get(Iden), Word.word("="), Type.ANY
 ]), Let)
 

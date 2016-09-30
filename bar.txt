@@ -1,11 +1,12 @@
 
-let foo = 2 + 3
+    let foo = 2 + 3
 
-define thing Int:n {
-    let pi = 3
-    pi + pi + n
-}
+    define thing Int:n {
+        let pi = 3
+        pi + pi + n
+    }
 
-10 + foo
+    10 + foo
 
-thing 1
+    thing 1
+
