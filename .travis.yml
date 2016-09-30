@@ -1,5 +1,8 @@
 install: make pypy
-script: make
+script:
+- make test-cpython
+- make test
+- make nfs
 compiler: clang
 language: python
 deploy:

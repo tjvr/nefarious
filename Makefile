@@ -8,9 +8,11 @@ ifeq ($(CPYTHON),)
 endif
 
 ifeq ($(PYPY_EXECUTABLE),)
-	TESTINTERP = $(CPYTHON)
+	TESTINTERP := $(CPYTHON)
+	PYNAME := "CPython"
 else
-	TESTINTERP = $(PYPY_EXECUTABLE)
+	TESTINTERP := $(PYPY_EXECUTABLE)
+	PYNAME := "PyPy"
 endif
 
 # translation is supposed to be faster under pypy
@@ -46,9 +48,12 @@ nfs-interp:
 	$(TESTINTERP) -m nefarious bar.txt
 
 test:
-	@echo Running tests...
+	@echo Running tests \(using $(PYNAME)\)...
 	$(TESTINTERP) -m unittest --buffer tests
 	@echo Tests passed!
+test-cpython:
+	@echo Running tests \(force CPython\)...
+	$(CPYTHON) -m unittest --buffer tests.compiled
 test-nfs:
 	@echo Testing compiled binary...
 	$(TESTINTERP) -m unittest --buffer tests.compiled
