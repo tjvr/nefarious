@@ -430,22 +430,28 @@ grammar.add(Int, [Word.DIGITS], ParseInt)
 Bool = Type.get('Bool')
 class W_Bool(Value):
     type = Bool
-    def __init__(self, value):
-        assert isinstance(value, bool)
-        self.value = value
+    def __init__(self):
+        assert False
 
     def __repr__(self):
         return 'W_Bool({})'.format(self.sexpr())
 
-    def sexpr(self):
-        return 'yes' if self.value else 'no'
-    
     @staticmethod
     def get(value):
         return W_Bool.TRUE if value else W_Bool.FALSE
 
-W_Bool.TRUE = W_Bool(True)
-W_Bool.FALSE = W_Bool(False)
+class W_True(W_Bool):
+    value = True
+    def __init__(self): pass
+    def sexpr(self): return 'yes'
+
+class W_False(W_Bool):
+    value = False
+    def __init__(self): pass
+    def sexpr(self): return 'no'
+
+W_Bool.TRUE = W_True()
+W_Bool.FALSE = W_False()
 
 grammar.add(Bool, [Word.word("yes")], Literal(W_Bool.TRUE))
 grammar.add(Bool, [Word.word("no")], Literal(W_Bool.FALSE))
@@ -456,8 +462,14 @@ grammar.add(Bool, [Word.word("no")], Literal(W_Bool.FALSE))
 #grammar.add(Int, [Word.DIGITS, Word.word("."), Word.DIGITS], ParseDecimal)
 # TODO W_Decimal
 
+
+
+# Text
+
 Text = Type.get('Text')
-Bool = Type.get('Bool')
+
+# TODO W_Text (using ropes!)
+
 add_type(Int)
 add_type(Text)
 add_type(Bool)
