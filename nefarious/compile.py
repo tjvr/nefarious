@@ -87,7 +87,7 @@ class Block(Value):
         # ohkayyyy. now there is *no stack*. have to invent temporaries.
         self.num_locals = 0
         self.constants = []
-        self.local_names = []
+        self.local_names = {}
         self.frame_size = 0 # num_args + num_locals
         # constants
         # locals
@@ -100,8 +100,9 @@ class Block(Value):
             env = Env()
 
         if args:
-            self.local_names = args
-            self.num_locals = max(0, len(args))
+            for name in args:
+                self.local_names[name] = self._tmp()
+            assert self.num_locals == len(args)
 
         self.compile_node(tree, env)
 
@@ -126,7 +127,7 @@ class Block(Value):
             self.opcodes.append(chr(opcode & 0xff))
 
     def move(self, dest, src):
-        self.emit(Op.MOVE, dest, src)
+        self.emit(Op.MOVE, dest, src, 0)
 
     def compile_node(self, node, env):
         if isinstance(node, Name):
@@ -137,9 +138,24 @@ class Block(Value):
             return self.compile_call(node, env)
         assert False, node.__class__
 
+    def compile_call(self, call, env):
+        name = call.func
+        if name == PROGRAM or name == BLOCK:
+            last = self.seq(call.args, env)
+            self.emit(Op.RET, 0, last + 1, 0)
+            return -1
+        elif name == LET:
+            return self.let(call.args, env)
+        elif name == DEFINE:
+            return self.define(call.args, env)
+        elif name in builtins:
+            return self.builtin(name, call.args, env)
+        else:
+            return self.call(name, call.args, env)
+
     def get(self, name, env):
         if name in self.local_names:
-            return self.local_names.index(name)
+            return self.local_names[name]
 
         # TODO non-arg names
         return self.constant(env.lookup(name))
@@ -151,18 +167,13 @@ class Block(Value):
         self.emit(Op.LOAD_CONSTANT, n, out)
         return out
 
-    def compile_call(self, call, env):
-        name = call.func
-        if name == PROGRAM or name == BLOCK:
-            last = self.seq(call.args, env)
-            self.emit(Op.RET, 0, last + 1, 0)
-            return -1
-        elif name == DEFINE:
-            return self.define(call.args, env)
-        elif name in builtins:
-            return self.builtin(name, call.args, env)
-        else:
-            return self.call(name, call.args, env)
+    def let(self, args, env):
+        name, expr = list(args)
+        value = self.compile_node(expr, env)
+        reg = self._tmp()
+        self.local_names[name] = reg
+        self.move(reg, value)
+        return -1
 
     def define(self, args, env):
         args = list(args)
@@ -202,7 +213,6 @@ class Block(Value):
         for line in lines:
             last = self.compile_node(line, env)
         return last
-
 
 class Closure:
     def __init__(self, block, env):
@@ -247,7 +257,7 @@ class Runtime: # TODO -> Thread?
         print
         assert len(self.registers) == 1
         result = self.registers[0]
-        print result
+        print result.sexpr()
 
     def execute(self):
         frame = self.frames.pop()

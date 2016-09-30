@@ -1,7 +1,11 @@
 
-define Int:x add Int:y {
-  x + y
+let foo = 2 + 3
+
+define thing Int:n {
+    let pi = 3
+    pi + pi + n
 }
 
-1 add 2 add 3
+10 + foo
 
+thing 1
