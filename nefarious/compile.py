@@ -153,13 +153,31 @@ class Block(Value):
             self.emit(Op.RET, 0, last + 1, 0)
             return -1
         elif name == LET:
-            return self.let(call.args, env)
+            self.let(call.args, env)
+            return -1
+        elif name == VAR:
+            if len(call.args) > 1:
+                name, expr = call.args
+                self.let([name, W_Null.NULL], env)
+                self.set([name, expr], env)
+            else:
+                name, = call.args
+                self.let([name, W_Null.NULL], env)
+            # TODO W_Var
+            return -1
+        elif name == SET:
+            self.set(call.args, env)
+            return -1
         elif name == DEFINE:
-            return self.define(call.args, env)
+            self.define(call.args, env)
+            return -1
         elif name in builtins:
             return self.builtin(name, call.args, env)
         else:
             return self.call(name, call.args, env)
+
+    def none(self):
+        return self.constant(None)
 
     def get(self, name, env):
         if name in self.local_names:
@@ -181,7 +199,12 @@ class Block(Value):
         reg = self._tmp()
         self.local_names[name] = reg
         self.move(reg, value)
-        return -1
+
+    def set(self, args, env):
+        name, expr = list(args)
+        value = self.compile_node(expr, env)
+        reg = self.local_names[name]
+        self.move(reg, value)
 
     def define(self, args, env):
         args = list(args)
@@ -191,7 +214,6 @@ class Block(Value):
         func = Block(name.name)
         env.set(name, func)
         func.compile(block, Env(env), args)
-        return -1
 
     def call(self, name, args, env):
         name = self.compile_node(name, env)

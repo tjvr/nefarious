@@ -369,7 +369,6 @@ grammar.add(Line, ws_not_null([
 
 # Let
 
-
 LET = Function("let")
 
 @singleton
@@ -382,10 +381,9 @@ class Let(Macro):
         for iden in identifier:
             assert isinstance(iden, Word)
             name += iden.value
+
         var = Name(value.type, name)
-
         grammar.add(value.type, identifier, Literal(var))
-
         return Call(LET, type_, [var, value])
 
 IDEN = Function('iden')
@@ -395,6 +393,46 @@ grammar.add(Seq.get(Iden), [Seq.get(Iden), Iden], ContinueList(IDEN))
 grammar.add(Line, ws_not_null([
     Word.word("let"), Seq.get(Iden), Word.word("="), Type.ANY
 ]), Let)
+
+
+# Var
+
+Var = Type.get("Var")
+VAR = Function("var")
+
+@singleton
+class Declare(Macro):
+    def build(self, values, type_):
+        identifier = values[2].args
+        name = ""
+        for iden in identifier:
+            assert isinstance(iden, Word)
+            name += iden.value
+
+        var = Name(Generic.ALPHA, name)
+        grammar.add(Generic.ALPHA, identifier, Literal(var))
+        grammar.add(Var, identifier, Literal(var))
+
+        if len(values) > 3:
+            value = values[7]
+            return Call(VAR, type_, [var, value])
+        else:
+            return Call(VAR, type_, [var])
+
+grammar.add(Line, [
+    Word.word("var"), Word.WS_NOT_NULL, Seq.get(Iden)
+], Declare)
+grammar.add(Line, [
+    Word.word("var"), Word.WS_NOT_NULL, Seq.get(Iden), Word.WS_NOT_NULL, Word.word(":"), Word.word("="), Word.WS_NOT_NULL, Type.ANY
+], Declare)
+
+
+SET = Function("set")
+
+grammar.add(Line, [
+    Var, Word.WS_NOT_NULL, Word.word(":"), Word.word("="), Word.WS_NOT_NULL, Type.ANY
+], CallMacro(SET, [0, 5]))
+
 
 
 
@@ -456,6 +494,16 @@ W_Bool.FALSE = W_False()
 grammar.add(Bool, [Word.word("yes")], Literal(W_Bool.TRUE))
 grammar.add(Bool, [Word.word("no")], Literal(W_Bool.FALSE))
 
+
+# Null
+# TODO ditch in favour of Options
+
+class W_Null(Value):
+    def __init__(self): pass
+    def sexpr(self): return 'null'
+W_Null.NULL = W_Null()
+
+grammar.add(Bool, [Word.word("null")], Literal(W_Null.NULL))
 
 # Decimal
 
