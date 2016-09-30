@@ -58,8 +58,9 @@ class Op:
         return code in Op._ops
 
 # 2 args: Bx C
-Op.JUMP_IF = 4
-Op.LOAD_CONSTANT = 5
+Op.NOP = 1
+Op.JUMP_UNLESS = 4
+Op.LOAD_CONSTANT = 6
 
 # 3 args: A B C
 HAVE_OUTPUT = 16
@@ -69,6 +70,7 @@ Op.RET = 18
 Op.MOVE = 24        # MOVE dest src _
 Op.INT_ADD = 49     # INT_ADD result x y
 Op.INT_SUB = 50     # INT_SUB result x y
+Op.INT_LT = 51      # INT_LT _ x y
 
 for key in Op.__dict__:
     if key.isalpha and key.isupper():
@@ -115,6 +117,7 @@ class Block(Value):
         if c is -1:
             b, c = a, b
         assert Op.is_op(opcode), opcode
+        index = len(self.opcodes)
         if opcode >= HAVE_OUTPUT:
             self.opcodes.append(chr(a & 0xff))
             self.opcodes.append(chr(b & 0xff))
@@ -125,6 +128,11 @@ class Block(Value):
             self.opcodes.append(chr(b & 0xff))
             self.opcodes.append(chr(c & 0xff))
             self.opcodes.append(chr(opcode & 0xff))
+        return index
+
+    def backpatch(self, index, bx):
+        self.opcodes[index + 0] = chr((bx >> 8) & 0xff)
+        self.opcodes[index + 1] = chr(bx & 0xff)
 
     def move(self, dest, src):
         self.emit(Op.MOVE, dest, src, 0)
@@ -195,11 +203,41 @@ class Block(Value):
         return out
 
     def builtin(self, name, args, env):
+        if name == IF:
+            test, te, fe = args
+            test = self.compile_node(test, env)
+            out = self._tmp()
+
+            start = self.emit(Op.JUMP_UNLESS, -1, test + 1)
+            tv = self.compile_node(te, env)
+            self.move(out, tv)
+
+            middle = self.emit(Op.JUMP_UNLESS, -1, 0)
+            fv = self.compile_node(fe, env)
+            self.move(out, fv)
+
+            end = self.emit(Op.NOP, 0, 0)
+
+            self.backpatch(start, middle - start + 4)
+            self.backpatch(middle, end - middle + 4)
+
+            return out
+
         args = [self.compile_node(arg, env) for arg in args]
         if name == ADD:
             a, b = args
             out = self._tmp()
             self.emit(Op.INT_ADD, out, a, b)
+            return out
+        elif name == SUB:
+            a, b = args
+            out = self._tmp()
+            self.emit(Op.INT_SUB, out, a, b)
+            return out
+        elif name == LT:
+            a, b = args
+            out = self._tmp()
+            self.emit(Op.INT_LT, out, a, b)
             return out
         assert False, name
 
@@ -240,7 +278,7 @@ def jitpolicy(driver):
 def sint_16(chars):
     if we_are_translated():
         from rpython.rlib.rstruct.runpack import runpack
-        return runpack('>h', chars)
+        return r_int(runpack('>h', chars))
     else:
         return struct.unpack('>h', chars)[0]
 
@@ -257,7 +295,8 @@ class Runtime: # TODO -> Thread?
         print
         assert len(self.registers) == 1
         result = self.registers[0]
-        print result.sexpr()
+        if result is not None:
+            print result.sexpr()
 
     def execute(self):
         frame = self.frames.pop()
@@ -339,18 +378,44 @@ class Frame:
                 stack.append(None)
             return frame
 
+        elif opcode == Op.JUMP_UNLESS:
+            if c == 0:
+                jump = True
+            else:
+                cond = stack[top + c - 1]
+                assert isinstance(cond, W_Bool)
+                jump = not cond.value
+            if jump:
+                print '==jump ' + str(bx) + ' =='
+                target = intmask(next_instr) + bx
+                assert target >= 0
+                self.next_instr = target
+
+        elif opcode == Op.NOP:
+            pass
+
         elif opcode == Op.INT_ADD:
             stack[top + a] = self.INT_ADD(stack[top + b], stack[top + c])
+        elif opcode == Op.INT_SUB:
+            stack[top + a] = self.INT_SUB(stack[top + b], stack[top + c])
+        elif opcode == Op.INT_LT:
+            stack[top + a] = self.INT_LT(stack[top + b], stack[top + c])
         elif opcode == Op.MOVE:
             stack[top + a] = stack[top + b]
         elif opcode == Op.LOAD_CONSTANT:
             stack[top + c] = self.constants[bx]
-
+        else:
+            raise NotImplementedError(Op.str(opcode))
         return self
         #if jit.we_are_jitted():
         #    return next_instr
 
+
+    # TODO bigints
     def INT_ADD(self, x, y):
-        # TODO bigints
         return W_Int(x.value + y.value)
+    def INT_SUB(self, x, y):
+        return W_Int(x.value - y.value)
+    def INT_LT(self, x, y):
+        return W_Bool.get(x.value < y.value)
 

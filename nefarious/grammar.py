@@ -424,6 +424,33 @@ class ParseInt(Macro):
         return W_Int(int(digits.value))
 grammar.add(Int, [Word.DIGITS], ParseInt)
 
+
+# Bool
+
+Bool = Type.get('Bool')
+class W_Bool(Value):
+    type = Bool
+    def __init__(self, value):
+        assert isinstance(value, bool)
+        self.value = value
+
+    def __repr__(self):
+        return 'W_Bool({})'.format(self.sexpr())
+
+    def sexpr(self):
+        return 'yes' if self.value else 'no'
+    
+    @staticmethod
+    def get(value):
+        return W_Bool.TRUE if value else W_Bool.FALSE
+
+W_Bool.TRUE = W_Bool(True)
+W_Bool.FALSE = W_Bool(False)
+
+grammar.add(Bool, [Word.word("yes")], Literal(W_Bool.TRUE))
+grammar.add(Bool, [Word.word("no")], Literal(W_Bool.FALSE))
+
+
 # Decimal
 
 #grammar.add(Int, [Word.DIGITS, Word.word("."), Word.DIGITS], ParseDecimal)

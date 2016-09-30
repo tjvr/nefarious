@@ -1,12 +1,9 @@
 
-    let foo = 2 + 3
+define fib Int:n {
+    if n < 2 then 1 else (fib (n - 1)) + (fib (n - 2))
+}
 
-    define thing Int:n {
-        let pi = 3
-        pi + pi + n
-    }
+if 1 < 2 then 10 else 20
 
-    10 + foo
-
-    thing 1
+fib 5
 

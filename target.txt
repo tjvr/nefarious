@@ -1,0 +1,62 @@
+
+define Int:a + Int:b {
+    var v
+    INT_ADD v a b
+    RETURN Int:v
+}
+
+define Int:a < Int:b {
+    var v
+    INT_LT v a b
+    RETURN Bool:v
+}
+
+define if Bool:cond then (Uneval T):tv else (Uneval T):fv {
+    var v
+    JUMP_UNLESS iffalse cond
+    CALL v tv
+    RETURN T:v
+label iffalse
+    CALL v fv
+    RETURN T:v
+}
+
+define while (Uneval Bool):cond Block:body {
+    var v
+label entry
+    CALL v cond
+    JUMP_UNLESS end v
+    CALL _ body
+    JUMP entry
+label end
+}
+
+define for (Upvar T):index in (List T):list Block:Body {
+    index := 1
+    var stop?
+label loop
+    INT_GT stop? index (length of list)
+    JUMP_IF end stop?
+    var := index
+    CALL _ body
+    index := index + 1
+    JUMP loop
+label end
+}
+
+define map (Block T):func over List:list {
+    var stop?
+    var index := 1
+    var output := empty list
+    var item
+label loop
+    INT_GT stop? index (length of list)
+    JUMP_IF end stop?
+    LIST_GET item list index
+    ARG item
+    CALL item func
+    LIST_ADD output item
+label end
+    RETURN (List T):output
+}
+
