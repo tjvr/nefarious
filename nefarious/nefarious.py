@@ -40,11 +40,11 @@ def run(fp, parse_only):
 
 def entry_point(argv):
     parse_only = False
-    if argv[1] == '--parse':
-        argv.pop(1)
-        parse_only = True
-
     try:
+        if argv[1] == '--parse':
+            argv.pop(1)
+            parse_only = True
+
         filename = argv[1]
     except IndexError:
         print "You must supply a filename"
