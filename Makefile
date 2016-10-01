@@ -53,7 +53,7 @@ test:
 	@echo Tests passed!
 test-cpython:
 	@echo Running tests \(force CPython\)...
-	$(CPYTHON) -m unittest --buffer tests.compiled
+	$(CPYTHON) -m unittest --buffer tests
 test-nfs:
 	@echo Testing compiled binary...
 	$(TESTINTERP) -m unittest --buffer tests.compiled

@@ -1,4 +1,16 @@
 
+define Int:a + Int:b { INT_ADD a b }
+define Int:a - Int:b { INT_SUB a b }
+define Int:a < Int:b { INT_LT a b }
+
+
+
+
+
+
+
+//define Int:a = Int:b { INT_EQ a b }
+
 define Any:a = Any:b {
     return (EQUAL a b)
 }

@@ -44,13 +44,10 @@ class Block(Value):
         self.opcodes = []
         self.code = None
 
-        # ohkayyyy. now there is *no stack*. have to invent temporaries.
+        self.is_primitive = True
         self.num_locals = 0
         self.constants = []
         self.local_names = {}
-        self.frame_size = 0 # num_args + num_locals
-        # constants
-        # locals
 
     def __repr__(self):
         return "<Block {r}>".format(self.debug_name)

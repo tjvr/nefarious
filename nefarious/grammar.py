@@ -551,7 +551,9 @@ class ByteCode(Macro):
 
     def build(self, values, type_):
         args = [(None if index == -1 else values[index]) for index in self.arg_indexes]
-        return Instruction(type_, self.opcode, *args)
+        assert len(args) == 3
+        a, b, c = args
+        return Instruction(type_, self.opcode, a, b, c)
 
 class Instruction(Tree):
     def __init__(self, type_, opcode, a=None, b=None, c=None):
