@@ -10,6 +10,7 @@ except ImportError:
 # from rpython.rlib.rbigint import ...
 
 from .grammar import *
+from .ops import Op
 
 
 
@@ -35,49 +36,6 @@ class Env:
         assert isinstance(name, Name)
         self.names[name] = value
 
-
-
-builtins = {
-    IF: None,
-    LT: None,
-    ADD: None,
-    SUB: None,
-}
-
-
-
-class Op:
-    _ops = {}
-
-    @staticmethod
-    def str(code):
-        return Op._ops[code]
-
-    @staticmethod
-    def is_op(code):
-        return code in Op._ops
-
-# 2 args: Bx C
-Op.NOP = 1
-Op.JUMP_UNLESS = 4
-Op.LOAD_CONSTANT = 6
-
-# 3 args: A B C
-HAVE_OUTPUT = 16
-Op.CALL = 16
-Op.ARG = 17
-Op.RETURN = 18
-Op.MOVE = 24        # MOVE dest src _
-Op.INT_ADD = 49     # INT_ADD result x y
-Op.INT_SUB = 50     # INT_SUB result x y
-Op.INT_LT = 51      # INT_LT _ x y
-
-for key in Op.__dict__:
-    if key.isalpha and key.isupper():
-        value = getattr(Op, key)
-        Op._ops[value] = key
-
-
 class Block(Value):
     def __init__(self, name):
         assert isinstance(name, str)
@@ -95,7 +53,10 @@ class Block(Value):
         # locals
 
     def __repr__(self):
-        return "<Block {!r}>".format(self.debug_name)
+        return "<Block {r}>".format(self.debug_name)
+
+    def sexpr(self):
+        return "<" + self.debug_name + ">"
 
     def compile(self, tree, env=None, args=None):
         if env is None:
@@ -144,6 +105,8 @@ class Block(Value):
             return self.constant(node)
         elif isinstance(node, Call):
             return self.compile_call(node, env)
+        elif isinstance(node, Instruction):
+            return self.builtin(node, env)
         assert False, node.__class__
 
     def compile_call(self, call, env):
@@ -174,8 +137,6 @@ class Block(Value):
         elif name == RETURN:
             self.return_(call.args, env)
             return -1
-        elif name in builtins:
-            return self.builtin(name, call.args, env)
         else:
             return self.call(name, call.args, env)
 
@@ -210,9 +171,12 @@ class Block(Value):
         self.move(reg, value)
 
     def return_(self, args, env):
-        expr, = list(args)
-        value = self.compile_node(expr, env)
-        self.emit(Op.RETURN, 0, value + 1, 0)
+        if len(args):
+            expr, = list(args)
+            value = self.compile_node(expr, env)
+            self.emit(Op.RETURN, 0, value + 1, 0)
+        else:
+            self.emit(Op.RETURN, 0, 0, 0)
 
     def define(self, args, env):
         args = list(args)
@@ -232,7 +196,14 @@ class Block(Value):
         self.emit(Op.CALL, out, name, 0)
         return out
 
-    def builtin(self, name, args, env):
+    def builtin(self, node, env):
+        return node.emit(self, env)
+
+        if node.opcode < HAVE_OUTPUT:
+            self.emit(node.opcode, out, node.bx, node.c)
+        else:
+            self.emit(node.opcode, out, node.a, node.b, node.c)
+
         if name == IF:
             test, te, fe = args
             test = self.compile_node(test, env)
@@ -375,14 +346,14 @@ class Frame:
             a = ord(code[next_instr])
             b = ord(code[next_instr + 1])
             c = ord(code[next_instr + 2])
-            print 'r'+str(a), ':=', Op.str(opcode), 'r'+str(b), 'r'+str(c)
+            print 'v'+str(a), ':=', Op.str(opcode), 'v'+str(b), 'v'+str(c)
         else:
             bx = sint_16(code[next_instr:next_instr + 2])
             c = ord(code[next_instr + 2])
             if opcode == Op.LOAD_CONSTANT:
-                print 'r'+str(c), ':=', Op.str(opcode), bx
+                print 'v'+str(c), ':=', Op.str(opcode), self.constants[bx].sexpr()
             else:
-                print Op.str(opcode), 'r'+str(c), '+'+str(bx)
+                print Op.str(opcode), 'v'+str(c), '+'+str(bx)
         self.next_instr += 4
 
         # nb. should translate into a switch()

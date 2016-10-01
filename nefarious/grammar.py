@@ -213,7 +213,6 @@ grammar.add(Type.TYPE, ws([Word.word("("), Word.word("List"), Type.TYPE, Word.wo
 
 Line = Type.get('Line')
 grammar.add(Line, [Type.ANY], Identity)
-grammar.add(Line, [Type.ANY], Identity)
 
 LINES = Function('Lines') # Internal
 
@@ -438,9 +437,15 @@ grammar.add(Line, [
 
 RETURN = Function("return")
 
+grammar.add(Line, [Word.word("return")], CallMacro(RETURN, []))
+
 grammar.add(Line, ws_not_null([
     Word.word("return"), Type.ANY,
 ]), CallMacro(RETURN, [2]))
+
+#grammar.add(Line, [
+#    Word.word("RETURN"), Word.WS, Type.TYPE, Word.word(":"), Type.ANY,
+#], ByteCode(Op.RETURN))
 
 
 
@@ -534,21 +539,79 @@ add_type(Bool)
 
 
 
-# Language stuff.
-
-ADD = Function("+")
-SUB = Function("-")
-p = grammar.add(Int, ws([Int, Word.word("+"), Int]), CallMacro(ADD, [0, 4])).priority
-grammar.add(Int, ws([Int, Word.word("-"), Int]), CallMacro(SUB, [0, 4])).priority = p
-
-LT = Function("<")
-grammar.add(Bool, ws([Int, Word.word("<"), Int]), CallMacro(LT, [0, 4]))
+# Bytecodes
 
 IF = Function("if")
+from .ops import *
+
+class ByteCode(Macro):
+    def __init__(self, opcode, arg_indexes):
+        self.opcode = opcode
+        self.arg_indexes = arg_indexes
+
+    def build(self, values, type_):
+        args = [(None if index == -1 else values[index]) for index in self.arg_indexes]
+        return Instruction(type_, self.opcode, *args)
+
+class Instruction(Tree):
+    def __init__(self, type_, opcode, a=None, b=None, c=None):
+        self.type = type_
+        self.opcode = opcode
+        if opcode < HAVE_OUTPUT:
+            self.bx = b
+            self.c = a
+        else:
+            self.a = a
+            self.b = b
+            self.c = c
+
+    def __repr__(self):
+        return "<Instruction{}>".format(self.sexpr())
+
+    def sexpr(self):
+        if self.opcode < HAVE_OUTPUT:
+            args = [self.bx, self.c]
+        else:
+            args = [self.a, self.b, self.c]
+        return "(" + Op.str(self.opcode) + " " + " ".join([("None" if a is None else a.sexpr()) for a in args]) + ")"
+
+    def emit(self, block, env):
+        if self.opcode < HAVE_OUTPUT:
+            bx = block.compile_node(self.bx, env)
+            c = block.compile_node(self.c, env)
+            block.emit(self.opcode, bx, c)
+            return -1
+        else:
+            if self.a is None:
+                a = block._tmp()
+            else:
+                a = block.compile_node(self.a, env)
+            b = block.compile_node(self.b, env)
+            c = block.compile_node(self.c, env)
+            block.emit(self.opcode, a, b, c)
+            return a
+
+grammar.add(Line, ws([Word.word("NOP")]), ByteCode(Op.NOP, []))
+
+#Label = Type.get('Label')
+#grammar.add(Line, ws([Word.word("label"), Word.WORD]), Label)
+#grammar.add(Line, ws([Word.word("JUMP"), Label]), Jump(Op.JUMP))
+#grammar.add(Line, ws([Word.word("JUMP"), Bool, Label]), Jump(Op.JUMP_IF))
+#grammar.add(Line, ws([Word.word("JUMP"), Bool, Label]), Jump(Op.JUMP_UNLESS))
+
+# LOAD_CONSTANT ?
+
+grammar.add(Line, ws([Word.word("ARG"), Type.ANY]), ByteCode(Op.ARG, [-1, 2, -1]))
+grammar.add(Generic.ALPHA, ws([Word.word("CALL"), Type.FUNC]), ByteCode(Op.CALL, [-1, 2, -1]))
+
+grammar.add(Int, ws([Word.word("INT_ADD"), Int, Int]), ByteCode(Op.INT_ADD, [-1, 2, 4]))
+grammar.add(Int, ws([Word.word("INT_SUB"), Int, Int]), ByteCode(Op.INT_SUB, [-1, 2, 4]))
+grammar.add(Bool, ws([Word.word("INT_LT"), Int, Int]), ByteCode(Op.INT_LT, [-1, 2, 4]))
+
+
 #grammar.add(ALPHA, [ALPHA, Word.word("if"), Bool, Word.word("else"), ALPHA], CallMacro(IF, [4, 0, 8]))
 # TODO: don't seem to support left-recursive generics.
 grammar.add(ALPHA, ws([Word.word("if"), Bool, Word.word("then"), ALPHA, Word.word("else"), ALPHA]), CallMacro(IF, [2, 6, 10]))
-# TODO short-circuiting (uneval) `if`
 
 # TODO consider binding user functions with lower precedence...
 

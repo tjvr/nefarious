@@ -1,17 +1,15 @@
 
 var foo := 4
-foo := 2 + 3
-var bar
-bar := 10
-foo
-if bar < 7 then 1 else 2
+(INT_LT 7 (INT_SUB (INT_ADD foo 2) 1))
 
-let cheese = 7
-cheese + bar
-
-define fib Int:n {
-    if n < 2 then return 1 else return 20
+define poop {
+    return 4
+    return 6
 }
 
-fib 10
+define Int:a + Int:b { INT_ADD a b }
+define Int:a - Int:b { INT_SUB a b }
+define Int:a < Int:b { INT_LT a b }
+
+1 + 2 < 4
 
