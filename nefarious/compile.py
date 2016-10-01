@@ -66,7 +66,7 @@ Op.LOAD_CONSTANT = 6
 HAVE_OUTPUT = 16
 Op.CALL = 16
 Op.ARG = 17
-Op.RET = 18
+Op.RETURN = 18
 Op.MOVE = 24        # MOVE dest src _
 Op.INT_ADD = 49     # INT_ADD result x y
 Op.INT_SUB = 50     # INT_SUB result x y
@@ -150,7 +150,7 @@ class Block(Value):
         name = call.func
         if name == PROGRAM or name == BLOCK:
             last = self.seq(call.args, env)
-            self.emit(Op.RET, 0, last + 1, 0)
+            self.emit(Op.RETURN, 0, last + 1, 0)
             return -1
         elif name == LET:
             self.let(call.args, env)
@@ -170,6 +170,9 @@ class Block(Value):
             return -1
         elif name == DEFINE:
             self.define(call.args, env)
+            return -1
+        elif name == RETURN:
+            self.return_(call.args, env)
             return -1
         elif name in builtins:
             return self.builtin(name, call.args, env)
@@ -205,6 +208,11 @@ class Block(Value):
         value = self.compile_node(expr, env)
         reg = self.local_names[name]
         self.move(reg, value)
+
+    def return_(self, args, env):
+        expr, = list(args)
+        value = self.compile_node(expr, env)
+        self.emit(Op.RETURN, 0, value + 1, 0)
 
     def define(self, args, env):
         args = list(args)
@@ -324,7 +332,7 @@ class Runtime: # TODO -> Thread?
         frame = self.frames.pop()
         while frame:
             next_ = frame.dispatch_bytecode(self.registers)
-            if next_ is None: # RET
+            if next_ is None: # RETURN
                 if len(self.frames) == 0:
                     return
                 frame = self.frames.pop()
@@ -360,7 +368,6 @@ class Frame:
         code = self.code
         top = self.top
 
-        print '   ', stack[top:]
         next_instr = r_uint(intmask(self.next_instr))
         opcode = ord(code[next_instr + 3])
 
@@ -368,16 +375,19 @@ class Frame:
             a = ord(code[next_instr])
             b = ord(code[next_instr + 1])
             c = ord(code[next_instr + 2])
-            print Op.str(opcode), a, b, c
+            print 'r'+str(a), ':=', Op.str(opcode), 'r'+str(b), 'r'+str(c)
         else:
             bx = sint_16(code[next_instr:next_instr + 2])
             c = ord(code[next_instr + 2])
-            print Op.str(opcode), bx, c
+            if opcode == Op.LOAD_CONSTANT:
+                print 'r'+str(c), ':=', Op.str(opcode), bx
+            else:
+                print Op.str(opcode), 'r'+str(c), '+'+str(bx)
         self.next_instr += 4
 
         # nb. should translate into a switch()
 
-        if opcode == Op.RET:
+        if opcode == Op.RETURN:
             if b == 0:
                 stack[self.result] = None
             else:

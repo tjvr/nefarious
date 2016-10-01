@@ -434,6 +434,14 @@ grammar.add(Line, [
 ], CallMacro(SET, [0, 5]))
 
 
+# Return
+
+RETURN = Function("return")
+
+grammar.add(Line, ws_not_null([
+    Word.word("return"), Type.ANY,
+]), CallMacro(RETURN, [2]))
+
 
 
 # Built-ins.
@@ -448,7 +456,7 @@ class W_Int(Value):
         self.value = value
 
     def __repr__(self):
-        return str(self.value)
+        return 'W_Int({})'.format(str(self.value))
 
     def sexpr(self):
         return str(self.value)
@@ -488,11 +496,11 @@ class W_False(W_Bool):
     def __init__(self): pass
     def sexpr(self): return 'no'
 
-W_Bool.TRUE = W_True()
-W_Bool.FALSE = W_False()
+Value.TRUE = W_True()
+Value.FALSE = W_False()
 
-grammar.add(Bool, [Word.word("yes")], Literal(W_Bool.TRUE))
-grammar.add(Bool, [Word.word("no")], Literal(W_Bool.FALSE))
+grammar.add(Bool, [Word.word("yes")], Literal(Value.TRUE))
+grammar.add(Bool, [Word.word("no")], Literal(Value.FALSE))
 
 
 # Null
@@ -500,10 +508,12 @@ grammar.add(Bool, [Word.word("no")], Literal(W_Bool.FALSE))
 
 class W_Null(Value):
     def __init__(self): pass
+    def __repr__(self): return 'Value.NULL'
     def sexpr(self): return 'null'
-W_Null.NULL = W_Null()
+Value.NULL = W_Null()
 
-grammar.add(Bool, [Word.word("null")], Literal(W_Null.NULL))
+grammar.add(Bool, [Word.word("null")], Literal(Value.NULL))
+
 
 # Decimal
 
