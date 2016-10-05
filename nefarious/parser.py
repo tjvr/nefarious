@@ -412,8 +412,12 @@ def grammar_parse(source, grammar, debug=DEBUG):
     token = lexer.lex()
     index = 0
     line = ""
+    lineno = 1
     previous = None
     while token != Word.EOF:
+        if token == Word.NL:
+            lineno += 1
+
         if token != Word.NL:
             if token == Word.WS:
                 line += " "
@@ -433,7 +437,7 @@ def grammar_parse(source, grammar, debug=DEBUG):
 
         previous, column = column, Column(grammar, index + 1)
         if not column.scan(token, previous):
-            msg = "Unexpected " + token.kind + " @ " + str(index)
+            msg = "Unexpected " + token.kind + " on line " + str(lineno)
             if token.value:
                 msg += ": " + token.value
             for token in previous.wants:

@@ -58,6 +58,7 @@ class Block(Value):
         return "<" + self.debug_name + ">"
 
     def compile(self, tree, env=None, args=None):
+        print "Compiling " + tree.sexpr()
         if env is None:
             env = Env()
 
@@ -98,6 +99,7 @@ class Block(Value):
         self.emit(Op.MOVE, dest, src, 0)
 
     def compile_node(self, node, env):
+        print "Compiling node " + node.sexpr()
         if isinstance(node, Name):
             return self.get(node, env)
         elif isinstance(node, Value):
@@ -131,9 +133,13 @@ class Block(Value):
             self.emit(Op.NEW_VAR, cell, value, 0)
             self.local_names[name] = cell
             self.local_var_names[name] = None
+            print 'defining', repr(name)
+            return -1
+        elif name == GET:
+            self.get_var(call.args, env)
             return -1
         elif name == SET:
-            self.set(call.args, env)
+            self.set_var(call.args, env)
             return -1
         elif name == DEFINE:
             self.define(call.args, env)
@@ -168,8 +174,9 @@ class Block(Value):
         self.local_names[name] = reg
         self.move(reg, value)
 
-    def get_var(self, name, env):
-        assert name in self.local_names
+    def get_var(self, args, env):
+        name, = args
+        assert name in self.local_names, repr(name)
         is_var = name in self.local_var_names
         assert is_var
         out = self._tmp()
@@ -178,8 +185,6 @@ class Block(Value):
 
     def set_var(self, args, env):
         name, expr = args
-        #is_var = name in self.local_var_names
-        #assert is_var, name
         cell = self.local_names[name]
         value = self.compile_node(expr, env)
         self.emit(Op.SET, cell, value, 0)

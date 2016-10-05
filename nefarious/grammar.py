@@ -407,8 +407,6 @@ grammar.add(Line, ws_not_null([
 
 # Var
 
-GET = Function("get")
-
 Var = Internal.get("Var")
 VAR = Function("var")
 add_type(Var)
@@ -425,8 +423,7 @@ class Declare(Macro):
         var = Name(Generic.ALPHA, name)
 
         # get value -- fits every slot
-        get_var = CallMacro(GET, [0])
-        grammar.add(Generic.ALPHA, identifier, get_var)
+        grammar.add(Generic.ALPHA, identifier, GetMacro(var))
 
         # fit Var slot
         grammar.add(Var, identifier, Literal(var))
@@ -436,6 +433,15 @@ class Declare(Macro):
             return Call(VAR, type_, [var, value])
         else:
             return Call(VAR, type_, [var])
+
+GET = Function("get")
+
+class GetMacro(Macro):
+    def __init__(self, var):
+        self.var = var
+
+    def build(self, values, type_):
+        return Call(GET, type_, [self.var])
 
 grammar.add(Line, [
     Word.word("var"), Word.WS_NOT_NULL, Seq.get(Iden)
