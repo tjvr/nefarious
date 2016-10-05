@@ -36,6 +36,7 @@ class Env:
         assert isinstance(name, Name)
         self.names[name] = value
 
+
 class Block(Value):
     def __init__(self, name):
         assert isinstance(name, str)
@@ -48,9 +49,10 @@ class Block(Value):
         self.num_locals = 0
         self.constants = []
         self.local_names = {}
+        self.local_var_names = {}
 
     def __repr__(self):
-        return "<Block {r}>".format(self.debug_name)
+        return "<Block {!r}>".format(self.debug_name)
 
     def sexpr(self):
         return "<" + self.debug_name + ">"
@@ -112,18 +114,23 @@ class Block(Value):
             last = self.seq(call.args, env)
             self.emit(Op.RETURN, 0, last + 1, 0)
             return -1
+        #elif name == QUOTE:
+        #    expr, = call.args
+        #    return self.quote(expr, env)
         elif name == LET:
             self.let(call.args, env)
             return -1
         elif name == VAR:
             if len(call.args) > 1:
                 name, expr = call.args
-                self.let([name, W_Null.NULL], env)
-                self.set([name, expr], env)
+                value = 1 + self.compile_node(expr, env)
             else:
                 name, = call.args
-                self.let([name, W_Null.NULL], env)
-            # TODO W_Var
+                value = 0
+            cell = self._tmp()
+            self.emit(Op.NEW_VAR, cell, value, 0)
+            self.local_names[name] = cell
+            self.local_var_names[name] = None
             return -1
         elif name == SET:
             self.set(call.args, env)
@@ -144,7 +151,7 @@ class Block(Value):
         if name in self.local_names:
             return self.local_names[name]
 
-        # TODO non-arg names
+        # TODO can we burn Env?
         return self.constant(env.lookup(name))
 
     def constant(self, value):
@@ -155,25 +162,38 @@ class Block(Value):
         return out
 
     def let(self, args, env):
-        name, expr = list(args)
+        name, expr = args
         value = self.compile_node(expr, env)
         reg = self._tmp()
         self.local_names[name] = reg
         self.move(reg, value)
 
-    def set(self, args, env):
-        name, expr = list(args)
+    def get_var(self, name, env):
+        assert name in self.local_names
+        is_var = name in self.local_var_names
+        assert is_var
+        out = self._tmp()
+        self.emit(Op.GET, out, self.local_names[name], 0)
+        return out
+
+    def set_var(self, args, env):
+        name, expr = args
+        #is_var = name in self.local_var_names
+        #assert is_var, name
+        cell = self.local_names[name]
         value = self.compile_node(expr, env)
-        reg = self.local_names[name]
-        self.move(reg, value)
+        self.emit(Op.SET, cell, value, 0)
 
     def return_(self, args, env):
         if len(args):
-            expr, = list(args)
+            expr, = args
             value = self.compile_node(expr, env)
             self.emit(Op.RETURN, 0, value + 1, 0)
         else:
             self.emit(Op.RETURN, 0, 0, 0)
+
+    def quote(self, expr, env):
+        self.constants.append(expr)
 
     def define(self, args, env):
         args = list(args)
@@ -249,6 +269,25 @@ class Block(Value):
         for line in lines:
             last = self.compile_node(line, env)
         return last
+
+
+class W_Var:
+    """a mutable cell"""
+
+    def __init__(self):
+        self.value = Value.NULL
+
+    def __repr__(self):
+        return "<W_Var {}>".format(hex(id(self))[-6:-2])
+
+    def get(self):
+        return self.value
+
+    def set(self, value):
+        assert isinstance(value, Value), value
+        self.value = value
+
+
 
 class Closure:
     def __init__(self, block, env):
@@ -339,6 +378,7 @@ class Frame:
         next_instr = r_uint(intmask(self.next_instr))
         opcode = ord(code[next_instr + 3])
 
+        print top, stack
         if opcode >= HAVE_OUTPUT:
             a = ord(code[next_instr])
             b = ord(code[next_instr + 1])
@@ -402,6 +442,22 @@ class Frame:
             stack[top + a] = self.INT_LT(stack[top + b], stack[top + c])
         elif opcode == Op.MOVE:
             stack[top + a] = stack[top + b]
+        elif opcode == Op.NEW_VAR:
+            assert a == 0
+            stack[top + a] = cell = W_Var()
+            if b > 0:
+                value = stack[top + b - 1]
+                cell.set(value)
+        elif opcode == Op.SET:
+            cell = stack[top + a]
+            value = stack[top + b]
+            print cell, value
+            assert isinstance(cell, W_Var)
+            cell.set(value)
+        elif opcode == Op.GET:
+            cell = stack[top + b]
+            assert isinstance(cell, W_Var)
+            stack[top + a] = cell.get()
         elif opcode == Op.LOAD_CONSTANT:
             stack[top + c] = self.constants[bx]
         else:

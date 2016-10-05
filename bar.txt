@@ -1,15 +1,12 @@
 
-var foo := 4
-(INT_LT 7 (INT_SUB (INT_ADD foo 2) 1))
-
-define poop {
-    return 4
-    return 6
+define reset Var:x {
+    x := 0
 }
 
-define Int:a + Int:b { INT_ADD a b }
-define Int:a - Int:b { INT_SUB a b }
-define Int:a < Int:b { INT_LT a b }
+var y
+y := 123
 
-1 + 2 < 4
+y := 4
+reset y
+y
 

@@ -99,13 +99,19 @@ class Macro:
         grammar.restore()
 
 class CallMacro(Macro):
-    def __init__(self, call, arg_indexes):
+    def __init__(self, call, arg_indexes, uneval=None):
         assert isinstance(call, Name)
         self.call = call
         self.arg_indexes = arg_indexes
+        self.uneval = uneval
 
     def build(self, values, type_):
         args = [values[i] for i in self.arg_indexes]
+        if self.uneval is not None:
+            for index in self.uneval:
+                # type_ ?
+                pass
+                #args[index] = Call(QUOTE, type_, [args[index]])
         return Call(self.call, type_, args)
 
 # TODO CustomMacros
@@ -330,9 +336,8 @@ class Define(Macro):
         Define.current_definition_args.append(args)
 
         # Add internal (recursive) rule
-        symbols = [(s.args[0] if self._is_arg(s) else s) for s in spec]
-        arg_indexes = [index for index, s in enumerate(spec) if self._is_arg(s)]
-        grammar.add(ALPHA, symbols, CallMacro(func, arg_indexes))
+        symbols, macro = self._macro(spec, func)
+        grammar.add(ALPHA, symbols, macro)
 
     def exit(self, values, type_):
         grammar.restore()
@@ -352,9 +357,15 @@ class Define(Macro):
         # TODO check unification with `func` calls in body
 
         # Define rule
+        symbols, macro = self._macro(spec, func)
+        grammar.add(type_, symbols, macro)
+
+    def _macro(self, spec, func):
         symbols = [(s.args[0] if self._is_arg(s) else s) for s in spec]
         arg_indexes = [index for index, s in enumerate(spec) if self._is_arg(s)]
-        grammar.add(type_, symbols, CallMacro(func, arg_indexes))
+        #uneval = [arg_indexes.index(index) for index in arg_indexes
+        #          if symbols[index] == Var]
+        return symbols, CallMacro(func, arg_indexes, [])
 
     def build(self, values, type_):
         func = Define.current_definitions.pop()
@@ -396,8 +407,11 @@ grammar.add(Line, ws_not_null([
 
 # Var
 
-Var = Type.get("Var")
+GET = Function("get")
+
+Var = Internal.get("Var")
 VAR = Function("var")
+add_type(Var)
 
 @singleton
 class Declare(Macro):
@@ -409,7 +423,12 @@ class Declare(Macro):
             name += iden.value
 
         var = Name(Generic.ALPHA, name)
-        grammar.add(Generic.ALPHA, identifier, Literal(var))
+
+        # get value -- fits every slot
+        get_var = CallMacro(GET, [0])
+        grammar.add(Generic.ALPHA, identifier, get_var)
+
+        # fit Var slot
         grammar.add(Var, identifier, Literal(var))
 
         if len(values) > 3:
@@ -428,9 +447,12 @@ grammar.add(Line, [
 
 SET = Function("set")
 
+# TODO don't parse `y := 4` as (set (get y) 4)
 grammar.add(Line, [
     Var, Word.WS_NOT_NULL, Word.word(":"), Word.word("="), Word.WS_NOT_NULL, Type.ANY
 ], CallMacro(SET, [0, 5]))
+
+# TODO pass var cells by reference!
 
 
 # Return
