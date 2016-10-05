@@ -422,9 +422,6 @@ class Declare(Macro):
 
         var = Name(Generic.ALPHA, name)
 
-        # get value -- fits every slot
-        grammar.add(Generic.ALPHA, identifier, GetMacro(var))
-
         # fit Var slot
         grammar.add(Var, identifier, Literal(var))
 
@@ -434,21 +431,15 @@ class Declare(Macro):
         else:
             return Call(VAR, type_, [var])
 
-GET = Function("get")
-
-class GetMacro(Macro):
-    def __init__(self, var):
-        self.var = var
-
-    def build(self, values, type_):
-        return Call(GET, type_, [self.var])
-
 grammar.add(Line, [
     Word.word("var"), Word.WS_NOT_NULL, Seq.get(Iden)
 ], Declare)
 grammar.add(Line, [
     Word.word("var"), Word.WS_NOT_NULL, Seq.get(Iden), Word.WS_NOT_NULL, Word.word(":"), Word.word("="), Word.WS_NOT_NULL, Type.ANY
 ], Declare)
+
+GET = Function("get")
+grammar.add(Generic.ALPHA, [Var], CallMacro(GET, [0]))
 
 
 SET = Function("set")

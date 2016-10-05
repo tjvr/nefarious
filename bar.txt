@@ -1,4 +1,6 @@
 
+define Int:a + Int:b { INT_ADD a b }
+
 define reset Var:x {
     x := 0
 }

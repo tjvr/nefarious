@@ -45,11 +45,10 @@ class Block(Value):
         self.opcodes = []
         self.code = None
 
-        self.is_primitive = True
+        self.is_primitive = True # TODO inline bytecode-only functions
         self.num_locals = 0
         self.constants = []
         self.local_names = {}
-        self.local_var_names = {}
 
     def __repr__(self):
         return "<Block {!r}>".format(self.debug_name)
@@ -58,7 +57,6 @@ class Block(Value):
         return "<" + self.debug_name + ">"
 
     def compile(self, tree, env=None, args=None):
-        print "Compiling " + tree.sexpr()
         if env is None:
             env = Env()
 
@@ -98,8 +96,13 @@ class Block(Value):
     def move(self, dest, src):
         self.emit(Op.MOVE, dest, src, 0)
 
+    def compile_value_node(self, node, env):
+        # TODO remove this assertion once we're more confident
+        reg = self.compile_node(node, env)
+        assert reg != -1, "not a value: " + node.sexpr()
+        return reg
+
     def compile_node(self, node, env):
-        print "Compiling node " + node.sexpr()
         if isinstance(node, Name):
             return self.get(node, env)
         elif isinstance(node, Value):
@@ -117,8 +120,7 @@ class Block(Value):
             self.emit(Op.RETURN, 0, last + 1, 0)
             return -1
         #elif name == QUOTE:
-        #    expr, = call.args
-        #    return self.quote(expr, env)
+        # TODO I think this should compile as a constant? Or possibly a block!
         elif name == LET:
             self.let(call.args, env)
             return -1
@@ -132,12 +134,9 @@ class Block(Value):
             cell = self._tmp()
             self.emit(Op.NEW_VAR, cell, value, 0)
             self.local_names[name] = cell
-            self.local_var_names[name] = None
-            print 'defining', repr(name)
             return -1
         elif name == GET:
-            self.get_var(call.args, env)
-            return -1
+            return self.get_var(call.args, env)
         elif name == SET:
             self.set_var(call.args, env)
             return -1
@@ -177,8 +176,6 @@ class Block(Value):
     def get_var(self, args, env):
         name, = args
         assert name in self.local_names, repr(name)
-        is_var = name in self.local_var_names
-        assert is_var
         out = self._tmp()
         self.emit(Op.GET, out, self.local_names[name], 0)
         return out
@@ -211,9 +208,10 @@ class Block(Value):
 
     def call(self, name, args, env):
         name = self.compile_node(name, env)
-        args = [self.compile_node(arg, env) for arg in args]
+        args = [self.compile_value_node(arg, env) for arg in args]
         out = self._tmp()
         for value in args:
+            assert 0 <= value <= 255
             self.emit(Op.ARG, 0, value, 0)
         self.emit(Op.CALL, out, name, 0)
         return out
@@ -246,7 +244,7 @@ class Block(Value):
 
             return out
 
-        args = [self.compile_node(arg, env) for arg in args]
+        args = [self.compile_value_node(arg, env) for arg in args]
         if name == ADD:
             a, b = args
             out = self._tmp()
@@ -383,7 +381,6 @@ class Frame:
         next_instr = r_uint(intmask(self.next_instr))
         opcode = ord(code[next_instr + 3])
 
-        print top, stack
         if opcode >= HAVE_OUTPUT:
             a = ord(code[next_instr])
             b = ord(code[next_instr + 1])
@@ -456,7 +453,6 @@ class Frame:
         elif opcode == Op.SET:
             cell = stack[top + a]
             value = stack[top + b]
-            print cell, value
             assert isinstance(cell, W_Var)
             cell.set(value)
         elif opcode == Op.GET:
