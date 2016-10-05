@@ -46,13 +46,12 @@ class Call(Tree):
 
 class Value(Tree):
     def __init__(self, type_, value):
-        assert isinstance(value, str)
+        assert isinstance(desc, str)
         self.type = type_
-        self.value = value
+        self.desc = desc
 
     def sexpr(self):
-        assert isinstance(self.value, str)
-        return self.value
+        return "<Value>"
 
 
 def Function(name):

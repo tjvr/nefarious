@@ -175,7 +175,7 @@ class Block(Value):
 
     def get_var(self, args, env):
         name, = args
-        assert name in self.local_names, repr(name)
+        assert name in self.local_names, name
         out = self._tmp()
         self.emit(Op.GET, out, self.local_names[name], 0)
         return out
@@ -274,22 +274,26 @@ class Block(Value):
         return last
 
 
-class W_Var:
+class W_Var(Value):
     """a mutable cell"""
 
     def __init__(self):
-        self.value = Value.NULL
+        self.value = None
+        self.set(Value.NULL)
 
     def __repr__(self):
         return "<W_Var {}>".format(hex(id(self))[-6:-2])
 
     def get(self):
+        assert isinstance(self.value, Value)
         return self.value
 
     def set(self, value):
-        assert isinstance(value, Value), value
+        assert isinstance(value, Value)
         self.value = value
 
+    def sexpr(self):
+        return "<Var>"
 
 
 class Closure:
@@ -425,12 +429,12 @@ class Frame:
                 jump = True
             else:
                 cond = stack[top + c - 1]
-                assert isinstance(cond, W_Bool)
+                assert isinstance(cond, W_Bool), "not a bool"
                 jump = not cond.value
             if jump:
                 print '==jump ' + str(bx) + ' =='
                 target = intmask(next_instr) + bx
-                assert target >= 0
+                assert target >= 0, "jump target is negative"
                 self.next_instr = target
 
         elif opcode == Op.NOP:
@@ -445,19 +449,21 @@ class Frame:
         elif opcode == Op.MOVE:
             stack[top + a] = stack[top + b]
         elif opcode == Op.NEW_VAR:
-            assert a == 0
+            assert a == 0, "a is not zero"
             stack[top + a] = cell = W_Var()
             if b > 0:
                 value = stack[top + b - 1]
+                assert isinstance(value, Value), "not a value"
                 cell.set(value)
         elif opcode == Op.SET:
             cell = stack[top + a]
             value = stack[top + b]
-            assert isinstance(cell, W_Var)
+            assert isinstance(cell, W_Var), "not a var"
+            assert isinstance(value, Value), "not a value"
             cell.set(value)
         elif opcode == Op.GET:
             cell = stack[top + b]
-            assert isinstance(cell, W_Var)
+            assert isinstance(cell, W_Var), "not a var"
             stack[top + a] = cell.get()
         elif opcode == Op.LOAD_CONSTANT:
             stack[top + c] = self.constants[bx]
@@ -470,9 +476,17 @@ class Frame:
 
     # TODO bigints
     def INT_ADD(self, x, y):
+        assert isinstance(x, W_Int)
+        assert isinstance(y, W_Int)
         return W_Int(x.value + y.value)
+
     def INT_SUB(self, x, y):
+        assert isinstance(x, W_Int)
+        assert isinstance(y, W_Int)
         return W_Int(x.value - y.value)
+
     def INT_LT(self, x, y):
+        assert isinstance(x, W_Int)
+        assert isinstance(y, W_Int)
         return W_Bool.get(x.value < y.value)
 
