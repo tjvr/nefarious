@@ -29,7 +29,8 @@ nfs: pypy \
 		nefarious/types.py \
 		nefarious/parser.py \
 		nefarious/grammar.py \
-		nefarious/compile.py \
+		nefarious/runtime.py \
+		nefarious/builtins.py \
 		nefarious/nefarious.py
 	@echo ============================================================
 	@echo Using CPython: $(CPYTHON)

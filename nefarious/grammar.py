@@ -1,5 +1,6 @@
 
 from .types import *
+from .values import *
 from .lex import Word, Lexer
 
 
@@ -34,24 +35,24 @@ class Call(Tree):
         return "<Call {!r} {!r}>".format(self.func.name, self.args)
 
     def sexpr(self):
-        indent = " "
-        is_lines = self.func == PROGRAM or self.func == BLOCK
-        sep = "\n" if is_lines else " "
-        inner = sep.join([a.sexpr() for a in self.args])
-        if is_lines:
-            inner = indent + ("\n" + indent).join(inner.split("\n"))
-        return "(" + self.func.sexpr() + sep + inner + ")"
+        inner = " ".join([a.sexpr() for a in self.args])
+        return "(" + self.func.sexpr() + " " + inner + ")"
         #return self.type.sexpr() + ":(" + self.func.sexpr() + " " + " ".join([a.sexpr() for a in self.args]) + ")"
 
 
-class Value(Tree):
-    def __init__(self, type_, value):
-        assert isinstance(desc, str)
-        self.type = type_
-        self.desc = desc
+class Block(Tree):
+    def __init__(self, nodes):
+        assert isinstance(nodes, list)
+        for node in nodes:
+            assert isinstance(node, Tree)
+        self.nodes = nodes
 
     def sexpr(self):
-        return "<Value>"
+        indent = "  "
+        inner = " ".join([a.sexpr() for a in self.nodes])
+        inner = indent + ("\n" + indent).join(inner.split("\n"))
+        return "(block" + inner + ")"
+
 
 
 def Function(name):
@@ -232,28 +233,24 @@ grammar.add(Seq.get(Line), [Seq.get(Line), Internal.SEP, Line], ContinueList(LIN
 
 
 # Blocks
-BLOCK = Function('block')
-
 @singleton
 class BlockMacro(Macro):
     def build(self, values, type_):
-        values[2].func = BLOCK
-        return values[2]
+        return Block(values[2].args)
 grammar.add(Type.BLOCK, [Word.word("{"), Internal.SEP, Seq.get(Line), Internal.SEP, Word.word("}")], BlockMacro)
 
 @singleton
 class EmptyBlock(Macro):
     def build(self, values, type_):
-        return Call(BLOCK, type_, [])
+        return Block([])
 grammar.add(Type.BLOCK, [Word.word("{"), Word.word("}")], EmptyBlock)
 
 
 # Program
-PROGRAM = Function('program')
 @singleton
 class Program(Macro):
     def build(self, values, type_):
-        return Call(PROGRAM, type_, values[1].args)
+        return Block(values[1].args)
 grammar.add(Type.PROGRAM, [Internal.SEP, Seq.get(Line), Internal.SEP], Program)
 
 
@@ -345,14 +342,14 @@ class Define(Macro):
 
         # Type check
         body = values[-1]
-        assert body.func == BLOCK
-        if len(body.args) == 0: # empty block
+        assert isinstance(body, Block)
+        if len(body.nodes) == 0: # empty block
             type_ = Line # ??
-        elif len(body.args) == 1:
-            type_ = body.args[0].type
+        elif len(body.nodes) == 1:
+            type_ = body.nodes[0].type
         else:
             # TODO walk AST for `return` statements
-            type_ = body.args[-1].type
+            type_ = body.nodes[-1].type
         # TODO check unification with `func` calls in body
 
         # Define rule
@@ -472,17 +469,6 @@ grammar.add(Line, ws_not_null([
 # Int
 
 Int = Type.get('Int')
-class W_Int(Value):
-    type = Int
-    def __init__(self, value):
-        assert isinstance(value, int)
-        self.value = value
-
-    def __repr__(self):
-        return 'W_Int({})'.format(str(self.value))
-
-    def sexpr(self):
-        return str(self.value)
 
 @singleton
 class ParseInt(Macro):
@@ -494,150 +480,20 @@ class ParseInt(Macro):
 grammar.add(Int, [Word.DIGITS], ParseInt)
 
 
-# Bool
-
-Bool = Type.get('Bool')
-class W_Bool(Value):
-    type = Bool
-    def __init__(self):
-        assert False
-
-    def __repr__(self):
-        return 'W_Bool({})'.format(self.sexpr())
-
-    @staticmethod
-    def get(value):
-        return W_Bool.TRUE if value else W_Bool.FALSE
-
-class W_True(W_Bool):
-    value = True
-    def __init__(self): pass
-    def sexpr(self): return 'yes'
-
-class W_False(W_Bool):
-    value = False
-    def __init__(self): pass
-    def sexpr(self): return 'no'
-
-Value.TRUE = W_True()
-Value.FALSE = W_False()
-
-grammar.add(Bool, [Word.word("yes")], Literal(Value.TRUE))
-grammar.add(Bool, [Word.word("no")], Literal(Value.FALSE))
-
-
 # Null
-# TODO ditch in favour of Options
-
-class W_Null(Value):
-    def __init__(self): pass
-    def __repr__(self): return 'Value.NULL'
-    def sexpr(self): return 'null'
-Value.NULL = W_Null()
-
-grammar.add(Bool, [Word.word("null")], Literal(Value.NULL))
-
-
-# Decimal
-
-#grammar.add(Int, [Word.DIGITS, Word.word("."), Word.DIGITS], ParseDecimal)
-# TODO W_Decimal
-
-
 
 # Text
 
 Text = Type.get('Text')
-
-# TODO W_Text (using ropes!)
+Bool = Type.get('Bool')
 
 add_type(Int)
 add_type(Text)
 add_type(Bool)
 
 
-
-# Bytecodes
-
-IF = Function("if")
-from .ops import *
-
-class ByteCode(Macro):
-    def __init__(self, opcode, arg_indexes):
-        self.opcode = opcode
-        self.arg_indexes = arg_indexes
-
-    def build(self, values, type_):
-        args = [(None if index == -1 else values[index]) for index in self.arg_indexes]
-        assert len(args) == 3
-        a, b, c = args
-        return Instruction(type_, self.opcode, a, b, c)
-
-class Instruction(Tree):
-    def __init__(self, type_, opcode, a=None, b=None, c=None):
-        self.type = type_
-        self.opcode = opcode
-        if opcode < HAVE_OUTPUT:
-            self.bx = b
-            self.c = a
-        else:
-            self.a = a
-            self.b = b
-            self.c = c
-
-    def __repr__(self):
-        return "<Instruction{}>".format(self.sexpr())
-
-    def sexpr(self):
-        if self.opcode < HAVE_OUTPUT:
-            args = [self.bx, self.c]
-        else:
-            args = [self.a, self.b, self.c]
-        return "(" + Op.str(self.opcode) + " " + " ".join([("None" if a is None else a.sexpr()) for a in args]) + ")"
-
-    def emit(self, block, env):
-        if self.opcode < HAVE_OUTPUT:
-            bx = block.compile_node(self.bx, env)
-            c = block.compile_node(self.c, env)
-            block.emit(self.opcode, bx, c)
-            return -1
-        else:
-            if self.a is None:
-                a = block._tmp()
-            else:
-                a = block.compile_node(self.a, env)
-            b = block.compile_node(self.b, env)
-            c = block.compile_node(self.c, env)
-            block.emit(self.opcode, a, b, c)
-            return a
-
-grammar.add(Line, ws([Word.word("NOP")]), ByteCode(Op.NOP, []))
-
-#Label = Type.get('Label')
-#grammar.add(Line, ws([Word.word("label"), Word.WORD]), Label)
-#grammar.add(Line, ws([Word.word("JUMP"), Label]), Jump(Op.JUMP))
-#grammar.add(Line, ws([Word.word("JUMP"), Bool, Label]), Jump(Op.JUMP_IF))
-#grammar.add(Line, ws([Word.word("JUMP"), Bool, Label]), Jump(Op.JUMP_UNLESS))
-
-# LOAD_CONSTANT ?
-
-grammar.add(Line, ws([Word.word("ARG"), Type.ANY]), ByteCode(Op.ARG, [-1, 2, -1]))
-grammar.add(Generic.ALPHA, ws([Word.word("CALL"), Type.FUNC]), ByteCode(Op.CALL, [-1, 2, -1]))
-
-grammar.add(Int, ws([Word.word("INT_ADD"), Int, Int]), ByteCode(Op.INT_ADD, [-1, 2, 4]))
-grammar.add(Int, ws([Word.word("INT_SUB"), Int, Int]), ByteCode(Op.INT_SUB, [-1, 2, 4]))
-grammar.add(Bool, ws([Word.word("INT_LT"), Int, Int]), ByteCode(Op.INT_LT, [-1, 2, 4]))
-
-
-#grammar.add(ALPHA, [ALPHA, Word.word("if"), Bool, Word.word("else"), ALPHA], CallMacro(IF, [4, 0, 8]))
-# TODO: don't seem to support left-recursive generics.
-grammar.add(ALPHA, ws([Word.word("if"), Bool, Word.word("then"), ALPHA, Word.word("else"), ALPHA]), CallMacro(IF, [2, 6, 10]))
-
-# TODO consider binding user functions with lower precedence...
-
-
-
-from .compile import Block, Runtime
+from .builtins import builtins
+from .runtime import Scope, eval_
 
 # TODO
 
@@ -654,15 +510,17 @@ def parse_and_run(source, debug=False):
     assert isinstance(tree, Tree)
     if isinstance(tree, Error):
         return tree.message
+    assert isinstance(tree, Block)
 
     print tree.sexpr()
     print
 
-    bytecode = Block('program')
-    env = bytecode.compile(tree)
+    scope = Scope(builtins)
+    retval = eval_(tree, scope)
 
-    r = Runtime()
-    r.run(bytecode, env)
+    print
+    print "=>", retval.sexpr()
+    print retval
 
     return ""
 
