@@ -368,7 +368,7 @@ class BaseParser(unittest.TestCase):
     def _parse(self, source, sexpr):
         # nb. debug reprs / capturing stdout is slow!
         result = self._execute(source)
-        result = result.replace("\n ", " ").replace("  ", " ")
+        result = result.replace("\n ", " ").replace("\n", " ").replace("  ", " ").replace("  ", " ")
         print result
         print
         print "Test input:"
@@ -382,7 +382,7 @@ class BaseParser(unittest.TestCase):
         result = self._execute(source)
         self.assertNotIn("Unexpected", result)
         self.assertNotIn("\n>>", result)
-        self.assertEqual(result[0], "(")
+        self.assertEqual(result[0], "{")
 
     def _error(self, source):
         result = self._execute(source)
@@ -436,24 +436,24 @@ class LanguageTests(BaseParser):
             fib 123
         }
         fib 123
-        """, "(block (define fib_Int n (block n (fib_Int 123))) (fib_Int 123))")
+        """, "{ (define fib_Int n { n (fib_Int 123) }) (fib_Int 123) }")
 
     def test_04b(self):
         self._parse(""" define fib Int:n { n
             fib 123 } fib 123
-        """, "(block (define fib_Int n (block n (fib_Int 123))) (fib_Int 123))")
+        """, "{ (define fib_Int n { n (fib_Int 123) }) (fib_Int 123) }")
 
     def test_05(self):
         self._parse("""
         let y = 123
         y
-        """, "(block (let y 123) y)")
+        """, "{ (let y 123) y }")
 
     def test_06(self):
         self._parse("""
         let foo bar = 2
         foo bar
-        """, "(block (let foo_bar 2) foo_bar)")
+        """, "{ (let foo_bar 2) foo_bar }")
 
     def test_07(self):
         self._success("let foo2 = 123")

@@ -54,9 +54,9 @@ class Block(Tree):
 
     def sexpr(self):
         indent = "  "
-        inner = " ".join([a.sexpr() for a in self.nodes])
+        inner = "\n".join([a.sexpr() for a in self.nodes])
         inner = indent + ("\n" + indent).join(inner.split("\n"))
-        return "(block" + inner + ")"
+        return "{\n" + inner + "\n}"
 
 
 class Quote(Tree):
