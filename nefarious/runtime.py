@@ -65,6 +65,8 @@ def eval_(node, scope):
         return eval_block(node, scope)
     elif isinstance(node, Closure):
         assert False, node
+    elif isinstance(node, Quote):
+        return node.child
     elif isinstance(node, Value): # TODO careful! Blocks are Values too
         return node
     else:
@@ -92,7 +94,6 @@ def eval_call(call, args, scope):
         scope.set(name, closure)
         return
     else:
-        print call, args
         func = eval_(call, scope)
         args = [eval_(arg, scope) for arg in args]
         if isinstance(func, W_Builtin):

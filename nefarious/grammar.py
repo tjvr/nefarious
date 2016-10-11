@@ -41,11 +41,16 @@ class Call(Tree):
 
 
 class Block(Tree):
+    type = Type.BLOCK
+
     def __init__(self, nodes):
         assert isinstance(nodes, list)
         for node in nodes:
             assert isinstance(node, Tree)
         self.nodes = nodes
+
+    def __repr__(self):
+        return "Block({!r})".format(self.nodes)
 
     def sexpr(self):
         indent = "  "
@@ -53,6 +58,19 @@ class Block(Tree):
         inner = indent + ("\n" + indent).join(inner.split("\n"))
         return "(block" + inner + ")"
 
+
+class Quote(Tree):
+    def __init__(self, child, type_):
+        assert isinstance(child, Tree)
+        self.child = child
+        assert isinstance(type_, Type)
+        self.type = type_
+
+    def __repr__(self):
+        return "Block({!r})".format(self.child)
+
+    def sexpr(self):
+        return "(quote " + self.child.sexpr() + ")"
 
 
 def Function(name):
@@ -126,7 +144,7 @@ def singleton(cls):
 @singleton
 class Identity(Macro):
     def build(self, values, type_):
-        assert len(values) == 1
+        assert len(values) == 1, "Identity macro fail"
         return values[0]
 
 class Select(Macro):
@@ -512,15 +530,15 @@ def parse_and_run(source, debug=False):
         return tree.message
     assert isinstance(tree, Block)
 
-    print tree.sexpr()
+    print(tree.sexpr())
     print
 
     scope = Scope(builtins)
     retval = eval_(tree, scope)
 
     print
-    print "=>", retval.sexpr()
-    print retval
+    print("=>", retval.sexpr())
+    print(retval)
 
     return ""
 
