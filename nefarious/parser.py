@@ -59,7 +59,8 @@ class Rule:
         target = self.target.specialise(u)
         symbols = [t.specialise(u) for t in self.symbols]
         rule = Rule(target, symbols, self.call)
-        rule.priority = self.priority
+        rule.priority = self.priority # this is important.
+        # however it surprised me that I'd remembered to do this!
         self._specialise[key] = rule
         return rule
 

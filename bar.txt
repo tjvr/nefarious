@@ -1,14 +1,5 @@
 
-define Int:a + Int:b { INT_ADD a b }
+define Int:a + Int:b { return INT_ADD a b }
 
-define reset Var:x {
-    x := 0
-}
-
-var y
-y := 123
-
-y := 4
-reset y
-y
+1 + 2
 
