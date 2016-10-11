@@ -486,22 +486,12 @@ grammar.add(Line, ws_not_null([
 
 # Int
 
-Int = Type.get('Int')
-
-@singleton
-class ParseInt(Macro):
-    def build(self, values, type_):
-        assert type_ == Int
-        digits, = values
-        assert isinstance(digits, Word)
-        return W_Int(int(digits.value))
-grammar.add(Int, [Word.DIGITS], ParseInt)
-
 
 # Null
 
 # Text
 
+Int = Type.get('Int')
 Text = Type.get('Text')
 Bool = Type.get('Bool')
 
@@ -537,7 +527,7 @@ def parse_and_run(source, debug=False):
     retval = eval_(tree, scope)
 
     print
-    print("=>", retval.sexpr())
+    print("=> " + retval.sexpr())
     print(retval)
 
     return ""
