@@ -5,3 +5,6 @@ pypy.zip
 # The built binary.
 nfs
 
+# Vim excludes
+*.swp
+*.swo
