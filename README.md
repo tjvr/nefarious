@@ -80,3 +80,13 @@ domains (science, math)?
 I've omitted a few details (eg. upvars, optional whitespace), but this overview is too long as it is!
 
 There are a range of fun extensions to the language and/or compiler: I could add an optimising compiler to the VM, and do flow analysis/SSA. Implementing closures properly could be fun. And the language would rather benefit from unevaluated argument types: `define while (Uneval Bool):test do Block:body`?
+
+
+
+Install
+-------
+
+**Ubuntu**: for making the JIT (`make nfsj`), you'll need to run:
+
+    sudo apt-get install libffi-dev
+

@@ -10,6 +10,38 @@ from .grammar import *
 from .builtins import W_Builtin
 
 
+#------------------------------------------------------------------------------
+
+try:
+    from rpython.rlib.jit import JitDriver, purefunction
+except ImportError:
+    # Dummy class for running under standard CPython
+    class JitDriver(object):
+        def __init__(self,**kw): pass
+        def jit_merge_point(self,**kw): pass
+        def can_enter_jit(self,**kw): pass
+    def purefunction(f): return f
+
+def jitpolicy(driver):
+    from rpython.jit.codewriter.policy import JitPolicy
+    return JitPolicy()
+
+
+# greens: loop constants. identify loop.                eg. code object & instruction pointer
+# reds: everything else used in the execution loop.     eg. frame object & execution context
+jitdriver = JitDriver(
+    greens=['node'], # TODO
+    virtualizables=[],
+    reds=['scope'], # TODO
+    is_recursive=True,
+)
+
+def get_location(node):
+    return node.sexpr()
+
+
+#------------------------------------------------------------------------------
+
 
 class Scope:
     def __init__(self, parent=None):
@@ -57,6 +89,9 @@ class Func(Value):
         self.block = block
 
 def eval_(node, scope):
+
+    jitdriver.jit_merge_point(node=node, scope=scope)
+
     if isinstance(node, Call):
         return eval_call(node.func, node.args, scope)
     elif isinstance(node, Name):
@@ -101,19 +136,4 @@ def eval_call(call, args, scope):
         assert isinstance(func, Closure)
         return func.call(args)
 
-#------------------------------------------------------------------------------
-
-try:
-    from rpython.rlib.jit import JitDriver, purefunction
-except ImportError:
-    # Dummy class for running under standard CPython
-    class JitDriver(object):
-        def __init__(self,**kw): pass
-        def jit_merge_point(self,**kw): pass
-        def can_enter_jit(self,**kw): pass
-    def purefunction(f): return f
-
-def jitpolicy(driver):
-    from rpython.jit.codewriter.policy import JitPolicy
-    return JitPolicy()
 

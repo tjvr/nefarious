@@ -24,14 +24,7 @@ BUILDINTERP = $(CPYTHON)
 all:
 	make test && make nfs
 
-nfs: pypy \
-		nefarious/lex.py \
-		nefarious/types.py \
-		nefarious/parser.py \
-		nefarious/grammar.py \
-		nefarious/runtime.py \
-		nefarious/builtins.py \
-		nefarious/nefarious.py
+nfs: pypy src
 	@echo ============================================================
 	@echo Using CPython: $(CPYTHON)
 	@echo Invoking RPython toolchain to build executable...
@@ -41,8 +34,26 @@ nfs: pypy \
 	@echo "Wrote 'nfs'"
 	@echo ============================================================
 	make test-nfs
+
+nfsj: pypy src
+	@echo ============================================================
+	@echo Using CPython: $(CPYTHON)
+	@echo Invoking RPython toolchain to build executable WITH JIT...
+	@echo
+	$(BUILDINTERP) pypy/rpython/bin/rpython --gc=incminimark --output=nfsj --translation-jit goal.py
+	# -Ojit --jit-backend=x86 --translation-jit goal.py
+	@echo "Wrote 'nfsj'"
+	@echo ============================================================
+
+src: pypy \
+		nefarious/lex.py \
+		nefarious/types.py \
+		nefarious/parser.py \
+		nefarious/grammar.py \
+		nefarious/runtime.py \
+		nefarious/builtins.py \
+		nefarious/nefarious.py
 .TODO:
-	# -Ojit --jit-backend=x86 --translation-jit
 	#@rem --cc=afl-clang
 
 nfs-interp:
@@ -77,5 +88,5 @@ reallyclean: clean
 	rm -r pypy/
 
 #------------------------------------------------------------------------------
-.PHONY: all nfs-interp test test-nfs clean reallyclean
+.PHONY: all nfs-interp test test-nfs clean reallyclean src
 
