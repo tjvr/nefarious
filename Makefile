@@ -51,8 +51,7 @@ src: pypy \
 		nefarious/parser.py \
 		nefarious/grammar.py \
 		nefarious/runtime.py \
-		nefarious/builtins.py \
-		nefarious/nefarious.py
+		nefarious/builtins.py
 .TODO:
 	#@rem --cc=afl-clang
 
