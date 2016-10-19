@@ -87,7 +87,6 @@ grammar.add(Word.WS, [], Null)
 
 
 # List -- After all, this is "Nefarious Scheme"
-LIST = Function('list')
 
 @singleton
 class EmptyList(Macro):
@@ -153,8 +152,6 @@ grammar.add(Type.TYPE, ws([Word.word("("), Word.word("List"), Type.TYPE, Word.wo
 Line = Type.get('Line')
 grammar.add(Line, [Type.ANY], Identity)
 
-LINES = Function('Lines') # Internal
-
 Internal.SEP = Internal.get("SEP")
 grammar.add(Internal.SEP, [], Null)
 grammar.add(Internal.SEP, [Internal.SEP, Word.WS], Null)
@@ -169,9 +166,11 @@ grammar.add(Seq.get(Line), [Seq.get(Line), Internal.SEP, Line], ContinueList)
 @singleton
 class BlockMacro(Macro):
     def build(self, values, type_):
-        list_ = values[2]
-        assert isinstance(list_, W_List)
-        return Block(list_.items)
+        children = values[2]
+        if isinstance(children, W_List):
+            return Block(children.items)
+        else:
+            return Block([children])
 grammar.add(Type.BLOCK, [Word.word("{"), Internal.SEP, Seq.get(Line), Internal.SEP, Word.word("}")], BlockMacro)
 
 @singleton
@@ -300,7 +299,8 @@ class DefineMacro(Macro):
         arg_names = DefineMacro.current_definition_args.pop()
         body = values[4]
 
-        return Let(name, Lambda(arg_names, body))
+        #return Let(name, Lambda(arg_names, body))
+        return Define(name, Func(arg_names, body))
 
 grammar.add(Line, ws_not_null([
     Word.word("define"), Seq.get(Spec), Type.BLOCK,
@@ -343,7 +343,7 @@ class LambdaMacro(Macro):
     def build(self, values, type_):
         arg_names = LambdaMacro.current_definition_args.pop()
         body = values[4]
-        return Lambda(arg_names, body)
+        return Lambda(Func(arg_names, body))
 
 grammar.add(Line, ws_not_null([
     Word.word("fun"), Seq.get(Arg), Type.BLOCK,
@@ -395,7 +395,6 @@ class LetMacro(Macro):
         grammar.add(value.type, identifier, LoadMacro(var))
         return Let(var, value)
 
-IDEN = Function('iden')
 grammar.add(Seq.get(Iden), [Iden], StartList)
 grammar.add(Seq.get(Iden), [Seq.get(Iden), Iden], ContinueList)
 
@@ -455,6 +454,18 @@ grammar.add(Line, [
 
 
 # Dynamic calls.
+
+# @singleton
+# class DynamicCallMacro(Macro):
+#     def build(self, values, type_):
+#
+#
+# grammar.add(Generic.ALPHA, ws_not_null([
+#     Word.word("call"), Type.FUNC
+# ], DynamicCallMacro))
+# grammar.add(Generic.ALPHA, ws_not_null([
+#     Word.word("call"), Type.FUNC, Word.word("with"), Type.ANY
+# ], DynamicCallMacro))
 
 
 
@@ -550,7 +561,7 @@ def macro(target, symbols, indexes=None):
         builtin = cls(impl)
         grammar.add(target, symbols, MacroMacro(builtin, indexes))
         return impl
-    return wrap 
+    return wrap
 
 
 

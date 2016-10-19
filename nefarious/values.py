@@ -275,7 +275,7 @@ class Func:
         self.arg_length = len(arg_names)
 
     def sexpr(self):
-        return "(" + " ".join(n.sexpr() for n in self.shape.names) + ") " + self.body.sexpr()
+        return " ".join(n.sexpr() for n in self.shape.names) + " " + self.body.sexpr()
 
 
 class W_Func(Value):

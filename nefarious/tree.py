@@ -195,24 +195,25 @@ class Let(Node):
     # TODO evaluate_float
 
     def sexpr(self):
-        return "(let " + self.name.sexpr() + " = " + self.value.sexpr() + ")"
+        return "(let " + self.name.sexpr() + " " + self.value.sexpr() + ")"
 
 
-# class Define(Node):
-#     def __init__(self, name, func):
-#         self._parent = None
-#         assert isinstance(name, Name)
-#         self.name = name
-#         self.func = func
-# 
-#     def evaluate(self, frame):
-#         closure = W_Func(frame, self.func)
-#         frame.set(self.name, closure)
-#         return None
-#     # TODO opt?? cache Closures?
-# 
-#     def sexpr(self):
-#         return "(define " + self.name.sexpr() + " " + self.func.sexpr() + ")"
+class Define(Node):
+    """A little like `let rec` I suppose"""
+    def __init__(self, name, func):
+        self._parent = None
+        assert isinstance(name, Name)
+        self.name = name
+        self.func = func
+
+    def evaluate(self, frame):
+        closure = W_Func(frame, self.func)
+        frame.set(self.name, closure)
+        return None
+    # TODO opt?? cache Closures?
+
+    def sexpr(self):
+        return "(define " + self.name.sexpr() + " " + self.func.sexpr() + ")"
 
 
 class Lambda(Node):

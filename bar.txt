@@ -1,14 +1,7 @@
 
-
-define bar Int:x {
-    return 42
-    return x
+define inf Int:x {
+    inf x
 }
 
-define fib Int:n {
-    return bar 5
-    6
-}
-
-fib 30
+inf 1
 
