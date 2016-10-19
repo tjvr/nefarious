@@ -1,7 +1,14 @@
 
-define fib Int:n {
-    fun Int:x { n }
+
+define bar Int:x {
+    return 42
+    return x
 }
 
-let f = (fib 30)
+define fib Int:n {
+    return bar 5
+    6
+}
+
+fib 30
 

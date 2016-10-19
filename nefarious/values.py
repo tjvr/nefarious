@@ -303,3 +303,10 @@ class W_Func(Value):
 
     def sexpr(self):
         return "<bound (fun " + self.func.sexpr() + ")>"
+
+
+class ReturnValue:
+    def __init__(self, value):
+        assert isinstance(value, Value)
+        self.value = value
+

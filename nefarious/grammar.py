@@ -353,13 +353,17 @@ grammar.add(Line, ws_not_null([
 
 # Return
 
-RETURN = Function("return")
+@singleton
+class ReturnMacro(Macro):
+    def build(self, values, type_):
+        child = values[2]
+        return Return(child)
 
-grammar.add(Line, [Word.word("return")], CallMacro(RETURN, []))
+#grammar.add(Line, [Word.word("return")], ReturnMacro)
 
 grammar.add(Line, ws_not_null([
     Word.word("return"), Type.ANY,
-]), CallMacro(RETURN, [2]))
+]), ReturnMacro)
 
 #grammar.add(Line, [
 #    Word.word("RETURN"), Word.WS, Type.TYPE, Word.word(":"), Type.ANY,

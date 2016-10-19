@@ -256,13 +256,31 @@ class Call(Node):
 
         arg_list = [arg.evaluate(frame) for arg in self.args]
         inner = closure.call(arg_list)
-        return closure.func.body.evaluate(inner)
+        try:
+            return closure.func.body.evaluate(inner)
+        except ReturnValue as ret:
+            return ret.value
 
     def sexpr(self):
         return "(" + self.func.sexpr() + " " + " ".join(a.sexpr() for a in self.args) + ")"
 
 
-# TODO class Return
+class Return(Node):
+    def __init__(self, child):
+        self._parent = None
+        self.child = child
+        child.set_parent(self)
+
+    def replace(self, child, other):
+        assert child is self.child
+        self.child = other
+
+    def evaluate(self, frame):
+        value = self.child.evaluate(frame)
+        raise ReturnValue(value)
+
+    def sexpr(self):
+        return "(return " + self.child.sexpr() + ")"
 
 
 # class StaticCall(Node):
