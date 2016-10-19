@@ -1,10 +1,5 @@
 
-define inf Int:x {
-    return 2
-    return 3
-}
+let I = fun Int:x { x }
 
-inf 1
-
-fun Int:x { x }
+call I with 1
 

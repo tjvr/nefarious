@@ -347,7 +347,7 @@ class LambdaMacro(Macro):
         body = values[4]
         return Lambda(Func(arg_names, body))
 
-grammar.add(Line, ws_not_null([
+grammar.add(Type.FUNC, ws_not_null([
     Word.word("fun"), Seq.get(Arg), Type.BLOCK,
 ]), LambdaMacro)
 
@@ -457,17 +457,22 @@ grammar.add(Line, ws_not_null([
 
 # Dynamic calls.
 
-# @singleton
-# class DynamicCallMacro(Macro):
-#     def build(self, values, type_):
-#
-#
-# grammar.add(Generic.ALPHA, ws_not_null([
-#     Word.word("call"), Type.FUNC
-# ], DynamicCallMacro))
-# grammar.add(Generic.ALPHA, ws_not_null([
-#     Word.word("call"), Type.FUNC, Word.word("with"), Type.ANY
-# ], DynamicCallMacro))
+@singleton
+class DynamicCallMacro(Macro):
+    def build(self, values, type_):
+        func = values[2]
+        arg = values[6]
+        return Call(func, [arg])
+
+
+#grammar.add(Generic.ALPHA, ws_not_null([
+#    Word.word("call"), Type.FUNC
+#]), DynamicCallMacro)
+grammar.add(Generic.ALPHA, ws_not_null([
+    Word.word("call"), Type.FUNC, Word.word("with"), Type.ANY
+]), DynamicCallMacro)
+# TODO better syntax: call with Record
+# TODO apply Func: to List:
 
 
 
@@ -492,6 +497,7 @@ Bool = Type.get('Bool')
 add_type(Int)
 add_type(Text)
 add_type(Bool)
+# TODO add_type(Any)
 
 
 
@@ -502,7 +508,7 @@ class ParseInt(Macro):
     def build(self, values, type_):
         digits, = values
         assert isinstance(digits, Word)
-        return Literal(W_Int(int(digits.value)))
+        return Literal(W_Int(int(digits.value)), type_)
 grammar.add(Int, [Word.DIGITS], ParseInt)
 
 

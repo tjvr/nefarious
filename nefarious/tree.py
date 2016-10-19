@@ -117,10 +117,11 @@ class Quote(Node):
 
 
 class Literal(Node):
-    def __init__(self, value):
+    def __init__(self, value, type_):
         assert isinstance(value, Value)
         assert not isinstance(value, Node)
         self.value = value
+        self.type = type_
 
     def __repr__(self):
         return "Literal({!r})".format(self.value)
@@ -217,6 +218,8 @@ class Define(Node):
 
 
 class Lambda(Node):
+    type = Type.FUNC
+
     def __init__(self, func):
         self._parent = None
         assert isinstance(func, Func)
