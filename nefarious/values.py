@@ -102,7 +102,7 @@ class W_List(Value):
         return "W_List({})".format(repr(self.items))
 
     def sexpr(self):
-        return "[" + ", ".join(self.items) + "]"
+        return "[" + ", ".join([c.sexpr() for c in self.items]) + "]"
 
 
 
@@ -122,16 +122,6 @@ class Name(Tree):
 
     def sexpr(self):
         return self.name.replace(" ", "_")
-
-    def evaluate(self, frame):
-        try:
-            index = frame.local_names.index(self)
-        except IndexError:
-            node = NonLocalNode(self)
-        else:
-            node = LocalNode(index)
-        self._parent.replace_child(self, node)
-        return node.evaluate(frame)
 
 
 class Symbol(Name):
@@ -160,7 +150,7 @@ class Symbol(Name):
 
 class Shape:
     def __init__(self, names):
-        assert isinstance(names, dict)
+        #assert isinstance(names, dict)
         self.names = names
         self._transitions = {}
 
@@ -174,7 +164,7 @@ class Shape:
     def transition(self, new_name):
         assert isinstance(new_name, Name)
         if new_name in self.names:
-            raise ValueError("symbol already in record: " + new_name)
+            raise ValueError("symbol already in record: " + new_name.sexpr())
         if new_name in self._transitions:
             return self._transitions[new_name]
         names = self.names.copy()
@@ -275,7 +265,7 @@ class Func:
         self.arg_length = len(arg_names)
 
     def sexpr(self):
-        return " ".join(n.sexpr() for n in self.shape.names) + " " + self.body.sexpr()
+        return " ".join([n.sexpr() for n in self.shape.names]) + " " + self.body.sexpr()
 
 
 class W_Func(Value):
@@ -305,7 +295,7 @@ class W_Func(Value):
         return "<bound (fun " + self.func.sexpr() + ")>"
 
 
-class ReturnValue:
+class ReturnValue(BaseException):
     def __init__(self, value):
         assert isinstance(value, Value)
         self.value = value

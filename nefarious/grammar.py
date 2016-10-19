@@ -52,7 +52,7 @@ class CallMacro(Macro):
 
     def build(self, values, type_):
         args = [values[i] for i in self.arg_indexes]
-        return Call(self.call, type_, args)
+        return Call(Load(self.call), args)
 
 # TODO CustomMacros
 #    return self.call_immediate(children)
@@ -256,8 +256,9 @@ class DefineMacro(Macro):
 
         # Define arguments
         args = []
-        for word in spec:
-            if self._is_arg(word):
+        for s in spec:
+            if self._is_arg(s):
+                assert isinstance(s, ArgSpec)
                 assert isinstance(s.name, Word)
                 arg = Name(s.name.value)
                 grammar.add(s.type, [s.name], LoadMacro(arg))
@@ -331,6 +332,7 @@ class LambdaMacro(Macro):
         # Define arguments
         args = []
         for s in spec:
+            assert isinstance(s, ArgSpec)
             arg = Name(s.name.value)
             grammar.add(s.type, [s.name], LoadMacro(arg))
             args.append(arg)
@@ -405,51 +407,51 @@ grammar.add(Line, ws_not_null([
 
 # Var
 
-Var = Internal.get("Var")
-VAR = Function("var")
-add_type(Var)
-
-@singleton
-class Declare(Macro):
-    def build(self, values, type_):
-        identifier = values[2].args
-        name = ""
-        for iden in identifier:
-            assert isinstance(iden, Word)
-            name += iden.value
-
-        var = Name(name)
-
-        # TODO var = LoadCell
-
-        # fit Var slot
-        #grammar.add(Var, identifier, LoadCellMacro(var))
-
-        if len(values) > 3:
-            value = values[7]
-            return Call(VAR, type_, [var, value])
-        else:
-            return Call(VAR, type_, [var])
-
-grammar.add(Line, [
-    Word.word("var"), Word.WS_NOT_NULL, Seq.get(Iden)
-], Declare)
-grammar.add(Line, [
-    Word.word("var"), Word.WS_NOT_NULL, Seq.get(Iden), Word.WS_NOT_NULL, Word.word(":"), Word.word("="), Word.WS_NOT_NULL, Type.ANY
-], Declare)
-
-GET = Function("get")
-grammar.add(Generic.ALPHA, [Var], CallMacro(GET, [0]))
-
-
-SET = Function("set")
-
-# TODO don't parse `y := 4` as (set (get y) 4)
-grammar.add(Line, [
-    Var, Word.WS_NOT_NULL, Word.word(":"), Word.word("="), Word.WS_NOT_NULL, Type.ANY
-], CallMacro(SET, [0, 5]))
-
-# TODO pass var cells by reference!
+# Var = Internal.get("Var")
+# VAR = Function("var")
+# add_type(Var)
+# 
+# @singleton
+# class Declare(Macro):
+#     def build(self, values, type_):
+#         identifier = values[2].args
+#         name = ""
+#         for iden in identifier:
+#             assert isinstance(iden, Word)
+#             name += iden.value
+# 
+#         var = Name(name)
+# 
+#         # TODO var = LoadCell
+# 
+#         # fit Var slot
+#         #grammar.add(Var, identifier, LoadCellMacro(var))
+# 
+#         if len(values) > 3:
+#             value = values[7]
+#             return Call(VAR, type_, [var, value])
+#         else:
+#             return Call(VAR, type_, [var])
+# 
+# grammar.add(Line, [
+#     Word.word("var"), Word.WS_NOT_NULL, Seq.get(Iden)
+# ], Declare)
+# grammar.add(Line, [
+#     Word.word("var"), Word.WS_NOT_NULL, Seq.get(Iden), Word.WS_NOT_NULL, Word.word(":"), Word.word("="), Word.WS_NOT_NULL, Type.ANY
+# ], Declare)
+# 
+# GET = Function("get")
+# grammar.add(Generic.ALPHA, [Var], CallMacro(GET, [0]))
+# 
+# 
+# SET = Function("set")
+# 
+# # TODO don't parse `y := 4` as (set (get y) 4)
+# grammar.add(Line, [
+#     Var, Word.WS_NOT_NULL, Word.word(":"), Word.word("="), Word.WS_NOT_NULL, Type.ANY
+# ], CallMacro(SET, [0, 5]))
+# 
+# # TODO pass var cells by reference!
 
 
 
@@ -514,54 +516,54 @@ builtins.set #...
 
 
 
-Uneval = Internal.get('Uneval')
-@singleton
-class QuoteMacro(Macro):
-    def build(self, values, type_):
-        assert len(values) == 1
-        return Quote(values[0], type_)
-grammar.add(Uneval, [ALPHA], QuoteMacro)
-
-class CallMacro(Macro):
-    def __init__(self, name, arg_indexes):
-        assert isinstance(name, Name)
-        self.name = name
-        self.arg_indexes = arg_indexes
-
-    def build(self, values, type_):
-        args = [values[i] for i in self.arg_indexes]
-        func = Load(self.name)
-        return Call(func, args)
-
-def defrule(target, symbols):
-    indexes = [i for i in range(len(symbols)) if not isinstance(symbols[i], Word)]
-    def wrap(impl):
-        name = Name(impl.__name__)
-        cls = W_Builtin.cls(len(indexes))
-        builtins.set(name, cls(impl))
-        grammar.add(target, symbols, CallMacro(name, indexes))
-        return impl
-    return wrap
-
-class MacroMacro(Macro):
-    def __init__(self, builtin, arg_indexes):
-        self.builtin = builtin
-        self.arg_indexes = arg_indexes
-
-    def build(self, values, type_):
-        args = [values[i] for i in self.arg_indexes]
-        return self.builtin.call(args, None)
-
-def macro(target, symbols, indexes=None):
-    if indexes is None:
-        indexes = [i for i in range(len(symbols)) if not isinstance(symbols[i], Word)]
-    def wrap(impl):
-        assert len(indexes) <= 5
-        cls = W_Builtin.cls(len(indexes))
-        builtin = cls(impl)
-        grammar.add(target, symbols, MacroMacro(builtin, indexes))
-        return impl
-    return wrap
+# Uneval = Internal.get('Uneval')
+# @singleton
+# class QuoteMacro(Macro):
+#     def build(self, values, type_):
+#         assert len(values) == 1
+#         return Quote(values[0], type_)
+# grammar.add(Uneval, [ALPHA], QuoteMacro)
+# 
+# class CallMacro(Macro):
+#     def __init__(self, name, arg_indexes):
+#         assert isinstance(name, Name)
+#         self.name = name
+#         self.arg_indexes = arg_indexes
+# 
+#     def build(self, values, type_):
+#         args = [values[i] for i in self.arg_indexes]
+#         func = Load(self.name)
+#         return Call(func, args)
+# 
+# def defrule(target, symbols):
+#     indexes = [i for i in range(len(symbols)) if not isinstance(symbols[i], Word)]
+#     def wrap(impl):
+#         name = Name(impl.__name__)
+#         cls = W_Builtin.cls(len(indexes))
+#         builtins.set(name, cls(impl))
+#         grammar.add(target, symbols, CallMacro(name, indexes))
+#         return impl
+#     return wrap
+# 
+# class MacroMacro(Macro):
+#     def __init__(self, builtin, arg_indexes):
+#         self.builtin = builtin
+#         self.arg_indexes = arg_indexes
+# 
+#     def build(self, values, type_):
+#         args = [values[i] for i in self.arg_indexes]
+#         return self.builtin.call(args, None)
+# 
+# def macro(target, symbols, indexes=None):
+#     if indexes is None:
+#         indexes = [i for i in range(len(symbols)) if not isinstance(symbols[i], Word)]
+#     def wrap(impl):
+#         assert len(indexes) <= 5
+#         cls = W_Builtin.cls(len(indexes))
+#         builtin = cls(impl)
+#         grammar.add(target, symbols, MacroMacro(builtin, indexes))
+#         return impl
+#     return wrap
 
 
 

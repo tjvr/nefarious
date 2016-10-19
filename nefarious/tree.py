@@ -217,9 +217,10 @@ class Define(Node):
 
 
 class Lambda(Node):
-    def __init__(self, arg_names, body):
+    def __init__(self, func):
         self._parent = None
-        self.func = Func(arg_names, body)
+        assert isinstance(func, Func)
+        self.func = func
 
     def evaluate(self, frame):
         closure = W_Func(frame, self.func)
@@ -237,6 +238,7 @@ class Call(Node):
         self.func = func
         self.args = args
         func.set_parent(self)
+        assert isinstance(args, list)
         for arg in args:
             assert isinstance(arg, Node), arg
             arg.set_parent(self)
@@ -263,7 +265,7 @@ class Call(Node):
             return ret.value
 
     def sexpr(self):
-        return "(" + self.func.sexpr() + " " + " ".join(a.sexpr() for a in self.args) + ")"
+        return "(" + self.func.sexpr() + " " + " ".join([a.sexpr() for a in self.args]) + ")"
 
 
 class Return(Node):
