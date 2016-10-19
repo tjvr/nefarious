@@ -3,83 +3,16 @@ from .types import *
 from .values import *
 from .lex import Word, Lexer
 
-
-class Name(Tree):
-    """Symbol. Compared by identity, not value, so shadowing works."""
-    def __init__(self, type_, name):
-        assert isinstance(type_, Type)
-        assert isinstance(name, str)
-        self.type = type_
-        self.name = name # String name really is just a debugging aid
-
-    def __repr__(self):
-        return "Name({!r}, {!r})".format(self.type, self.name)
-
-    def sexpr(self):
-        return self.name.replace(" ", "_")
-
-
-class Call(Tree):
-    def __init__(self, func, type_, args):
-        assert isinstance(func, Name)
-        assert func.type == Type.FUNC
-        assert isinstance(type_, Type)
-        assert isinstance(args, list)
-        for arg in args:
-            assert isinstance(arg, Tree)
-        self.func = func
-        self.type = type_
-        self.args = args
-
-    def __repr__(self):
-        return "<Call {!r} {!r}>".format(self.func.name, self.args)
-
-    def sexpr(self):
-        inner = " ".join([a.sexpr() for a in self.args])
-        return "(" + self.func.sexpr() + " " + inner + ")"
-        #return self.type.sexpr() + ":(" + self.func.sexpr() + " " + " ".join([a.sexpr() for a in self.args]) + ")"
-
-
-class Block(Tree):
-    type = Type.BLOCK
-
-    def __init__(self, nodes):
-        assert isinstance(nodes, list)
-        for node in nodes:
-            assert isinstance(node, Tree)
-        self.nodes = nodes
-
-    def __repr__(self):
-        return "Block({!r})".format(self.nodes)
-
-    def sexpr(self):
-        indent = "  "
-        inner = "\n".join([a.sexpr() for a in self.nodes])
-        inner = indent + ("\n" + indent).join(inner.split("\n"))
-        return "{\n" + inner + "\n}"
-
-
-class Quote(Tree):
-    def __init__(self, child, type_):
-        assert isinstance(child, Tree)
-        self.child = child
-        assert isinstance(type_, Type)
-        self.type = type_
-
-    def __repr__(self):
-        return "Block({!r})".format(self.child)
-
-    def sexpr(self):
-        return "(quote " + self.child.sexpr() + ")"
-
+from .runtime import Name
+from .runtime import CallNode as Call
+from .runtime import BlockNode as Block
+from .runtime import QuoteNode as Quote
+from .runtime import Scope, eval_, Error
+from .runtime import *
 
 def Function(name):
     return Name(Type.FUNC, name)
 
-
-class Error(Tree):
-    def __init__(self, message):
-        self.message = message
 
 
 #---------------
@@ -117,19 +50,13 @@ class Macro:
         grammar.restore()
 
 class CallMacro(Macro):
-    def __init__(self, call, arg_indexes, uneval=None):
+    def __init__(self, call, arg_indexes):
         assert isinstance(call, Name)
         self.call = call
         self.arg_indexes = arg_indexes
-        self.uneval = uneval
 
     def build(self, values, type_):
         args = [values[i] for i in self.arg_indexes]
-        if self.uneval is not None:
-            for index in self.uneval:
-                # type_ ?
-                pass
-                #args[index] = Call(QUOTE, type_, [args[index]])
         return Call(self.call, type_, args)
 
 # TODO CustomMacros
@@ -304,8 +231,6 @@ grammar.add(Seq.get(Spec), [Spec], StartList(SPEC))
 grammar.add(Seq.get(Spec), [Seq.get(Spec), Spec], ContinueList(SPEC))
 
 
-DEFINE = Function('define')
-
 @singleton
 class Define(Macro):
     current_definitions = []
@@ -377,9 +302,7 @@ class Define(Macro):
     def _macro(self, spec, func):
         symbols = [(s.args[0] if self._is_arg(s) else s) for s in spec]
         arg_indexes = [index for index, s in enumerate(spec) if self._is_arg(s)]
-        #uneval = [arg_indexes.index(index) for index in arg_indexes
-        #          if symbols[index] == Var]
-        return symbols, CallMacro(func, arg_indexes, [])
+        return symbols, CallMacro(func, arg_indexes)
 
     def build(self, values, type_):
         func = Define.current_definitions.pop()
@@ -392,8 +315,6 @@ grammar.add(Line, ws_not_null([
 
 
 # Let
-
-LET = Function("let")
 
 @singleton
 class Let(Macro):
@@ -501,7 +422,6 @@ add_type(Bool)
 
 
 from .builtins import builtins
-from .runtime import Scope, eval_
 
 # TODO
 

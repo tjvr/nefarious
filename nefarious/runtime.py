@@ -6,9 +6,6 @@ try:
 except ImportError:
     def we_are_translated(): return False
 
-from .grammar import *
-from .builtins import W_Builtin
-
 
 #------------------------------------------------------------------------------
 
@@ -41,6 +38,182 @@ def get_location(node):
 
 
 #------------------------------------------------------------------------------
+
+from .types import *
+from .values import *
+
+class Name(Tree):
+    """Symbol. Compared by identity, not value, so shadowing works."""
+    def __init__(self, type_, name):
+        assert isinstance(type_, Type)
+        assert isinstance(name, str)
+        self.type = type_
+        self.name = name # String name really is just a debugging aid
+        self._parent = None
+
+    def __repr__(self):
+        return "Name({!r}, {!r})".format(self.type, self.name)
+
+    def sexpr(self):
+        return self.name.replace(" ", "_")
+
+    def evaluate(self, frame):
+        try:
+            index = frame.local_names.index(self)
+        except IndexError:
+            node = NonLocalNode(self)
+        else:
+            node = LocalNode(index)
+        self._parent.replace_child(self, node)
+        return node.evaluate(frame)
+
+
+class LocalNode(Name):
+    def __init__(self, index):
+        self.index = index
+
+    def evaluate(self, frame):
+        return frame.locals[index]
+
+class NonLocalNode(Name):
+    def __init__(self, key):
+        self.key = key
+
+    def evaluate(self, frame):
+        return frame.parent.lookup(self.key)
+
+
+class Error(Tree):
+    def __init__(self, message):
+        self.message = message
+
+
+class CallNode(Tree):
+    def __init__(self, func, type_, args):
+        assert isinstance(func, Name)
+        assert func.type == Type.FUNC
+        assert isinstance(type_, Type)
+        assert isinstance(args, list)
+        for arg in args:
+            assert isinstance(arg, Tree)
+        self.func = func
+        self.type = type_
+        self.args = args
+
+    def __repr__(self):
+        return "<CallNode {!r} {!r}>".format(self.func.name, self.args)
+
+    def sexpr(self):
+        inner = " ".join([a.sexpr() for a in self.args])
+        return "(" + self.func.sexpr() + " " + inner + ")"
+        #return self.type.sexpr() + ":(" + self.func.sexpr() + " " + " ".join([a.sexpr() for a in self.args]) + ")"
+
+    def replace_child(self, child, other):
+        if child == self.func:
+            self.func = other
+        for i in range(len(self.args)):
+            if self.args[i] == child:
+                self.args[i] = other
+        other._parent = self
+
+    def evaluate(self, frame):
+        node = StaticCallNode(self.func, self.args)
+        self._parent.replace_child(self, node)
+        return node.evaluate(frame)
+
+class StaticCallNode(CallNode):
+    def __init__(self, func, args):
+        self.func = func
+        self._cache = None
+        self.args = args
+        self._calls = 0
+
+    def evaluate(self, frame):
+        func = self.func.evaluate(frame)
+        if self._cache is None:
+            self._cache = func
+        elif func != self._cache:
+            node = DynamicCallNode(self.func, self.args)
+            self._parent.replace_child(self, node)
+            return node.evaluate(frame)
+
+        self._calls += 1
+        if self._calls > 4:
+            return self.inline(func).evaluate(frame)
+        # TODO consider inlining
+
+        args = [a.evaluate(frame) for a in self.args]
+        inner = Frame(frame, args)
+        return func.evaluate(inner)
+
+    def inline(self, func):
+        #assert self._cache == func
+        # TODO generate inlined node which computes args, pushes to stack
+        # TODO copy original AST of func
+        # TODO replace name lookups with arg lookups
+        # TODO heuristic to avoid infinitely recursive inlining
+        self._parent.replace_child(self, node)
+        return node
+
+
+class DynamicCallNode(CallNode):
+    def __init__(self, func, args):
+        self.func = func
+        self.args = args
+
+    def evaluate(self, frame):
+        func = self.func.evaluate(frame)
+        args = [a.evaluate(frame) for a in self.args]
+        inner = Frame(frame, args)
+        return func.evaluate(inner)
+
+
+class BlockNode(Tree):
+    type = Type.BLOCK
+
+    def __init__(self, nodes):
+        assert isinstance(nodes, list)
+        for node in nodes:
+            assert isinstance(node, Tree)
+        self.nodes = nodes
+
+    def __repr__(self):
+        return "BlockNode({!r})".format(self.nodes)
+
+    def sexpr(self):
+        indent = "  "
+        inner = "\n".join([a.sexpr() for a in self.nodes])
+        inner = indent + ("\n" + indent).join(inner.split("\n"))
+        return "{\n" + inner + "\n}"
+    
+    def evaluate(self):
+        value = None
+        for node in self.nodes:
+            value = node.evaluate()
+        return value
+
+
+class QuoteNode(Tree):
+    def __init__(self, child, type_):
+        assert isinstance(child, Tree)
+        self.child = child
+        assert isinstance(type_, Type)
+        self.type = type_
+
+    def __repr__(self):
+        return "QuoteNode({!r})".format(self.child)
+
+    def sexpr(self):
+        return "(quote " + self.child.sexpr() + ")"
+
+    def evaluate(self):
+        return self.child
+
+
+#------------------------------------------------------------------------------
+
+LET = Name(Type.FUNC, "let")
+DEFINE = Name(Type.FUNC, "define")
 
 
 class Scope:
@@ -88,19 +261,20 @@ class Func(Value):
         self.arg_names = args
         self.block = block
 
+
 def eval_(node, scope):
 
-    jitdriver.jit_merge_point(node=node, scope=scope)
+    #jitdriver.jit_merge_point(node=node, scope=scope)
 
-    if isinstance(node, Call):
+    if isinstance(node, CallNode):
         return eval_call(node.func, node.args, scope)
     elif isinstance(node, Name):
         return scope.lookup(node)
-    elif isinstance(node, Block):
+    elif isinstance(node, BlockNode):
         return eval_block(node, scope)
     elif isinstance(node, Closure):
         assert False, node
-    elif isinstance(node, Quote):
+    elif isinstance(node, QuoteNode):
         return node.child
     elif isinstance(node, Value): # TODO careful! Blocks are Values too
         return node
@@ -114,6 +288,8 @@ def eval_block(block, scope):
     return value
 
 def eval_call(call, args, scope):
+    from .builtins import W_Builtin
+
     # TODO attach these to outermost scope somehow
     if call == LET:
         name, value = args
@@ -124,7 +300,7 @@ def eval_call(call, args, scope):
         args = list(args)
         body = args.pop()
         name = args.pop(0)
-        assert isinstance(body, Block)
+        assert isinstance(body, BlockNode)
         closure = Closure(Func(name.name, args, body), scope)
         scope.set(name, closure)
         return

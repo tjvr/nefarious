@@ -398,7 +398,7 @@ class Scope:
 
 
 
-from .grammar import Error
+from .runtime import Error
 
 def grammar_parse(source, grammar, debug=DEBUG):
     lexer = Lexer(source)

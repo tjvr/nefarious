@@ -1,7 +1,5 @@
 
 from .lex import Word
-#from .grammar import Name, grammar, ws, CallMacro
-from .grammar import *
 from .values import *
 
 
@@ -39,10 +37,9 @@ class Builtin3(W_Builtin):
 
 #------------------------------------------------------------------------------
 
-from .runtime import Scope, eval_
+from .grammar import *
+from .runtime import Scope
 builtins = Scope()
-
-# TODO uneval
 
 Uneval = Internal.get('Uneval')
 @singleton
@@ -163,3 +160,4 @@ def if_then_else(test, tv, fv, scope):
 #    return ...
 
 
+#------------------------------------------------------------------------------
