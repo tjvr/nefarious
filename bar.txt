@@ -1,13 +1,9 @@
 
-let f = fun Int:x { x }
+define first (List Any):x { x }
 
-let g = fun {
-    let x = 42
-    fun { x }
+define foo (List Int):x {
+    first x
 }
 
-
-let y = call g
-
-call y
+foo [1,2,3]
 

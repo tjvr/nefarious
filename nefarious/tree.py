@@ -51,7 +51,7 @@ class Node(Tree):
     def _replace(self, other):
         assert isinstance(other, Node)
         parent = self._parent
-        self._parent = None
+        self._parent = None # TODO omit
         parent.replace(self, other)
         other._parent = parent
 
@@ -61,7 +61,8 @@ class Node(Tree):
     def evaluate(self, frame):
         raise NotImplementedError
 
-        
+# TODO annotate nodes with SourceSections
+
 class Block(Node):
     # TODO W_Block ??
 
@@ -87,13 +88,13 @@ class Block(Node):
         inner = "\n".join([a.sexpr() for a in self.nodes])
         inner = indent + ("\n" + indent).join(inner.split("\n"))
         return "{\n" + inner + "\n}"
-    
+
     def evaluate(self, frame):
         value = None
         for node in self.nodes:
             value = node.evaluate(frame)
         return value
-    
+
 
 class Quote(Node):
     def __init__(self, child):

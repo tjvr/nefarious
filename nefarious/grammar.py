@@ -109,12 +109,64 @@ class ContinueList(Macro):
         items.append(values[-1])
         return W_List(items)
 
-# Generic lists
-ALPHA = Generic.ALPHA
-grammar.add(List.get(ALPHA), ws([ALPHA, Word.word(","), ALPHA]), PairList)
-grammar.add(List.get(ALPHA), ws([List.get(ALPHA), Word.word(","), ALPHA]), ContinueList)
 
-# TODO revisit this... --require square brackets?
+
+# Generic lists
+# TODO require square brackets?
+
+ALPHA = Generic.ALPHA
+
+@singleton
+class PairListMacro(Macro):
+    def build(self, values, type_):
+        return Literal(W_List([values[0], values[-1]]), type_)
+grammar.add(List.get(ALPHA), ws([
+    ALPHA, Word.word(","), ALPHA,
+]), PairListMacro)
+
+@singleton
+class ContinueListMacro(Macro):
+    def build(self, values, type_):
+        assert isinstance(values[0], Literal)
+        list_ = values[0].value
+        assert isinstance(list_, W_List)
+        items = list(list_.items)
+        items.append(values[-1])
+        return Literal(W_List(items), type_)
+grammar.add(List.get(ALPHA), ws([
+    List.get(ALPHA), Word.word(","), ALPHA,
+]), ContinueListMacro)
+
+@singleton
+class EmptyListMacro(Macro):
+    def build(self, values, type_):
+        return Literal(W_List([]), type_)
+grammar.add(List.get(ALPHA), ws([
+    Word.word("["), Word.word("]"),
+]), EmptyListMacro)
+
+@singleton
+class OneListMacro(Macro):
+    def build(self, values, type_):
+        return Literal(W_List([values[2]]), type_)
+grammar.add(List.get(ALPHA), ws([
+    Word.word("["), ALPHA, Word.word("]"),
+]), OneListMacro)
+grammar.add(List.get(ALPHA), ws([
+    Word.word("["), ALPHA, Word.word(","), Word.word("]"),
+]), OneListMacro)
+
+@singleton
+class EncloseListMacro(Macro):
+    def build(self, values, type_):
+        return values[2]
+grammar.add(List.get(ALPHA), ws([
+    Word.word("["), List.get(ALPHA), Word.word("]"),
+]), EncloseListMacro)
+grammar.add(List.get(ALPHA), ws([
+    Word.word("["), List.get(ALPHA), Word.word(","), Word.word("]"),
+]), EncloseListMacro)
+
 
 
 # Parentheses
@@ -126,26 +178,6 @@ class Parens(Macro):
         return child
 grammar.add(ALPHA, ws([Word.word("("), ALPHA, Word.word(")")]), Parens)
 
-
-# Types
-
-class LiteralMacro(Macro):
-    def __init__(self, value):
-        self.value = value
-    def build(self, values, type_):
-        return self.value
-
-def add_type(type_):
-    name = type_._str()
-    assert len(name.split(" ")) == 1
-    grammar.add(Type.TYPE, [Word.word(name)], LiteralMacro(type_))
-
-@singleton
-class ListTypeMacro(Macro):
-    def build(self, values, type_):
-        return List.get(values[4])
-
-grammar.add(Type.TYPE, ws([Word.word("("), Word.word("List"), Type.TYPE, Word.word(")")]), ListTypeMacro)
 
 
 # Lines
@@ -248,7 +280,7 @@ class DefineMacro(Macro):
         for s in spec:
             if self._is_arg(s):
                 assert isinstance(s.type, Type)
-                debug_name += s.type.name
+                debug_name += s.type._str()
             else:
                 assert isinstance(s, Word)
                 debug_name += s.value
@@ -489,17 +521,27 @@ grammar.add(Generic.ALPHA, ws_not_null([
 
 
 
-# Built-ins.
+# Types
 
+# TODO type grammar
 
+class LiteralMacro(Macro):
+    def __init__(self, value):
+        self.value = value
+    def build(self, values, type_):
+        return self.value
 
+def add_type(type_):
+    name = type_._str()
+    assert len(name.split(" ")) == 1
+    grammar.add(Type.TYPE, [Word.word(name)], LiteralMacro(type_))
 
-# Int
+@singleton
+class ListTypeMacro(Macro):
+    def build(self, values, type_):
+        return List.get(values[4])
 
-
-# Null
-
-# Text
+grammar.add(Type.TYPE, ws([Word.word("("), Word.word("List"), Type.TYPE, Word.word(")")]), ListTypeMacro)
 
 Int = Type.get('Int')
 Text = Type.get('Text')
@@ -508,7 +550,7 @@ Bool = Type.get('Bool')
 add_type(Int)
 add_type(Text)
 add_type(Bool)
-# TODO add_type(Any)
+add_type(Type.ANY)
 
 
 
@@ -602,6 +644,7 @@ def parse_and_run(source, debug=False):
     assert isinstance(tree, Block)
 
     print(tree.sexpr())
+    #print(repr(tree))
     print
 
     retval = tree.evaluate(builtins)
