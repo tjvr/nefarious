@@ -295,7 +295,7 @@ class W_Func(Value):
         return "<bound (fun " + self.func.sexpr() + ")>"
 
 
-class ReturnValue(BaseException):
+class ReturnValue(Exception):
     def __init__(self, value):
         assert isinstance(value, Value)
         self.value = value

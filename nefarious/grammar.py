@@ -594,7 +594,7 @@ def parse_and_run(source, debug=False):
 
     print
     print("=> " + retval.sexpr())
-    print(retval)
+    #print(retval) # Useless on RPython!
 
     return ""
 
