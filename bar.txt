@@ -5,5 +5,4 @@ define foo (List Int):x {
     first x
 }
 
-foo [1,2,3]
-
+foo []

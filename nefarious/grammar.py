@@ -86,6 +86,7 @@ class Null(Macro):
 grammar.add(Word.WS, [], Null)
 
 
+
 # List -- After all, this is "Nefarious Scheme"
 
 @singleton
@@ -110,32 +111,9 @@ class ContinueList(Macro):
         return W_List(items)
 
 
-
 # Generic lists
-# TODO require square brackets?
 
 ALPHA = Generic.ALPHA
-
-@singleton
-class PairListMacro(Macro):
-    def build(self, values, type_):
-        return Literal(W_List([values[0], values[-1]]), type_)
-grammar.add(List.get(ALPHA), ws([
-    ALPHA, Word.word(","), ALPHA,
-]), PairListMacro)
-
-@singleton
-class ContinueListMacro(Macro):
-    def build(self, values, type_):
-        assert isinstance(values[0], Literal)
-        list_ = values[0].value
-        assert isinstance(list_, W_List)
-        items = list(list_.items)
-        items.append(values[-1])
-        return Literal(W_List(items), type_)
-grammar.add(List.get(ALPHA), ws([
-    List.get(ALPHA), Word.word(","), ALPHA,
-]), ContinueListMacro)
 
 @singleton
 class EmptyListMacro(Macro):
@@ -146,26 +124,18 @@ grammar.add(List.get(ALPHA), ws([
 ]), EmptyListMacro)
 
 @singleton
-class OneListMacro(Macro):
+class ListMacro(Macro):
     def build(self, values, type_):
-        return Literal(W_List([values[2]]), type_)
+        return Literal(values[2], type_)
 grammar.add(List.get(ALPHA), ws([
-    Word.word("["), ALPHA, Word.word("]"),
-]), OneListMacro)
-grammar.add(List.get(ALPHA), ws([
-    Word.word("["), ALPHA, Word.word(","), Word.word("]"),
-]), OneListMacro)
+    Word.word("["), Repeat.get(ALPHA), Word.word("]"),
+]), ListMacro)
 
-@singleton
-class EncloseListMacro(Macro):
-    def build(self, values, type_):
-        return values[2]
-grammar.add(List.get(ALPHA), ws([
-    Word.word("["), List.get(ALPHA), Word.word("]"),
-]), EncloseListMacro)
-grammar.add(List.get(ALPHA), ws([
-    Word.word("["), List.get(ALPHA), Word.word(","), Word.word("]"),
-]), EncloseListMacro)
+
+# Repeat
+grammar.add(Repeat.get(ALPHA), [ALPHA], StartList)
+grammar.add(Repeat.get(ALPHA), ws([Repeat.get(ALPHA), ALPHA]), ContinueList)
+
 
 
 

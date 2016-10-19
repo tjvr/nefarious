@@ -102,7 +102,7 @@ class W_List(Value):
         return "W_List({})".format(repr(self.items))
 
     def sexpr(self):
-        return "[" + ", ".join([c.sexpr() for c in self.items]) + "]"
+        return "[" + " ".join([c.sexpr() for c in self.items]) + "]"
 
 
 

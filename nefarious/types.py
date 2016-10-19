@@ -290,6 +290,51 @@ class Seq(Internal):
         return l
 
 
+class Repeat(Internal):
+    _cache = {}
+
+    def __init__(self, child):
+        self.child = child
+        self._union = {}
+        self.has_generic = child.has_generic
+
+    @staticmethod
+    def get(child):
+        assert isinstance(child, Type)
+        if child in Repeat._cache:
+            type_ = Repeat._cache[child]
+        else:
+            type_ = Repeat._cache[child] = Repeat(child)
+        return type_
+
+    def __repr__(self):
+        return 'Repeat({!r})'.format(self.child)
+
+    def _str(self):
+        return "*" + self.child._str()
+
+    def _is_super(self, other):
+        if isinstance(other, Repeat):
+            return self.child.is_super(other.child)
+
+    def specialise(self, unification):
+        return Repeat.get(self.child.specialise(unification))
+
+    def supertypes(self):
+        l = [] #Type.ANY]
+        for t in self.child.supertypes():
+            l.append(Repeat.get(t))
+        return l
+
+    def subtypes(self):
+        l = []
+        for t in self.child.subtypes():
+            l.append(Repeat.get(t))
+        l.append(Generic.ALPHA)
+        return l
+
+
+
 Type.PROGRAM = Internal._cache['Program'] = Program('Program')
 
 # Wild -- a value which can fit into any slot
