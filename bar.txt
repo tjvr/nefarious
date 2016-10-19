@@ -1,5 +1,7 @@
 
-let I = fun Int:x { x }
+let f = fun Int:x { x }
 
-call I with 1
+let g = fun { 42 }
+
+call g
 

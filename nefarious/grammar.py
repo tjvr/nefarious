@@ -315,7 +315,7 @@ Arg = Internal.get('Arg')
 
 grammar.add(Arg, [Type.TYPE, Word.word(":"), Word.WORD], ArgSpecMacro)
 
-grammar.add(Seq.get(Arg), [Arg], StartList)
+grammar.add(Seq.get(Arg), [], EmptyList)
 grammar.add(Seq.get(Arg), ws([Seq.get(Arg), Arg]), ContinueList)
 
 @singleton
@@ -347,7 +347,7 @@ class LambdaMacro(Macro):
         body = values[4]
         return Lambda(Func(arg_names, body))
 
-grammar.add(Type.FUNC, ws_not_null([
+grammar.add(Type.FUNC, ws([
     Word.word("fun"), Seq.get(Arg), Type.BLOCK,
 ]), LambdaMacro)
 
@@ -461,13 +461,16 @@ grammar.add(Line, ws_not_null([
 class DynamicCallMacro(Macro):
     def build(self, values, type_):
         func = values[2]
-        arg = values[6]
-        return Call(func, [arg])
+        if len(values) > 3:
+            arg = values[6]
+            return Call(func, [arg])
+        else:
+            return Call(func, [])
 
 
-#grammar.add(Generic.ALPHA, ws_not_null([
-#    Word.word("call"), Type.FUNC
-#]), DynamicCallMacro)
+grammar.add(Generic.ALPHA, ws_not_null([
+    Word.word("call"), Type.FUNC
+]), DynamicCallMacro)
 grammar.add(Generic.ALPHA, ws_not_null([
     Word.word("call"), Type.FUNC, Word.word("with"), Type.ANY
 ]), DynamicCallMacro)
