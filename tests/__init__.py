@@ -416,7 +416,7 @@ class LanguageTests(BaseParser):
         return language_parse(source, debug)
 
     def test_00(self): self._success("define fib { 123 }")
-    def test_01(self): self._success("define fib { 123 } 123")
+    def test_01(self): self._success("define fib { 123 } \n 123")
     def test_02(self): self._error("define fib n { n }")
     def test_02(self): self._success("define fib Int:n { n }")
     def test_03(self): self._error("define fib Int:n { n } n")
@@ -432,7 +432,8 @@ class LanguageTests(BaseParser):
 
     def test_04b(self):
         self._parse(""" define fib Int:n { n
-            fib 123 } fib 123
+            fib 123 }
+        fib 123
         """, "{ (define fib_Int n { n (fib_Int 123) }) (fib_Int 123) }")
 
     def test_05(self):
@@ -456,4 +457,13 @@ class LanguageTests(BaseParser):
 
     def test_08b(self):
         self._success("define foo {}")
+
+    def test_09(self):
+        self._success("""
+        1
+        2
+        """)
+        self._error("""
+        1 2
+        """)
 

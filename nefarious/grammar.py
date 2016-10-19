@@ -137,8 +137,6 @@ grammar.add(Repeat.get(ALPHA), [ALPHA], StartList)
 grammar.add(Repeat.get(ALPHA), ws([Repeat.get(ALPHA), ALPHA]), ContinueList)
 
 
-
-
 # Parentheses
 
 @singleton
@@ -150,11 +148,20 @@ grammar.add(ALPHA, ws([Word.word("("), ALPHA, Word.word(")")]), Parens)
 
 
 
+
 # Lines
 
 Line = Type.get('Line')
 grammar.add(Line, [Type.ANY], Identity)
 
+# NLS -> WS* NL (WS | NL)*
+Internal.NLS = Internal.get("NLS")
+grammar.add(Internal.NLS, [Word.NL], Null)
+grammar.add(Internal.NLS, [Word.WS, Internal.NLS], Null)
+grammar.add(Internal.NLS, [Internal.NLS, Word.WS], Null)
+grammar.add(Internal.NLS, [Internal.NLS, Word.NL], Null)
+
+# SEP -> (WS | NL)*
 Internal.SEP = Internal.get("SEP")
 grammar.add(Internal.SEP, [], Null)
 grammar.add(Internal.SEP, [Internal.SEP, Word.WS], Null)
@@ -162,7 +169,11 @@ grammar.add(Internal.SEP, [Internal.SEP, Word.NL], Null)
 
 grammar.add(Seq.get(Line), [], EmptyList)
 grammar.add(Seq.get(Line), [Line], StartList)
-grammar.add(Seq.get(Line), [Seq.get(Line), Internal.SEP, Line], ContinueList)
+grammar.add(Seq.get(Line), [Seq.get(Line), Internal.NLS, Line], ContinueList)
+
+
+# TODO allow newlines inside parens?
+
 
 
 # Blocks

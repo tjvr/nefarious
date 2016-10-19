@@ -1,8 +1,3 @@
 
-define first (List Any):x { x }
+{}
 
-define foo (List Int):x {
-    first x
-}
-
-foo []
