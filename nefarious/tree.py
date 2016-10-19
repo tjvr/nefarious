@@ -43,7 +43,7 @@ from .types import *
 from .values import *
 
 class Node(Tree):
-    type = Type.get('Null')
+    type = None
 
     def set_parent(self, parent):
         self._parent = parent
@@ -134,10 +134,14 @@ class Literal(Node):
 
 
 class Load(Node):
-    def __init__(self, name):
+    def __init__(self, name, type_):
         self._parent = None
         assert isinstance(name, Name)
         self.name = name
+        self.type = type_
+
+    def __repr__(self):
+        return "Load({!r})".format(self.name)
 
     def evaluate(self, frame):
         shape = frame.shape
@@ -167,7 +171,7 @@ class LoadOffset(Load):
             return other.evaluate(frame)
         return frame.values[self.index]
 
-class LoadGeneric(Node):
+class LoadGeneric(Load):
     def __init__(self, name):
         self.name = name
     def evaluate(self, frame):
@@ -183,6 +187,9 @@ class Let(Node):
 
         self.value = value
         value.set_parent(self)
+
+    def __repr__(self):
+        return "Let({!r}, {!r})".format(self.name, self.value)
 
     def replace(self, child, other):
         assert child is self.value
@@ -236,7 +243,7 @@ class Lambda(Node):
 
 
 class Call(Node):
-    def __init__(self, func, args):
+    def __init__(self, func, args, type_):
         self._parent = None
         self.func = func
         self.args = args
@@ -245,6 +252,8 @@ class Call(Node):
         for arg in args:
             assert isinstance(arg, Node), arg
             arg.set_parent(self)
+
+        self.type = type_
 
     def replace(self, child, other):
         if child is self.func:

@@ -1,7 +1,13 @@
 
 let f = fun Int:x { x }
 
-let g = fun { 42 }
+let g = fun {
+    let x = 42
+    fun { x }
+}
 
-call g
+
+let y = call g
+
+call y
 

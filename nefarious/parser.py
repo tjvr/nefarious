@@ -13,6 +13,7 @@ class Rule:
         for s in symbols:
             assert isinstance(s, Tag)
         self.symbols = symbols
+        assert isinstance(target, Tag)
         self.target = target
 
         self._specialise = {}

@@ -52,7 +52,7 @@ class CallMacro(Macro):
 
     def build(self, values, type_):
         args = [values[i] for i in self.arg_indexes]
-        return Call(Load(self.call), args)
+        return Call(Load(self.call, Type.FUNC), args, type_)
 
 # TODO CustomMacros
 #    return self.call_immediate(children)
@@ -105,8 +105,9 @@ class ContinueList(Macro):
     def build(self, values, type_):
         list_ = values[0]
         assert isinstance(list_, W_List)
-        list_.items.append(values[-1])
-        return list_
+        items = list(list_.items)
+        items.append(values[-1])
+        return W_List(items)
 
 # Generic lists
 ALPHA = Generic.ALPHA
@@ -261,7 +262,7 @@ class DefineMacro(Macro):
                 assert isinstance(s, ArgSpec)
                 assert isinstance(s.name, Word)
                 arg = Name(s.name.value)
-                grammar.add(s.type, [s.name], LoadMacro(arg))
+                grammar.add(s.type, [s.name], LoadMacro(arg, s.type))
                 args.append(arg)
         DefineMacro.current_definition_args.append(args)
 
@@ -284,6 +285,7 @@ class DefineMacro(Macro):
         else:
             # TODO walk AST for `return` statements
             type_ = body.nodes[-1].type
+        assert type_ is not None, body
         # TODO check unification with `func` calls in body
 
         # Define rule
@@ -334,7 +336,7 @@ class LambdaMacro(Macro):
         for s in spec:
             assert isinstance(s, ArgSpec)
             arg = Name(s.name.value)
-            grammar.add(s.type, [s.name], LoadMacro(arg))
+            grammar.add(s.type, [s.name], LoadMacro(arg, s.type))
             args.append(arg)
         LambdaMacro.current_definition_args.append(args)
 
@@ -376,11 +378,13 @@ grammar.add(Line, ws_not_null([
 # Let
 
 class LoadMacro(Macro):
-    def __init__(self, name):
+    def __init__(self, name, type_):
         assert isinstance(name, Name)
         self.name = name
+        self.type = type_
     def build(self, values, type_):
-        return Load(self.name)
+        assert self.type == type_
+        return Load(self.name, self.type)
 
 @singleton
 class LetMacro(Macro):
@@ -392,9 +396,13 @@ class LetMacro(Macro):
         for iden in identifier:
             assert isinstance(iden, Word)
             name += iden.value
-
         var = Name(name) # TODO Symbol?
-        grammar.add(value.type, identifier, LoadMacro(var))
+
+        type_ = value.type
+        if type_ is None:
+            type_ = Generic.ALPHA # TODO this doesn't work
+
+        grammar.add(type_, identifier, LoadMacro(var, type_))
         return Let(var, value)
 
 grammar.add(Seq.get(Iden), [Iden], StartList)
@@ -463,9 +471,9 @@ class DynamicCallMacro(Macro):
         func = values[2]
         if len(values) > 3:
             arg = values[6]
-            return Call(func, [arg])
+            return Call(func, [arg], type_)
         else:
-            return Call(func, [])
+            return Call(func, [], type_)
 
 
 grammar.add(Generic.ALPHA, ws_not_null([
