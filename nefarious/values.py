@@ -134,10 +134,10 @@ class Symbol(Name):
     @staticmethod
     def get(name):
         assert isinstance(name, str), name
-        if name in Type._cache:
-            symbol = Type._cache[name]
+        if name in Symbol._cache:
+            symbol = Symbol._cache[name]
         else:
-            symbol = Type._cache[name] = Type(name)
+            symbol = Symbol._cache[name] = Symbol(name)
         return symbol
 
     def __repr__(self):
@@ -162,7 +162,7 @@ class Shape:
         return self.names.get(key, -1)
 
     def transition(self, new_name):
-        assert isinstance(new_name, Name)
+        assert isinstance(new_name, Name), repr(new_name)
         if new_name in self.names:
             raise ValueError("symbol already in record: " + new_name.sexpr())
         if new_name in self._transitions:
@@ -185,9 +185,10 @@ Shape.EMPTY = Shape({})
 class W_Record(Value):
     type = Type.get('Record')
 
-    def __init__(self, keys):
+    def __init__(self, keys, values):
         self.shape = Shape.get(keys)
-        self.values = [None] * len(keys)
+        self.values = values
+        assert len(keys) == len(values)
         # first,second,third TODO opt
 
     def set(self, key, value):
@@ -210,6 +211,19 @@ class W_Record(Value):
         if index == -1:
             raise KeyError(key)
         return self.values[index]
+
+    def sexpr(self):
+        values = self.values
+        symbols = []
+        lookup = self.shape.names
+        for index in range(len(values)):
+            for key in lookup:
+                if lookup[key] == index:
+                    symbols.append(key)
+        return "[" + " ".join([
+            ":" + symbols[i].name + " " + values[i].sexpr()
+            for i in range(len(symbols))
+        ]) + "]"
 
 
 class Frame:

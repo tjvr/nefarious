@@ -224,7 +224,6 @@ class ArgSpec(Tree):
         assert isinstance(type_, Type)
         self.name = name
         self.type = type_
-
 @singleton
 class ArgSpecMacro(Macro):
     def build(self, values, type_):
@@ -499,6 +498,41 @@ grammar.add(Generic.ALPHA, ws_not_null([
 # TODO apply Func: to List:
 
 
+# Records
+
+Pair = Internal.get('Pair')
+class KVPair(Tree):
+    def __init__(self, key, value):
+        assert isinstance(key, Symbol)
+        self.key = key
+        self.value = value
+@singleton
+class PairMacro(Macro):
+    def build(self, values, type_):
+        _, key, _w, value = values
+        assert isinstance(key, Word)
+        return KVPair(Symbol.get(key.value), value)
+grammar.add(Pair, [Word.word(":"), Word.WORD, Word.WS_NOT_NULL, Type.ANY], PairMacro)
+
+grammar.add(Seq.get(Pair), [], EmptyList)
+grammar.add(Seq.get(Pair), [Pair], StartList)
+grammar.add(Seq.get(Pair), [Seq.get(Pair), Internal.SEP, Pair], ContinueList)
+
+Record = Type.get('Record')
+@singleton
+class RecordMacro(Macro):
+    def build(self, values, type_):
+        pairs = values[2]
+        assert isinstance(pairs, W_List)
+        keys = []
+        values = []
+        for p in pairs.items:
+            assert isinstance(p, KVPair)
+            keys.append(p.key)
+            values.append(p.value)
+        return Literal(W_Record(keys, values), type_)
+grammar.add(Type.get('Record'), ws([Word.word("["), Seq.get(Pair), Word.word("]")]), RecordMacro)
+
 
 
 
@@ -532,6 +566,7 @@ add_type(Int)
 add_type(Text)
 add_type(Bool)
 add_type(Type.ANY)
+add_type(Record)
 
 
 

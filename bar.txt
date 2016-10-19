@@ -1,3 +1,15 @@
 
-{}
+define first (List Any):x { x }
+
+define foo (List Int):x {
+    first x
+}
+
+[ :x 10 :y 20 ]
+
+define distance Record:r {
+    r
+}
+
+distance [ :x 10 :y 20 ]
 
