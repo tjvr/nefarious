@@ -50,8 +50,8 @@ src: pypy \
 		nefarious/types.py \
 		nefarious/parser.py \
 		nefarious/grammar.py \
-		nefarious/runtime.py \
-		nefarious/builtins.py
+		nefarious/tree.py \
+		nefarious/values.py
 .TODO:
 	#@rem --cc=afl-clang
 

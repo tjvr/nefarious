@@ -1,7 +1,11 @@
 
 class Tree:
     def sexpr(self):
-        raise NotImplementedError
+        raise NotImplementedError, self
+
+class Error(Tree):
+    def __init__(self, message):
+        self.message = message
 
 
 class Tag(Tree):

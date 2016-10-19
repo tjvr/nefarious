@@ -284,6 +284,10 @@ class Column:
                 item.evaluate([])
 
     def eval_enter(self):
+        if Type.BLOCK not in self.wants:
+            # Unexpected Block ??
+            raise ValueError()
+
         for item in self.wants[Type.BLOCK]:
             assert isinstance(item.tag, LR0)
             assert item.tag.wants == Type.BLOCK
@@ -398,7 +402,6 @@ class Scope:
 
 
 
-from .runtime import Error
 
 def grammar_parse(source, grammar, debug=DEBUG):
     lexer = Lexer(source)
@@ -429,7 +432,12 @@ def grammar_parse(source, grammar, debug=DEBUG):
             column.print_()
 
         if token == Word.ENTER: # { -> start of block
-            column.eval_enter()
+            try:
+                column.eval_enter()
+            except ValueError:
+                msg = "Unexpected BLOCK on line " + str(lineno)
+                msg += "\n>> " + line
+                return Error(msg)
 
         if token == Word.NL: # end of line
             line = ""
