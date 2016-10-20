@@ -1,6 +1,7 @@
 
 import os
 import sys
+sys.path.append('./pypy/')
 
 from .grammar import parse, parse_and_run
 
