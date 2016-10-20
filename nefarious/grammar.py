@@ -601,9 +601,19 @@ grammar.add(Int, [Word.DIGITS], ParseInt)
 @singleton
 class ParseFloat(Macro):
     def build(self, values, type_):
-        string = values[0].value + "." + values[-1].value
+        left, right = values[0], values[2]
+        assert isinstance(left, Word) and isinstance(right, Word)
+        string = left.value + "." + right.value
         return Literal(W_Float.fromstr(string), type_)
 grammar.add(Float, [Word.DIGITS, Word.word("."), Word.DIGITS], ParseFloat)
+
+@singleton
+class ParseText(Macro):
+    def build(self, values, type_):
+        word = values[0]
+        assert isinstance(word, Word)
+        return Literal(W_Text.fromstr(word.value), type_)
+grammar.add(Text, [Word.TEXT], ParseText)
 
 
 

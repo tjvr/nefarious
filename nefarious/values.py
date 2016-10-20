@@ -114,8 +114,21 @@ class W_Int(Value):
 class W_Text(Value):
     type = Type.get('Text')
 
+    def __init__(self, text):
+        assert isinstance(text, rope.StringNode)
+        self.text = text
 
+    @staticmethod
+    @jit.elidable
+    def fromstr(string):
+        return W_Text(rope.LiteralStringNode(string))
 
+    def __repr__(self):
+        return 'W_Text({!r})'.format(self.text)
+
+    def sexpr(self):
+        # TODO use flatten_unicode() ?
+        return '"' + self.text.flatten_string() + '"'
 
 
 class W_List(Value):

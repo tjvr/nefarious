@@ -27,7 +27,7 @@ class Word(Tag):
         assert isinstance(kind, str)
         assert isinstance(value, str)
         if value:
-            assert kind in ('RESERVED', 'PUNC', 'DIGITS', 'WORD', 'ERROR', 'WS'), value
+            assert kind in ('RESERVED', 'PUNC', 'DIGITS', 'TEXT', 'WORD', 'ERROR', 'WS'), value
         key = kind, value
         if key in Word._cache:
             word = Word._cache[key]
@@ -109,7 +109,7 @@ class Lexer:
             self.next()
             return Word.get('RESERVED', c)
 
-        elif self.tok in "-!\"#$%&\\'()*+,./;<=>?@[]^`|~":
+        elif self.tok in "-!#$%&\\'()*+,./;<=>?@[]^`|~":
             c = self.tok
             self.next()
             return Word.get('PUNC', c)
@@ -120,7 +120,18 @@ class Lexer:
             while self.tok in "0123456789":
                 s += self.tok
                 self.next()
-            return Word.get('DIGITS', s)
+            return Word('DIGITS', s) # Don't unique digit tokens.
+
+        elif self.tok == '"':
+            s = ""
+            self.next() # quote
+            while self.tok != '"':
+                if self.tok == '\\':
+                    self.next()
+                s += self.tok
+                self.next()
+            self.next() # quote
+            return Word('TEXT', s) # Don't unique string tokens.
 
         # TODO _
         else:
@@ -156,6 +167,7 @@ Word.WS_NOT_NULL = Word.get('WS', '  ')
 Word.RESERVED = Word.get('RESERVED')
 Word.PUNC = Word.get('PUNC')
 Word.DIGITS = Word.get('DIGITS')
+Word.TEXT = Word.get('TEXT')
 Word.WORD = Word.get('WORD')
 Word.ERROR = Word.get('ERROR')
 
