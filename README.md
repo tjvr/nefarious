@@ -86,7 +86,12 @@ There are a range of fun extensions to the language and/or compiler: I could add
 Install
 -------
 
-**Ubuntu**: for making the JIT (`make nfsj`), you'll need to run:
+**Ubuntu**: you'll need the following before `make` will work (of course, you might have
+them already):
+
+    sudo apt-get install build-essential git unzip python
+
+For making the JIT (`make nfsj`), you'll need to run:
 
     sudo apt-get install libffi-dev
 
