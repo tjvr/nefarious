@@ -571,10 +571,12 @@ class ListTypeMacro(Macro):
 grammar.add(Type.TYPE, ws([Word.word("("), Word.word("List"), Type.TYPE, Word.word(")")]), ListTypeMacro)
 
 Int = Type.get('Int')
+Float = Type.get('Float')
 Text = Type.get('Text')
 Bool = Type.get('Bool')
 
 add_type(Int)
+add_type(Float)
 add_type(Text)
 add_type(Bool)
 add_type(Type.ANY)
@@ -595,6 +597,14 @@ class ParseInt(Macro):
         assert isinstance(digits, Word)
         return Literal(W_Int.fromstr(digits.value), type_)
 grammar.add(Int, [Word.DIGITS], ParseInt)
+
+@singleton
+class ParseFloat(Macro):
+    def build(self, values, type_):
+        string = values[0].value + "." + values[-1].value
+        return Literal(W_Float.fromstr(string), type_)
+grammar.add(Float, [Word.DIGITS, Word.word("."), Word.DIGITS], ParseFloat)
+
 
 
 

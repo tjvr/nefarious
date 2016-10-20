@@ -2,6 +2,15 @@
 
 define Int:a + Int:b { INT_ADD a b }
 define Int:c - Int:b { INT_SUB c b }
+define Float:a + Float:b { FLOAT_ADD a b }
+define Float:a - Float:b { FLOAT_SUB a b }
 
-1 + 2 + 3 + 10000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+define π { 3.14 }
 
+define ☺ { 4 }
+
+
+1 + 2 + 3 + 100
+
+3 + ☺
+π + 1.0

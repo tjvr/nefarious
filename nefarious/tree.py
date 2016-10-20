@@ -430,3 +430,25 @@ class INT_SUB(InfixBuiltin):
         assert isinstance(right, W_Int)
         return W_Int(left.value.sub(right.value))
 
+class FLOAT_ADD(InfixBuiltin):
+    type = W_Float.type
+    arg_types = [W_Float, W_Float]
+    def evaluate(self, frame):
+        left = self.left.evaluate(frame)
+        assert isinstance(left, W_Float)
+        right = self.right.evaluate(frame)
+        assert isinstance(right, W_Float)
+        return W_Float(left.value + right.value)
+    # TODO evaluate_float
+
+class FLOAT_SUB(InfixBuiltin):
+    type = W_Float.type
+    arg_types = [W_Float, W_Float]
+    def evaluate(self, frame):
+        left = self.left.evaluate(frame)
+        assert isinstance(left, W_Float)
+        right = self.right.evaluate(frame)
+        assert isinstance(right, W_Float)
+        return W_Float(left.value - right.value)
+    # TODO evaluate_float
+

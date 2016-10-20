@@ -2,6 +2,7 @@
 from .types import Tree, Type, List, Generic
 
 from rpython.rlib.rbigint import rbigint
+from rpython.rlib import rope
 from rpython.rlib import jit
 
 
@@ -72,6 +73,25 @@ class W_Null(Value):
 Value.NULL = W_Null()
 
 
+class W_Float(Value):
+    type = Type.get('Float')
+    def __init__(self, value):
+        assert isinstance(value, float)
+        self.value = value
+
+    @staticmethod
+    @jit.elidable
+    def fromstr(string):
+        assert isinstance(string, str)
+        return W_Float(float(string))
+
+    def __repr__(self):
+        return "W_Float({!r})".format(self.value)
+
+    def sexpr(self):
+        return str(self.value)
+
+
 class W_Int(Value):
     type = Type.get('Int')
 
@@ -91,13 +111,11 @@ class W_Int(Value):
         return self.value.str()
 
 
-# Decimal
-
-#grammar.add(Int, [Word.DIGITS, Word.word("."), Word.DIGITS], ParseDecimal)
-# TODO W_Decimal
+class W_Text(Value):
+    type = Type.get('Text')
 
 
-# TODO W_Text (using ropes!)
+
 
 
 class W_List(Value):
