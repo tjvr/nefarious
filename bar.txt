@@ -19,7 +19,11 @@ define ☺ { 4 }
 
 "Hello ü there! 💩"
 
+split "foo bar baz"
+
 join ["foo" "bar"]
 
-split "foo bar baz"
+join ["ü" "💩"]
+
+join split "Hello ü there! 💩"
 

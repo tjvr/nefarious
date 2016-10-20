@@ -493,5 +493,3 @@ class TEXT_SPLIT(UnaryBuiltin):
         text = self.child.evaluate(frame)
         return text.split()
 
-
-

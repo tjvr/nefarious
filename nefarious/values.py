@@ -115,31 +115,34 @@ class W_Text(Value):
     type = Type.get('Text')
 
     def __init__(self, text):
-        assert isinstance(text, rope.StringNode)
+        #assert isinstance(text, rope.StringNode)
         self.text = text
 
     @staticmethod
     @jit.elidable
     def fromstr(string):
-        return W_Text(rope.LiteralStringNode(string))
+        # TODO tokenizer should understand utf-8
+        return W_Text(rope.LiteralUnicodeNode(string.decode('utf-8')))
 
     def __repr__(self):
         return 'W_Text({!r})'.format(self.text)
 
     def sexpr(self):
-        # TODO use flatten_unicode() ?
-        return '"' + self.text.flatten_string() + '"'
+        return '"' + self.text.flatten_unicode().encode('utf-8') + '"'
 
     @staticmethod
     def join(text_list):
-        return W_Text(rope.join(rope.LiteralStringNode(""), [t.text for t in text_list.items]))
+        assert isinstance(text_list, W_List)
+        l = [t.text for t in text_list.items]
+        return W_Text(rope.rebalance(l))
 
-    @staticmethod
-    def join_with(text_list, sep):
-        return W_Text(rope.join(sep.text, [t.text for t in text_list.items]))
+    #@staticmethod
+    #def join_with(text_list, sep):
+    #    return W_Text(rope.join(sep.text, [t.text for t in text_list.items]))
 
     def split(self):
-        return W_List([W_Text(x) for x in rope.split_chars(self.text)])
+        return W_List([W_Text(x) for x in rope.split_chars(self.text,
+            predicate=lambda x: unichr(x) == u" ")])
 
     #def split_by(self, sep):
     #    return W_Text(rope.join(rope.LiteralStringNode(""), [t.text for t in text_list.items]))
