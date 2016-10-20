@@ -300,6 +300,8 @@ class DefineMacro(Macro):
         assert type_ is not None, body
         # TODO check unification with `func` calls in body
 
+        # TODO if body is trivial Builtin -- use BuiltinMacro ??
+
         # Define rule
         symbols, macro = self._macro(spec, func)
         grammar.add(type_, symbols, macro)
@@ -494,8 +496,18 @@ grammar.add(Generic.ALPHA, ws_not_null([
 grammar.add(Generic.ALPHA, ws_not_null([
     Word.word("call"), Type.FUNC, Word.word("with"), Type.ANY
 ]), DynamicCallMacro)
+
+
+@singleton
+class ApplyMacro(Macro):
+    def build(self, values, type_):
+        return Apply(values[2], values[6], type_)
+
+grammar.add(Generic.ALPHA, ws_not_null([
+    Word.word("apply"), Type.FUNC, Word.word("to"), List.get(Type.ANY)
+]), ApplyMacro)
+
 # TODO better syntax: call with Record
-# TODO apply Func: to List:
 
 
 # Records
@@ -568,9 +580,13 @@ add_type(Bool)
 add_type(Type.ANY)
 add_type(Record)
 
+#Digits = Type.get('Digits')
+#grammar.add(Digits, [Word.word("Digits")], Identity)
+#add_type(Digits)
 
 
-# TODO built-ins...
+# Built-in builtins
+# TODO move to preamble
 
 @singleton
 class ParseInt(Macro):
@@ -582,11 +598,43 @@ grammar.add(Int, [Word.DIGITS], ParseInt)
 
 
 
+# Built in function nodes
 
-main = Func([], None)
-builtins = Frame(None, main, [])
+class BuiltinMacro(Macro):
+    def __init__(self, cls, arg_indexes):
+        assert issubclass(cls, Builtin)
+        self.cls = cls
+        self.arg_indexes = arg_indexes
 
-builtins.set #...
+    def build(self, values, type_):
+        args = [values[i] for i in self.arg_indexes]
+        return self.cls(args, type_)
+
+def value_type(cls):
+    assert issubclass(cls, Value)
+    assert isinstance(cls.type, Type)
+    return cls.type
+
+def add_builtin(cls):
+    name = cls.__name__
+    out = cls.type
+    assert isinstance(out, Type), out
+    args = [value_type(a) for a in cls.arg_types]
+    symbols = ws([Word.word(name)] + args)
+    arg_indexes = [i for i in range(len(symbols)) if isinstance(symbols[i], Type)]
+    assert len(arg_indexes) == len(args)
+    grammar.add(out, symbols, BuiltinMacro(cls, arg_indexes))
+
+import tree
+for name in dir(tree):
+    cls = getattr(tree, name)
+    if name.replace("_", "").isupper():
+        if cls is not Builtin and issubclass(cls, Builtin):
+            add_builtin(cls)
+
+
+
+
 
 
 
@@ -663,7 +711,10 @@ def parse_and_run(source, debug=False):
     #print(repr(tree))
     print
 
-    retval = tree.evaluate(builtins)
+    main = Func([], None)
+    root = Frame(None, main, [])
+
+    retval = tree.evaluate(root)
     if retval is None:
         print "=> None"
         return ""

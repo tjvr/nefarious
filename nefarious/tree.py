@@ -51,7 +51,7 @@ class Node(Tree):
     def _replace(self, other):
         assert isinstance(other, Node)
         parent = self._parent
-        self._parent = None # TODO omit
+        #self._parent = None # TODO omit
         parent.replace(self, other)
         other._parent = parent
 
@@ -68,10 +68,10 @@ class Block(Node):
 
     def __init__(self, nodes):
         assert isinstance(nodes, list)
+        self.nodes = nodes
         for node in nodes:
             assert isinstance(node, Node), node
             node.set_parent(self)
-        self.nodes = nodes
 
     def replace(self, child, other):
         for index in range(len(self.nodes)):
@@ -81,7 +81,7 @@ class Block(Node):
         assert False
 
     def __repr__(self):
-        return "BlockNode({!r})".format(self.nodes)
+        return "Block({!r})".format(self.nodes)
 
     def sexpr(self):
         indent = "  "
@@ -119,6 +119,7 @@ class Quote(Node):
 
 class Literal(Node):
     def __init__(self, value, type_):
+        self._parent = None
         assert isinstance(value, Value)
         assert not isinstance(value, Node)
         self.value = value
@@ -280,6 +281,41 @@ class Call(Node):
     def sexpr(self):
         return "(" + self.func.sexpr() + " " + " ".join([a.sexpr() for a in self.args]) + ")"
 
+class Apply(Node):
+    def __init__(self, func, arg_list, type_):
+        self._parent = None
+        self.func = func
+        self.arg_list = arg_list
+        func.set_parent(self)
+        arg_list.set_parent(self)
+        self.type = type_
+
+    def replace(self, child, other):
+        if child is self.func:
+            self.func = other
+            return
+        if child is self.arg_list:
+            self.arg_list = other
+            return
+        assert False, "child not found"
+
+    def evaluate(self, frame):
+        closure = self.func.evaluate(frame)
+        assert isinstance(closure, W_Func)
+
+        arg_list = self.arg_list.evaluate(frame)
+        assert isinstance(arg_list, list)
+
+        inner = closure.call(arg_list)
+        try:
+            return closure.func.body.evaluate(inner)
+        except ReturnValue as ret:
+            return ret.value
+
+    def sexpr(self):
+        return "(apply " + self.func.sexpr() + " " + self.arg_list.sexpr() + ")"
+
+
 
 class Return(Node):
     def __init__(self, child):
@@ -348,4 +384,49 @@ class Return(Node):
 #     def evaluate(self, frame):
 #         value = self.value.evaluate() # ...
 #         pass # TODO
+
+class Builtin(Node):
+    type = None
+
+    def __init__(self, args, type_):
+        raise NotImplementedError
+
+    def sexpr(self):
+        return "(" + self.__class__.__name__ + " " + " ".join([a.sexpr() for a in self._args()]) + ")"
+
+class InfixBuiltin(Builtin):
+    def __init__(self, args, type_):
+        self._parent = None
+        self.left, self.right = args
+        self.left.set_parent(self)
+        self.right.set_parent(self)
+    def _args(self):
+        return [self.left, self.right]
+    def replace(self, child, other):
+        if child == self.left:
+            self.left = child
+        elif child == self.right:
+            self.right = child
+        else:
+            assert False
+
+class INT_ADD(InfixBuiltin):
+    type = W_Int.type
+    arg_types = [W_Int, W_Int]
+    def evaluate(self, frame):
+        left = self.left.evaluate(frame)
+        assert isinstance(left, W_Int)
+        right = self.right.evaluate(frame)
+        assert isinstance(right, W_Int)
+        return W_Int(left.value + right.value)
+
+class INT_SUB(InfixBuiltin):
+    type = W_Int.type
+    arg_types = [W_Int, W_Int]
+    def evaluate(self, frame):
+        left = self.left.evaluate(frame)
+        assert isinstance(left, W_Int)
+        right = self.right.evaluate(frame)
+        assert isinstance(right, W_Int)
+        return W_Int(left.value - right.value)
 

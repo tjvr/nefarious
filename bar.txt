@@ -1,15 +1,7 @@
 
-define first (List Any):x { x }
 
-define foo (List Int):x {
-    first x
-}
+define Int:a + Int:b { INT_ADD a b }
+define Int:c - Int:b { INT_SUB c b }
 
-[ :x 10 :y 20 ]
-
-define distance Record:r {
-    r
-}
-
-distance [ :x 10 :y 20 ]
+1 + 2 + 3 - 10
 
