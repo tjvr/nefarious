@@ -130,6 +130,20 @@ class W_Text(Value):
         # TODO use flatten_unicode() ?
         return '"' + self.text.flatten_string() + '"'
 
+    @staticmethod
+    def join(text_list):
+        return W_Text(rope.join(rope.LiteralStringNode(""), [t.text for t in text_list.items]))
+
+    @staticmethod
+    def join_with(text_list, sep):
+        return W_Text(rope.join(sep.text, [t.text for t in text_list.items]))
+
+    def split(self):
+        return W_List([W_Text(x) for x in rope.split_chars(self.text)])
+
+    #def split_by(self, sep):
+    #    return W_Text(rope.join(rope.LiteralStringNode(""), [t.text for t in text_list.items]))
+
 
 class W_List(Value):
     type = List.get(Generic.ALPHA)

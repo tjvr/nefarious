@@ -126,7 +126,8 @@ grammar.add(List.get(ALPHA), ws([
 @singleton
 class ListMacro(Macro):
     def build(self, values, type_):
-        return Literal(values[2], type_)
+        items = [(x.value if isinstance(x, Literal) else x) for x in values[2].items]
+        return Literal(W_List(items), type_)
 grammar.add(List.get(ALPHA), ws([
     Word.word("["), Repeat.get(ALPHA), Word.word("]"),
 ]), ListMacro)
@@ -630,16 +631,11 @@ class BuiltinMacro(Macro):
         args = [values[i] for i in self.arg_indexes]
         return self.cls(args, type_)
 
-def value_type(cls):
-    assert issubclass(cls, Value)
-    assert isinstance(cls.type, Type)
-    return cls.type
-
 def add_builtin(cls):
     name = cls.__name__
     out = cls.type
     assert isinstance(out, Type), out
-    args = [value_type(a) for a in cls.arg_types]
+    args = cls.arg_types
     symbols = ws([Word.word(name)] + args)
     arg_indexes = [i for i in range(len(symbols)) if isinstance(symbols[i], Type)]
     assert len(arg_indexes) == len(args)

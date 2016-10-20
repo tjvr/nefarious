@@ -70,6 +70,8 @@ class Block(Node):
         assert isinstance(nodes, list)
         self.nodes = nodes
         for node in nodes:
+            #if isinstance(node, Value) and not isinstance(node, Node):
+            #    node = Literal(node)
             assert isinstance(node, Node), node
             node.set_parent(self)
 
@@ -394,6 +396,20 @@ class Builtin(Node):
     def sexpr(self):
         return "(" + self.__class__.__name__ + " " + " ".join([a.sexpr() for a in self._args()]) + ")"
 
+class UnaryBuiltin(Builtin):
+    def __init__(self, args, type_):
+        self._parent = None
+        self.child, = args
+        self.child.set_parent(self)
+    def _args(self):
+        return [self.child]
+    def replace(self, child, other):
+        if child == self.child:
+            self.child = other
+        else:
+            assert False
+
+
 class InfixBuiltin(Builtin):
     def __init__(self, args, type_):
         self._parent = None
@@ -410,9 +426,12 @@ class InfixBuiltin(Builtin):
         else:
             assert False
 
+
+Int = Type.get('Int')
+
 class INT_ADD(InfixBuiltin):
-    type = W_Int.type
-    arg_types = [W_Int, W_Int]
+    type = Int
+    arg_types = [Int, Int]
     def evaluate(self, frame):
         left = self.left.evaluate(frame)
         assert isinstance(left, W_Int)
@@ -421,8 +440,8 @@ class INT_ADD(InfixBuiltin):
         return W_Int(left.value.add(right.value))
 
 class INT_SUB(InfixBuiltin):
-    type = W_Int.type
-    arg_types = [W_Int, W_Int]
+    type = Int
+    arg_types = [Int, Int]
     def evaluate(self, frame):
         left = self.left.evaluate(frame)
         assert isinstance(left, W_Int)
@@ -430,9 +449,13 @@ class INT_SUB(InfixBuiltin):
         assert isinstance(right, W_Int)
         return W_Int(left.value.sub(right.value))
 
+
+
+Float = Type.get('Float')
+
 class FLOAT_ADD(InfixBuiltin):
-    type = W_Float.type
-    arg_types = [W_Float, W_Float]
+    type = Float
+    arg_types = [Float, Float]
     def evaluate(self, frame):
         left = self.left.evaluate(frame)
         assert isinstance(left, W_Float)
@@ -442,8 +465,8 @@ class FLOAT_ADD(InfixBuiltin):
     # TODO evaluate_float
 
 class FLOAT_SUB(InfixBuiltin):
-    type = W_Float.type
-    arg_types = [W_Float, W_Float]
+    type = Float
+    arg_types = [Float, Float]
     def evaluate(self, frame):
         left = self.left.evaluate(frame)
         assert isinstance(left, W_Float)
@@ -451,4 +474,24 @@ class FLOAT_SUB(InfixBuiltin):
         assert isinstance(right, W_Float)
         return W_Float(left.value - right.value)
     # TODO evaluate_float
+
+
+
+Text = Type.get('Text')
+
+class TEXT_JOIN(UnaryBuiltin):
+    type = Text
+    arg_types = [List.get(Text)]
+    def evaluate(self, frame):
+        text_list = self.child.evaluate(frame)
+        return W_Text.join(text_list)
+
+class TEXT_SPLIT(UnaryBuiltin):
+    type = List.get(Text)
+    arg_types = [Text]
+    def evaluate(self, frame):
+        text = self.child.evaluate(frame)
+        return text.split()
+
+
 

@@ -4,6 +4,8 @@ define Int:a + Int:b { INT_ADD a b }
 define Int:c - Int:b { INT_SUB c b }
 define Float:a + Float:b { FLOAT_ADD a b }
 define Float:a - Float:b { FLOAT_SUB a b }
+define join (List Text):pieces { TEXT_JOIN pieces }
+define split Text:t { TEXT_SPLIT t }
 
 define π { 3.14 }
 
@@ -16,4 +18,8 @@ define ☺ { 4 }
 π + 1.0
 
 "Hello ü there! 💩"
+
+join ["foo" "bar"]
+
+split "foo bar baz"
 
