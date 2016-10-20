@@ -593,7 +593,7 @@ class ParseInt(Macro):
     def build(self, values, type_):
         digits, = values
         assert isinstance(digits, Word)
-        return Literal(W_Int(int(digits.value)), type_)
+        return Literal(W_Int.fromstr(digits.value), type_)
 grammar.add(Int, [Word.DIGITS], ParseInt)
 
 

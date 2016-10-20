@@ -1,6 +1,9 @@
 
 from .types import Tree, Type, List, Generic
 
+from rpython.rlib.rbigint import rbigint
+from rpython.rlib import jit
+
 
 class Value(Tree):
     def __init__(self, type_, value):
@@ -71,15 +74,21 @@ Value.NULL = W_Null()
 
 class W_Int(Value):
     type = Type.get('Int')
+
     def __init__(self, value):
-        assert isinstance(value, int)
+        assert isinstance(value, rbigint)
         self.value = value
 
+    @staticmethod
+    @jit.elidable
+    def fromstr(string):
+        return W_Int(rbigint.fromstr(string))
+
     def __repr__(self):
-        return 'W_Int({})'.format(str(self.value))
+        return 'W_Int({!r})'.format(self.value)
 
     def sexpr(self):
-        return str(self.value)
+        return self.value.str()
 
 
 # Decimal

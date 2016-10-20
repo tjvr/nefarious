@@ -418,7 +418,7 @@ class INT_ADD(InfixBuiltin):
         assert isinstance(left, W_Int)
         right = self.right.evaluate(frame)
         assert isinstance(right, W_Int)
-        return W_Int(left.value + right.value)
+        return W_Int(left.value.add(right.value))
 
 class INT_SUB(InfixBuiltin):
     type = W_Int.type
@@ -428,5 +428,5 @@ class INT_SUB(InfixBuiltin):
         assert isinstance(left, W_Int)
         right = self.right.evaluate(frame)
         assert isinstance(right, W_Int)
-        return W_Int(left.value - right.value)
+        return W_Int(left.value.sub(right.value))
 
