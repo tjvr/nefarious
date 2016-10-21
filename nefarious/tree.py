@@ -468,6 +468,16 @@ class INT_SUB(InfixBuiltin):
         assert isinstance(right, W_Int)
         return W_Int(left.value.sub(right.value))
 
+# TODO INT_EQ
+
+class INT_LT(InfixBuiltin):
+    type = Bool
+    arg_types = [Int, Int]
+    def evaluate(self, frame):
+        left = self.left.evaluate(frame)
+        right = self.right.evaluate(frame)
+        return W_Bool.get(left.value.lt(right.value))
+
 
 
 Float = Type.get('Float')
