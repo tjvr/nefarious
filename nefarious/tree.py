@@ -91,7 +91,7 @@ class Block(Node):
         inner = indent + ("\n" + indent).join(inner.split("\n"))
         return "{\n" + inner + "\n}"
 
-    def evaluate(self, frame):
+    def evaluate(self, frame): # TODO OPT ??
         value = None
         for node in self.nodes:
             value = node.evaluate(frame)
@@ -269,7 +269,7 @@ class Call(Node):
                 return
         assert False, "child not found"
 
-    def evaluate(self, frame):
+    def evaluate(self, frame): # TODO OPT
         closure = self.func.evaluate(frame)
         assert isinstance(closure, W_Func)
 
@@ -461,7 +461,7 @@ class INT_ADD(InfixBuiltin):
 class INT_SUB(InfixBuiltin):
     type = Int
     arg_types = [Int, Int]
-    def evaluate(self, frame):
+    def evaluate(self, frame): # this is expensive
         left = self.left.evaluate(frame)
         assert isinstance(left, W_Int)
         right = self.right.evaluate(frame)
@@ -475,7 +475,9 @@ class INT_LT(InfixBuiltin):
     arg_types = [Int, Int]
     def evaluate(self, frame):
         left = self.left.evaluate(frame)
+        assert isinstance(left, W_Int)
         right = self.right.evaluate(frame)
+        assert isinstance(right, W_Int)
         return W_Bool.get(left.value.lt(right.value))
 
 
@@ -537,4 +539,28 @@ class TEXT_SPLIT_BY(InfixBuiltin):
         left = self.left.evaluate(frame)
         right = self.right.evaluate(frame)
         return left.split_by(right)
+
+
+
+
+class IF_THEN_ELSE(Builtin):
+    type = Generic.ALPHA
+    arg_types = [Bool, Generic.ALPHA, Generic.ALPHA]
+
+    def __init__(self, values, type_):
+        self.cond, self.tv, self.fv = values
+        self.cond.set_parent(self)
+        self.tv.set_parent(self)
+        self.fv.set_parent(self)
+
+    def sexpr(self):
+        return "(IF_THEN_ELSE " + self.cond.sexpr() + " " + self.tv.sexpr() + " " + self.fv.sexpr() + ")"
+
+    def evaluate(self, frame): # TODO OPT
+        cond = self.cond.evaluate(frame)
+        if cond == Value.TRUE:
+            return self.tv.evaluate(frame)
+        elif cond == Value.FALSE:
+            return self.fv.evaluate(frame)
+        assert False
 
