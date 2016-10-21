@@ -427,6 +427,25 @@ class InfixBuiltin(Builtin):
             assert False
 
 
+Bool = Type.get('Bool')
+
+class BOOL_NOT(UnaryBuiltin):
+    type = Bool
+    arg_types = [Bool]
+    def evaluate(self, frame):
+        child = self.child.evaluate(frame)
+        if child is Value.TRUE:
+            return Value.FALSE
+        elif child is Value.FALSE:
+            return Value.TRUE
+        assert False
+
+
+# TODO BOOL_AND
+# TODO BOOL_OR
+
+
+
 Int = Type.get('Int')
 
 class INT_ADD(InfixBuiltin):
