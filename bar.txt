@@ -8,22 +8,5 @@ define join (List Text):pieces with Text:sep { TEXT_JOIN_WITH pieces sep }
 define split Text:t { TEXT_SPLIT t }
 define split Text:text by Text:sep { TEXT_SPLIT_BY text sep }
 
-define π { 3.14 }
-
-define ☺ { 4 }
-
-
-1 + 2 + 3 + 100
-
-3 + ☺
-π + 1.0
-
-
-split "foo bar baz"
-
-join ["foo" "bar"]
-
-
-join ["foo" "bar" "quxx"] with "-"
-split "foofoofoogooboo" by "oo"
+yes
 

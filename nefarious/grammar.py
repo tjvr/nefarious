@@ -616,6 +616,9 @@ class ParseText(Macro):
         return Literal(W_Text.fromstr(word.value), type_)
 grammar.add(Text, [Word.TEXT], ParseText)
 
+grammar.add(Bool, [Word.word("yes")], LiteralMacro(Literal(Value.TRUE, Bool)))
+grammar.add(Bool, [Word.word("no")], LiteralMacro(Literal(Value.FALSE, Bool)))
+#grammar.add(Null, [Word.word("nil")], Literal(Value.NULL))
 
 
 
