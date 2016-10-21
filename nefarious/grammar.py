@@ -301,10 +301,18 @@ class DefineMacro(Macro):
         assert type_ is not None, body
         # TODO check unification with `func` calls in body
 
-        # TODO if body is trivial Builtin -- use BuiltinMacro ??
-
         # Define rule
         symbols, macro = self._macro(spec, func)
+        if values[0] is Word.word('defprim'):
+            node, = body.nodes
+            assert isinstance(node, Builtin)
+            arg_indexes = []
+            arg_names = DefineMacro.current_definition_args[-1]
+            for index, arg in enumerate(node._args()):
+                assert isinstance(arg, Load)
+                arg_indexes.append(arg_names.index(arg.name))
+            arg_arg_indexes = [index for index, s in enumerate(spec) if self._is_arg(s)]
+            macro = BuiltinMacro(node.__class__, [arg_arg_indexes[i] for i in arg_indexes])
         grammar.add(type_, symbols, macro)
 
     def _macro(self, spec, func):
@@ -320,9 +328,8 @@ class DefineMacro(Macro):
         #return Let(name, Lambda(arg_names, body))
         return Define(name, Func(arg_names, body))
 
-grammar.add(Line, ws_not_null([
-    Word.word("define"), Seq.get(Spec), Type.BLOCK,
-]), DefineMacro)
+grammar.add(Line, ws_not_null([Word.word("define"), Seq.get(Spec), Type.BLOCK,]), DefineMacro)
+grammar.add(Line, ws_not_null([Word.word("defprim"), Seq.get(Spec), Type.BLOCK,]), DefineMacro)
 
 
 
@@ -626,7 +633,7 @@ grammar.add(Bool, [Word.word("no")], LiteralMacro(Literal(Value.FALSE, Bool)))
 
 class BuiltinMacro(Macro):
     def __init__(self, cls, arg_indexes):
-        assert issubclass(cls, Builtin)
+        #assert issubclass(cls, Builtin)
         self.cls = cls
         self.arg_indexes = arg_indexes
 
