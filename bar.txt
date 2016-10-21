@@ -2,15 +2,16 @@
 define not Bool:x { BOOL_NOT x }
 define Int:a < Int:b { INT_LT a b }
 define Int:a <= Int:b { BOOL_NOT (INT_LT b a) }
-define Int:a + Int:b { INT_ADD a b }
-define Int:c - Int:b { INT_SUB c b }
+define Float:a + Float:b { FLOAT_ADD a b }
+define Float:a - Float:b { FLOAT_SUB a b }
+define Float:a < Float:b { FLOAT_LT a b }
 define join (List Text):pieces { TEXT_JOIN pieces }
 define join (List Text):pieces with Text:sep { TEXT_JOIN_WITH pieces sep }
 define split Text:t { TEXT_SPLIT t }
 define split Text:text by Text:sep { TEXT_SPLIT_BY text sep }
 
-define fib Int:n {
-    IF_THEN_ELSE (n < 2) 1 ((fib (n - 1)) + (fib (n - 2)))
+define fib Float:n {
+    IF_THEN_ELSE (n < 2.0) 1.0 ((fib (n - 1.0)) + (fib (n - 2.0)))
 }
 
-fib 20
+fib 30.0
