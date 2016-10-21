@@ -115,7 +115,7 @@ class W_Text(Value):
     type = Type.get('Text')
 
     def __init__(self, text):
-        #assert isinstance(text, rope.StringNode)
+        assert isinstance(text, rope.StringNode)
         self.text = text
 
     @staticmethod
@@ -136,16 +136,17 @@ class W_Text(Value):
         l = [t.text for t in text_list.items]
         return W_Text(rope.rebalance(l))
 
-    #@staticmethod
-    #def join_with(text_list, sep):
-    #    return W_Text(rope.join(sep.text, [t.text for t in text_list.items]))
+    @staticmethod
+    def join_with(text_list, sep):
+        return W_Text(rope.join(sep.text, [t.text for t in text_list.items]))
 
     def split(self):
+        # TODO isspace() for unicode ?
         return W_List([W_Text(x) for x in rope.split_chars(self.text,
             predicate=lambda x: unichr(x) == u" ")])
 
-    #def split_by(self, sep):
-    #    return W_Text(rope.join(rope.LiteralStringNode(""), [t.text for t in text_list.items]))
+    def split_by(self, sep):
+        return W_List([W_Text(x) for x in rope.split(self.text, sep.text)])
 
 
 class W_List(Value):

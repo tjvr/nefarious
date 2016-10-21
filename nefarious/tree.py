@@ -493,3 +493,19 @@ class TEXT_SPLIT(UnaryBuiltin):
         text = self.child.evaluate(frame)
         return text.split()
 
+class TEXT_JOIN_WITH(InfixBuiltin):
+    type = Text
+    arg_types = [List.get(Text), Text]
+    def evaluate(self, frame):
+        left = self.left.evaluate(frame)
+        right = self.right.evaluate(frame)
+        return W_Text.join_with(left, right)
+
+class TEXT_SPLIT_BY(InfixBuiltin):
+    type = List.get(Text)
+    arg_types = [Text, Text]
+    def evaluate(self, frame):
+        left = self.left.evaluate(frame)
+        right = self.right.evaluate(frame)
+        return left.split_by(right)
+
