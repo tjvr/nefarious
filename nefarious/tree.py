@@ -440,6 +440,37 @@ class BOOL_NOT(UnaryBuiltin):
             return Value.TRUE
         assert False
 
+class BOOL_OR(InfixBuiltin):
+    type = Bool
+    arg_types = [Bool, Bool]
+    def evaluate(self, frame):
+        left = self.left.evaluate(frame)
+        if left is Value.TRUE:
+            return Value.TRUE
+        assert left is Value.FALSE
+        right = self.right.evaluate(frame)
+        if right is Value.TRUE:
+            return Value.TRUE
+        assert right is Value.FALSE
+        return Value.FALSE
+
+class BOOL_AND(InfixBuiltin):
+    type = Bool
+    arg_types = [Bool, Bool]
+    def evaluate(self, frame):
+        left = self.left.evaluate(frame)
+        if left is Value.FALSE:
+            return Value.FALSE
+        assert left is Value.TRUE
+        right = self.right.evaluate(frame)
+        if right is Value.FALSE:
+            return Value.FALSE
+        assert right is Value.TRUE
+        return Value.TRUE
+
+
+
+
 
 # TODO BOOL_AND
 # TODO BOOL_OR
@@ -553,11 +584,11 @@ class TEXT_SPLIT_BY(InfixBuiltin):
         return left.split_by(right)
 
 
-
+_a = Generic.ALPHA
 
 class IF_THEN_ELSE(Builtin):
-    type = Generic.ALPHA
-    arg_types = [Bool, Generic.ALPHA, Generic.ALPHA]
+    type = _a
+    arg_types = [Bool, _a, _a]
 
     def __init__(self, values, type_):
         self.cond, self.tv, self.fv = values
