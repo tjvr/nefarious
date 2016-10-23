@@ -137,6 +137,23 @@ class Literal(Node):
         return self.value
 
 
+class ListLiteral(Node):
+    def __init__(self, items, type_):
+        self._parent = None
+        assert isinstance(items, list)
+        self.items = items
+        self.type = type_
+
+    def __repr__(self):
+        return "ListLiteral({!r})".format(self.items)
+
+    def sexpr(self):
+        return "(list " + " ".join([n.sexpr() for n in self.items]) + ")" # TODO
+
+    def evaluate(self, frame):
+        return W_List([item.evaluate(frame) for item in self.items])
+
+
 class Load(Node):
     def __init__(self, name, type_):
         self._parent = None
@@ -584,6 +601,7 @@ class TEXT_SPLIT_BY(InfixBuiltin):
         return left.split_by(right)
 
 
+
 _a = Generic.ALPHA
 
 class IF_THEN_ELSE(Builtin):
@@ -606,4 +624,5 @@ class IF_THEN_ELSE(Builtin):
         elif cond == Value.FALSE:
             return self.fv.evaluate(frame)
         assert False
+
 

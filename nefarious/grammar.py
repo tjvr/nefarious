@@ -118,7 +118,7 @@ ALPHA = Generic.ALPHA
 @singleton
 class EmptyListMacro(Macro):
     def build(self, values, type_):
-        return Literal(W_List([]), type_)
+        return ListLiteral([], type_)
 grammar.add(List.get(ALPHA), ws([
     Word.word("["), Word.word("]"),
 ]), EmptyListMacro)
@@ -126,8 +126,8 @@ grammar.add(List.get(ALPHA), ws([
 @singleton
 class ListMacro(Macro):
     def build(self, values, type_):
-        items = [(x.value if isinstance(x, Literal) else x) for x in values[2].items]
-        return Literal(W_List(items), type_)
+        # TODO some kind of type unification on items?
+        return ListLiteral(values[2].items, type_)
 grammar.add(List.get(ALPHA), ws([
     Word.word("["), Repeat.get(ALPHA), Word.word("]"),
 ]), ListMacro)
@@ -747,6 +747,7 @@ def parse_and_run(source, debug=False):
 
     print
     print("=> " + retval.sexpr())
+    print(retval.type.sexpr())
     #print(retval) # Useless on RPython!
 
     return ""
