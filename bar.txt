@@ -6,6 +6,7 @@ defprim not Bool:x { BOOL_NOT x }
 defprim Int:a + Int:b { INT_ADD a b }
 defprim Int:a - Int:b { INT_SUB a b }
 defprim Int:a < Int:b { INT_LT a b }
+defprim random from Int:a to Int:b { INT_RANDOM a b }
 
 defprim Float:a + Float:b { FLOAT_ADD a b }
 defprim Float:a - Float:b { FLOAT_SUB a b }
@@ -24,10 +25,11 @@ define item first of (List Any):l { item 1 of l }
 
 define repeat Int:count Block:body {
     var c := count
-    var result
+    let result = []
     WHILE (0 < c) {
-        result := call body
+        add (call body) to result
         c := c - 1
+
     }
     result
 }
@@ -58,9 +60,5 @@ define fastfib Int:n {
     item last of seq
 }
 
-repeat 10 {
-    fastfib 30
-}
-
-item first of [1 2 3]
+repeat 20 { random from 0 to 10 }
 

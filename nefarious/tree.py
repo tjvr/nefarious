@@ -3,9 +3,10 @@ import struct
 
 try:
     from rpython.rlib.objectmodel import we_are_translated
+    from rpython.rlib.rrandom import Random
 except ImportError:
     def we_are_translated(): return False
-
+    from random import Random
 
 #------------------------------------------------------------------------------
 
@@ -590,6 +591,24 @@ class INT_LT(InfixBuiltin):
         assert isinstance(right, W_Int)
         return W_Bool.get(left.value.lt(right.value))
 
+class INT_RANDOM(InfixBuiltin):
+    type = Bool
+    arg_types = [Int, Int]
+    def evaluate(self, frame):
+        left = self.left.evaluate(frame)
+        assert isinstance(left, W_Int)
+        right = self.right.evaluate(frame)
+        assert isinstance(right, W_Int)
+        # TODO random for bigints.
+        start = left.value.toint()
+        end = right.value.toint()
+        f = INT_RANDOM.random.random()
+        value = int(round(start + f * (end - start)))
+        return W_Int.fromint(value)
+
+import time
+INT_RANDOM.random = Random(seed=int(time.time()))
+
 
 
 Float = Type.get('Float')
@@ -599,7 +618,7 @@ class FLOAT_ADD(InfixBuiltin):
     arg_types = [Float, Float]
     def evaluate(self, frame):
         left = self.left.evaluate(frame)
-        assert isinstance(left, W_Float)
+        assert isinstance(left, W_Float), left
         right = self.right.evaluate(frame)
         assert isinstance(right, W_Float)
         return W_Float(left.value + right.value)
@@ -661,6 +680,18 @@ class TEXT_SPLIT_BY(InfixBuiltin):
         left = self.left.evaluate(frame)
         right = self.right.evaluate(frame)
         return left.split_by(right)
+
+
+
+Bytes = Type.get('Bytes')
+
+# class BYTES_URANDOM(Builtin):
+#         context = INT_RANDOM.random_context
+#         try:
+#             bytes_ = W_Int.fromint(rurandom.urandom(context, 4))
+#         except OSError as e:
+#             raise # TODO
+
 
 
 _a = Generic.ALPHA
