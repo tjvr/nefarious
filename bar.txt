@@ -7,10 +7,12 @@ defprim Int:a + Int:b { INT_ADD a b }
 defprim Int:a - Int:b { INT_SUB a b }
 defprim Int:a < Int:b { INT_LT a b }
 defprim random from Int:a to Int:b { INT_RANDOM a b }
+defprim float Int:a { INT_FLOAT a }
 
 defprim Float:a + Float:b { FLOAT_ADD a b }
 defprim Float:a - Float:b { FLOAT_SUB a b }
 defprim Float:a < Float:b { FLOAT_LT a b }
+defprim round Float:f { FLOAT_ROUND f }
 
 defprim join (List Text):pieces { TEXT_JOIN pieces }
 defprim join (List Text):pieces with Text:sep { TEXT_JOIN_WITH pieces sep }
@@ -61,4 +63,6 @@ define fastfib Int:n {
 }
 
 repeat 20 { random from 0 to 10 }
+
+[(round 1234.5)]
 

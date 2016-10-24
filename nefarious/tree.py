@@ -1,5 +1,6 @@
 
 import struct
+import time
 
 try:
     from rpython.rlib.objectmodel import we_are_translated
@@ -592,8 +593,11 @@ class INT_LT(InfixBuiltin):
         return W_Bool.get(left.value.lt(right.value))
 
 class INT_RANDOM(InfixBuiltin):
-    type = Bool
+    type = Int
     arg_types = [Int, Int]
+
+    random = Random(seed=int(time.time()))
+
     def evaluate(self, frame):
         left = self.left.evaluate(frame)
         assert isinstance(left, W_Int)
@@ -603,11 +607,16 @@ class INT_RANDOM(InfixBuiltin):
         start = left.value.toint()
         end = right.value.toint()
         f = INT_RANDOM.random.random()
-        value = int(round(start + f * (end - start)))
+        value = int(0.5 + start + f * (end - start))
         return W_Int.fromint(value)
 
-import time
-INT_RANDOM.random = Random(seed=int(time.time()))
+class INT_FLOAT(UnaryBuiltin):
+    type = Type.get('Float')
+    arg_types = [Int]
+    def evaluate(self, frame):
+        child = self.child.evaluate(frame)
+        assert isinstance(child, W_Int)
+        return W_Float(child.value.tofloat())
 
 
 
@@ -645,6 +654,16 @@ class FLOAT_LT(InfixBuiltin):
         assert isinstance(right, W_Float)
         return W_Bool.get(left.value < right.value)
     # TODO evaluate_float
+
+class FLOAT_ROUND(UnaryBuiltin):
+    type = Int
+    arg_types = [Float]
+    def evaluate(self, frame):
+        f = self.child.evaluate(frame)
+        assert isinstance(f, W_Float)
+        return W_Int.fromfloat(f.value + 0.5)
+    # TODO evaluate_float
+
 
 
 

@@ -108,6 +108,11 @@ class W_Int(Value):
     def fromint(value):
         return W_Int(rbigint.fromint(value))
 
+    @staticmethod
+    @jit.elidable
+    def fromfloat(value):
+        return W_Int(rbigint.fromfloat(value))
+
     def __repr__(self):
         return 'W_Int({!r})'.format(self.value)
 
