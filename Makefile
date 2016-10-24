@@ -59,15 +59,15 @@ nfs-interp:
 	$(TESTINTERP) -m nefarious bar.txt
 
 test:
-	@echo Running tests \(using $(PYNAME)\)...
-	$(TESTINTERP) -m unittest --buffer tests
+	@echo Running tests \(using $(CPYTHON)\)...
+	$(BUILDINTERP) -m unittest --buffer tests
 	@echo Tests passed!
-test-cpython:
-	@echo Running tests \(force CPython\)...
-	$(CPYTHON) -m unittest --buffer tests
+test-pypy:
+	@echo Running tests \(force PyPy\)...
+	$(PYPY_EXECUTABLE) -m unittest --buffer tests
 test-nfs:
 	@echo Testing compiled binary...
-	$(TESTINTERP) -m unittest --buffer tests.compiled
+	$(BUILDINTERP) -m unittest --buffer tests.compiled
 
 # RPython toolchain is required to build nfs executable.
 pypy.zip:
