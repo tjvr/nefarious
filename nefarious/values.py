@@ -349,7 +349,7 @@ class Frame:
         self.shape = self.func.shape = shape
         # TODO also modify other frames on the stack!
 
-    def _print(self):
+    def print_(self):
         values = self.values
         symbols = []
         lookup = self.shape.names

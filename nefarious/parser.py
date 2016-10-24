@@ -145,7 +145,13 @@ class Item:
 
         children = self.evaluate_children(stack)
 
+        print self
+        print rule
+        print rule.target
+        print children
         value = rule.call.build(children, rule.target)
+        print value
+        print
 
         self.value = value
         assert stack.pop() == self

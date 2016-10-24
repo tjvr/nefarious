@@ -95,7 +95,7 @@ class PairList(Macro):
 class ContinueList(Macro):
     def build(self, values, type_):
         list_ = values[0]
-        assert isinstance(list_, W_List), type_
+        assert isinstance(list_, W_List)
         items = list(list_.items)
         items.append(values[-1])
         return W_List(items)
@@ -158,10 +158,9 @@ grammar.add(Internal.SEP, [], Null)
 grammar.add(Internal.SEP, [Internal.SEP, Word.WS], Null)
 grammar.add(Internal.SEP, [Internal.SEP, Word.NL], Null)
 
-grammar.add(Seq.get(Line), [], EmptyList)
+#grammar.add(Seq.get(Line), [], EmptyList)
 grammar.add(Seq.get(Line), [Line], StartList)
 grammar.add(Seq.get(Line), [Seq.get(Line), Internal.NLS, Line], ContinueList)
-
 
 # TODO allow newlines inside parens?
 
@@ -171,28 +170,26 @@ grammar.add(Seq.get(Line), [Seq.get(Line), Internal.NLS, Line], ContinueList)
 @singleton
 class BlockMacro(Macro):
     def build(self, values, type_):
+        if len(values) == 2:
+            return Block([])
         children = values[2]
-        if isinstance(children, W_List):
-            return Block(children.items)
-        else:
-            return Block([children])
+        assert isinstance(children, W_List)
+        return Block(children.items)
 grammar.add(Type.BLOCK, [Word.word("{"), Internal.SEP, Seq.get(Line), Internal.SEP, Word.word("}")], BlockMacro)
-
-@singleton
-class EmptyBlock(Macro):
-    def build(self, values, type_):
-        return Block([])
-grammar.add(Type.BLOCK, [Word.word("{"), Word.word("}")], EmptyBlock)
+grammar.add(Type.BLOCK, [Word.word("{"), Word.word("}")], BlockMacro)
 
 
 # Program
 @singleton
 class Program(Macro):
     def build(self, values, type_):
+        if len(values) == 1:
+            return Block([])
         list_ = values[1]
         assert isinstance(list_, W_List)
         return Block(list_.items)
 grammar.add(Type.PROGRAM, [Internal.SEP, Seq.get(Line), Internal.SEP], Program)
+grammar.add(Type.PROGRAM, [Internal.SEP], Program)
 
 
 # Identifiers
@@ -286,7 +283,7 @@ class DefineMacro(Macro):
         body = values[-1]
         assert isinstance(body, Block)
         if len(body.nodes) == 0: # empty block
-            type_ = Line # ??
+            type_ = Line # ?? # TODO ahhhhhhhhhh
         elif len(body.nodes) == 1:
             type_ = body.nodes[0].type
         else:
@@ -330,7 +327,9 @@ class CallMacro(Macro):
         self.arg_indexes = arg_indexes
 
     def build(self, values, type_):
+        print values, self.call
         args = [values[i] for i in self.arg_indexes]
+        # TODO get IndexError here if we do eg. `define define Int:b { call b }`
 
         # Block -> Func
         args = [(Lambda(Func([], arg)) if isinstance(arg, Block) else arg) for arg in args]
@@ -502,6 +501,7 @@ grammar.add(Line, [
 @singleton
 class DynamicCallMacro(Macro):
     def build(self, values, type_):
+        print "dynamic call", type_ 
         func = values[2]
         if len(values) > 3:
             arg = values[6]
@@ -684,7 +684,7 @@ def parse(source, debug=False):
     return tree.sexpr()
 
 
-def parse_and_run(source, debug=False):
+def parse_and_run(source, debug=True):
     tree = grammar_parse(source, grammar, debug)
     assert isinstance(tree, Tree)
     if isinstance(tree, Error):
