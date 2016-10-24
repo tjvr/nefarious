@@ -46,6 +46,17 @@ define range from Int:start to Int:stop {
     result
 }
 
+define map Func:f over (List Any):l {
+    let out = []
+    var index := 1
+    repeat length of l {
+        add (call f with (item index of l)) to out
+        index := index + 1
+    }
+    out
+}
+
+
 
 define fib Float:n {
     IF_THEN_ELSE (n < 2.0) 1.0 ((fib (n - 1.0)) + (fib (n - 2.0)))
@@ -62,7 +73,5 @@ define fastfib Int:n {
     item last of seq
 }
 
-repeat 20 { random from 0 to 10 }
-
-[(round 1234.5)]
+map (fun Int:x { x + x }) over (range from 1 to 10)
 

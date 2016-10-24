@@ -100,27 +100,6 @@ class Block(Node):
         return value
 
 
-class Quote(Node):
-    def __init__(self, child):
-        assert isinstance(child, Node)
-        self.child = child
-        #child.set_parent(self)
-
-    def replace(self, child, other):
-        assert False
-        # assert child is self.child
-        # self.child = other
-
-    def __repr__(self):
-        return "Quote({!r})".format(self.child)
-
-    def sexpr(self):
-        return "(quote " + self.child.sexpr() + ")"
-
-    def evaluate(self, frame):
-        return self.child # !!!
-
-
 class Literal(Node):
     def __init__(self, value, type_):
         self._parent = None
@@ -744,10 +723,9 @@ class WHILE(Builtin):
     arg_types = [Bool, _Block]
 
     def __init__(self, values, type_):
-        self.cond, body = values
+        self.cond, self.body = values
         self.cond.set_parent(self)
-        assert isinstance(body, Lambda)
-        self.body = body.func.body
+        assert isinstance(self.body, Block)
         self.body.set_parent(self)
 
     def sexpr(self):

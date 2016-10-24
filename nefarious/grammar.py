@@ -44,16 +44,6 @@ class Macro:
     def exit(self, children, type_):
         grammar.restore()
 
-class CallMacro(Macro):
-    def __init__(self, call, arg_indexes):
-        assert isinstance(call, Name)
-        self.call = call
-        self.arg_indexes = arg_indexes
-
-    def build(self, values, type_):
-        args = [values[i] for i in self.arg_indexes]
-        return Call(Load(self.call, Type.FUNC), args, type_)
-
 # TODO CustomMacros
 #    return self.call_immediate(children)
 
@@ -183,15 +173,15 @@ class BlockMacro(Macro):
     def build(self, values, type_):
         children = values[2]
         if isinstance(children, W_List):
-            return Lambda(Func([], Block(children.items)))
+            return Block(children.items)
         else:
-            return Lambda(Func([], Block([children])))
+            return Block([children])
 grammar.add(Type.BLOCK, [Word.word("{"), Internal.SEP, Seq.get(Line), Internal.SEP, Word.word("}")], BlockMacro)
 
 @singleton
 class EmptyBlock(Macro):
     def build(self, values, type_):
-        return Lambda(Func([], Block([])))
+        return Block([])
 grammar.add(Type.BLOCK, [Word.word("{"), Word.word("}")], EmptyBlock)
 
 
@@ -252,6 +242,11 @@ class DefineMacro(Macro):
         symbols = list(spec.items)
         return symbols
 
+    def _arg_type(self, s):
+        if s.type == Type.get('Block'):
+            return Type.FUNC
+        return s.type
+
     def enter(self, values, type_):
         grammar.save()
         spec = self._get_spec(values)
@@ -273,7 +268,8 @@ class DefineMacro(Macro):
         for s in spec:
             if isinstance(s, ArgSpec):
                 arg = Name.from_word(s.word)
-                grammar.add(s.type, [s.word], LoadMacro(arg, s.type))
+                type_ = self._arg_type(s)
+                grammar.add(type_, [s.word], LoadMacro(arg, type_))
                 args.append(arg)
         DefineMacro.current_definition_args.append(args)
 
@@ -288,8 +284,7 @@ class DefineMacro(Macro):
 
         # Type check
         body = values[-1]
-        assert isinstance(body, Lambda), body
-        body = body.func.body
+        assert isinstance(body, Block)
         if len(body.nodes) == 0: # empty block
             type_ = Line # ??
         elif len(body.nodes) == 1:
@@ -323,11 +318,27 @@ class DefineMacro(Macro):
         name = DefineMacro.current_definitions.pop()
         arg_names = DefineMacro.current_definition_args.pop()
         body = values[4]
-        assert isinstance(body, Lambda)
-        body = body.func.body
 
         #return Let(name, Lambda(arg_names, body))
         return Define(name, Func(arg_names, body))
+
+
+class CallMacro(Macro):
+    def __init__(self, call, arg_indexes):
+        assert isinstance(call, Name)
+        self.call = call
+        self.arg_indexes = arg_indexes
+
+    def build(self, values, type_):
+        args = [values[i] for i in self.arg_indexes]
+
+        # Block -> Func
+        args = [(Lambda(Func([], arg)) if isinstance(arg, Block) else arg) for arg in args]
+
+        # TODO Uneval -> Func
+
+        return Call(Load(self.call, Type.FUNC), args, type_)
+
 
 grammar.add(Line, ws_not_null([Word.word("define"), Seq.get(Spec), Type.BLOCK,]), DefineMacro)
 grammar.add(Line, ws_not_null([Word.word("defprim"), Seq.get(Spec), Type.BLOCK,]), DefineMacro)
@@ -359,6 +370,8 @@ class LambdaMacro(Macro):
         for s in spec:
             assert isinstance(s, ArgSpec)
             arg = Name.from_word(s.word)
+            if DefineMacro._arg_type(s) != s.type:
+                raise SyntaxError("lambda can't have Block or Uneval arguments")
             grammar.add(s.type, [s.word], LoadMacro(arg, s.type))
             args.append(arg)
         LambdaMacro.current_definition_args.append(args)
@@ -370,6 +383,7 @@ class LambdaMacro(Macro):
     def build(self, values, type_):
         arg_names = LambdaMacro.current_definition_args.pop()
         body = values[4]
+        assert isinstance(body, Block)
         return Lambda(Func(arg_names, body))
 
 grammar.add(Type.FUNC, ws([
@@ -495,9 +509,6 @@ class DynamicCallMacro(Macro):
         else:
             return Call(func, [], type_)
 
-grammar.add(Generic.ALPHA, ws_not_null([
-    Word.word("call"), Type.BLOCK
-]), DynamicCallMacro)
 grammar.add(Generic.ALPHA, ws_not_null([
     Word.word("call"), Type.FUNC
 ]), DynamicCallMacro)
@@ -660,62 +671,6 @@ for name in dir(tree):
     if name.replace("_", "").isupper():
         if cls is not Builtin and issubclass(cls, Builtin):
             add_builtin(cls)
-
-
-
-
-
-
-
-
-# Uneval = Internal.get('Uneval')
-# @singleton
-# class QuoteMacro(Macro):
-#     def build(self, values, type_):
-#         assert len(values) == 1
-#         return Quote(values[0], type_)
-# grammar.add(Uneval, [ALPHA], QuoteMacro)
-# 
-# class CallMacro(Macro):
-#     def __init__(self, name, arg_indexes):
-#         assert isinstance(name, Name)
-#         self.name = name
-#         self.arg_indexes = arg_indexes
-# 
-#     def build(self, values, type_):
-#         args = [values[i] for i in self.arg_indexes]
-#         func = Load(self.name)
-#         return Call(func, args)
-# 
-# def defrule(target, symbols):
-#     indexes = [i for i in range(len(symbols)) if not isinstance(symbols[i], Word)]
-#     def wrap(impl):
-#         name = Name(impl.__name__)
-#         cls = W_Builtin.cls(len(indexes))
-#         builtins.set(name, cls(impl))
-#         grammar.add(target, symbols, CallMacro(name, indexes))
-#         return impl
-#     return wrap
-# 
-# class MacroMacro(Macro):
-#     def __init__(self, builtin, arg_indexes):
-#         self.builtin = builtin
-#         self.arg_indexes = arg_indexes
-# 
-#     def build(self, values, type_):
-#         args = [values[i] for i in self.arg_indexes]
-#         return self.builtin.call(args, None)
-# 
-# def macro(target, symbols, indexes=None):
-#     if indexes is None:
-#         indexes = [i for i in range(len(symbols)) if not isinstance(symbols[i], Word)]
-#     def wrap(impl):
-#         assert len(indexes) <= 5
-#         cls = W_Builtin.cls(len(indexes))
-#         builtin = cls(impl)
-#         grammar.add(target, symbols, MacroMacro(builtin, indexes))
-#         return impl
-#     return wrap
 
 
 
