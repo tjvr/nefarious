@@ -16,6 +16,14 @@ defprim join (List Text):pieces with Text:sep { TEXT_JOIN_WITH pieces sep }
 defprim split Text:t { TEXT_SPLIT t }
 defprim split Text:text by Text:sep { TEXT_SPLIT_BY text sep }
 
+define repeat Int:count Block:body {
+    var c := count
+    WHILE (0 < c) {
+        call body
+        c := c - 1
+    }
+}
+
 define range from Int:start to Int:stop {
     var count := start
     let result = []
@@ -26,9 +34,14 @@ define range from Int:start to Int:stop {
     result
 }
 
+
 define fib Float:n {
     IF_THEN_ELSE (n < 2.0) 1.0 ((fib (n - 1.0)) + (fib (n - 2.0)))
 }
 
-range from 1 to 10
+var x := []
+repeat 10 {
+    LIST_ADD "foo" x
+}
+join x with " "
 

@@ -105,7 +105,7 @@ class PairList(Macro):
 class ContinueList(Macro):
     def build(self, values, type_):
         list_ = values[0]
-        assert isinstance(list_, W_List)
+        assert isinstance(list_, W_List), type_
         items = list(list_.items)
         items.append(values[-1])
         return W_List(items)
@@ -183,15 +183,15 @@ class BlockMacro(Macro):
     def build(self, values, type_):
         children = values[2]
         if isinstance(children, W_List):
-            return Block(children.items)
+            return Lambda(Func([], Block(children.items)))
         else:
-            return Block([children])
+            return Lambda(Func([], Block([children])))
 grammar.add(Type.BLOCK, [Word.word("{"), Internal.SEP, Seq.get(Line), Internal.SEP, Word.word("}")], BlockMacro)
 
 @singleton
 class EmptyBlock(Macro):
     def build(self, values, type_):
-        return Block([])
+        return Lambda(Func([], Block([])))
 grammar.add(Type.BLOCK, [Word.word("{"), Word.word("}")], EmptyBlock)
 
 
@@ -288,7 +288,8 @@ class DefineMacro(Macro):
 
         # Type check
         body = values[-1]
-        assert isinstance(body, Block)
+        assert isinstance(body, Lambda), body
+        body = body.func.body
         if len(body.nodes) == 0: # empty block
             type_ = Line # ??
         elif len(body.nodes) == 1:
@@ -322,6 +323,8 @@ class DefineMacro(Macro):
         name = DefineMacro.current_definitions.pop()
         arg_names = DefineMacro.current_definition_args.pop()
         body = values[4]
+        assert isinstance(body, Lambda)
+        body = body.func.body
 
         #return Let(name, Lambda(arg_names, body))
         return Define(name, Func(arg_names, body))
@@ -492,7 +495,9 @@ class DynamicCallMacro(Macro):
         else:
             return Call(func, [], type_)
 
-
+grammar.add(Line, ws_not_null([
+    Word.word("call"), Type.BLOCK
+]), DynamicCallMacro)
 grammar.add(Generic.ALPHA, ws_not_null([
     Word.word("call"), Type.FUNC
 ]), DynamicCallMacro)
@@ -570,7 +575,6 @@ def add_type(type_):
 class ListTypeMacro(Macro):
     def build(self, values, type_):
         return List.get(values[4])
-
 grammar.add(Type.TYPE, ws([Word.word("("), Word.word("List"), Type.TYPE, Word.word(")")]), ListTypeMacro)
 
 Int = Type.get('Int')
@@ -578,7 +582,10 @@ Float = Type.get('Float')
 Text = Type.get('Text')
 Bool = Type.get('Bool')
 
+grammar.add(Type.TYPE, [Word.word("Block")], LiteralMacro(Type.get('Block')))
+grammar.add(Type.TYPE, [Word.word("Func")], LiteralMacro(Type.FUNC))
 add_type(Var)
+
 add_type(Int)
 add_type(Float)
 add_type(Text)

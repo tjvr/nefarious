@@ -185,11 +185,19 @@ class LoadOffset(Load):
         self.index = index
 
     def evaluate(self, frame):
-        if frame.shape is not self.shape: # shape guard
-            assert False # ???
-            other = LoadGeneric(self.name)
-            self._replace(other)
-            return other.evaluate(frame)
+        # shape guard
+        if frame.shape is not self.shape:
+            # Ugh. frame could have added stuff to shape since last time...
+            if frame.shape.compatible(self.shape):
+                self.shape = frame.shape
+            else:
+                frame._print()
+                #print self.shape.names
+                #print frame.shape.names
+                assert False # ???
+                other = LoadGeneric(self.name)
+                self._replace(other)
+                return other.evaluate(frame)
         return frame.values[self.index]
 
 class LoadGeneric(Load):
@@ -685,8 +693,10 @@ class WHILE(Builtin):
     arg_types = [Bool, _Block]
 
     def __init__(self, values, type_):
-        self.cond, self.body = values
+        self.cond, body = values
         self.cond.set_parent(self)
+        assert isinstance(body, Lambda)
+        self.body = body.func.body
         self.body.set_parent(self)
 
     def sexpr(self):

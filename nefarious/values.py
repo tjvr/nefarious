@@ -209,10 +209,11 @@ class Symbol(Name):
 
 
 class Shape:
-    def __init__(self, names):
+    def __init__(self, names, previous=None):
         #assert isinstance(names, dict)
         self.names = names
         self._transitions = {}
+        self.previous = previous
 
     def size(self):
         return len(self.names)
@@ -229,8 +230,16 @@ class Shape:
             return self._transitions[new_name]
         names = self.names.copy()
         names[new_name] = len(names)
-        shape = self._transitions[new_name] = Shape(names)
+        shape = self._transitions[new_name] = Shape(names, self)
         return shape
+
+    def compatible(self, other):
+        shape = self
+        while shape.previous:
+            shape = shape.previous
+            if shape is other:
+                return True
+        return False
 
     @staticmethod
     def get(names):
@@ -325,6 +334,19 @@ class Frame:
     def _set_shape(self, shape):
         self.shape = self.func.shape = shape
         # TODO also modify other frames on the stack!
+
+    def _print(self):
+        values = self.values
+        symbols = []
+        lookup = self.shape.names
+        for index in range(len(values)):
+            for key in lookup:
+                if lookup[key] == index:
+                    symbols.append(key)
+        print "<Frame [" + " ".join([
+            ":" + symbols[i].name + " " + ("None" if values[i] is None else values[i].sexpr())
+            for i in range(len(symbols))
+        ]) + "]"
 
 
 class Func:
