@@ -1,7 +1,7 @@
 install: make pypy
 script:
-- make test-cpython
 - make test
+- make test-pypy
 - make nfs
 compiler: clang
 language: python
