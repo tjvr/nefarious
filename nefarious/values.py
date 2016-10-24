@@ -103,6 +103,11 @@ class W_Int(Value):
     def fromstr(string):
         return W_Int(rbigint.fromstr(string))
 
+    @staticmethod
+    @jit.elidable
+    def fromint(value):
+        return W_Int(rbigint.fromint(value))
+
     def __repr__(self):
         return 'W_Int({!r})'.format(self.value)
 

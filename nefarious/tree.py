@@ -714,11 +714,31 @@ _List = List.get(_a)
 
 class LIST_ADD(InfixBuiltin):
     type = _Line
-    arg_types = [_a, _List.get(_a)]
+    arg_types = [_List.get(_a), _a]
     def evaluate(self, frame):
-        item = self.left.evaluate(frame)
-        list_ = self.right.evaluate(frame)
+        list_ = self.left.evaluate(frame)
+        item = self.right.evaluate(frame)
         assert isinstance(list_, W_List)
         list_.items.append(item)
 
+class LIST_GET(InfixBuiltin):
+    type = _a
+    arg_types = [_List.get(_a), Int]
+    def evaluate(self, frame):
+        list_ = self.left.evaluate(frame)
+        assert isinstance(list_, W_List)
+        int_ = self.right.evaluate(frame)
+        assert isinstance(int_, W_Int)
+        index = int_.value.toint()
+        if not 1 <= index <= len(list_.items):
+            raise IndexError(index) # TODO error handling
+        return list_.items[index - 1]
+
+class LIST_LEN(UnaryBuiltin):
+    type = Int
+    arg_types = [_List.get(_a)]
+    def evaluate(self, frame):
+        list_ = self.child.evaluate(frame)
+        assert isinstance(list_, W_List)
+        return W_Int.fromint(len(list_.items))
 

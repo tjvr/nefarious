@@ -16,6 +16,11 @@ defprim join (List Text):pieces with Text:sep { TEXT_JOIN_WITH pieces sep }
 defprim split Text:t { TEXT_SPLIT t }
 defprim split Text:text by Text:sep { TEXT_SPLIT_BY text sep }
 
+defprim add Any:x to (List Any):l { LIST_ADD l x }
+defprim length of (List Any):l { LIST_LEN l }
+defprim item Int:i of (List Any):l { LIST_GET l i }
+define item last of (List Any):l { item length of l of l }
+
 define repeat Int:count Block:body {
     var c := count
     WHILE (0 < c) {
@@ -27,8 +32,8 @@ define repeat Int:count Block:body {
 define range from Int:start to Int:stop {
     var count := start
     let result = []
-    WHILE (count < stop + 1) {
-        LIST_ADD count result
+    WHILE (count < (stop + 1)) {
+        add count to result
         count := count + 1
     }
     result
@@ -39,9 +44,16 @@ define fib Float:n {
     IF_THEN_ELSE (n < 2.0) 1.0 ((fib (n - 1.0)) + (fib (n - 2.0)))
 }
 
-var x := []
-repeat 10 {
-    LIST_ADD "foo" x
+define fastfib Int:n {
+    let seq = [1 1]
+    repeat n - 1 {
+        let index = length of seq
+        let a = item last of seq
+        let b = item index - 1 of seq
+        add (a + b) to seq
+    }
+    item last of seq
 }
-join x with " "
+
+fastfib 30
 
