@@ -1,18 +1,34 @@
 
-var x := 1
-x
-x := 2
-x
+defprim Bool:a and Bool:b { BOOL_AND a b }
+defprim Bool:a or Bool:b { BOOL_OR a b }
+defprim not Bool:x { BOOL_NOT x }
 
-let y = var z
-z := 4
-y
+defprim Int:a + Int:b { INT_ADD a b }
+defprim Int:a - Int:b { INT_SUB a b }
+defprim Int:a < Int:b { INT_LT a b }
 
-define reset Var:v {
-    v := 0
-    1
+defprim Float:a + Float:b { FLOAT_ADD a b }
+defprim Float:a - Float:b { FLOAT_SUB a b }
+defprim Float:a < Float:b { FLOAT_LT a b }
+
+defprim join (List Text):pieces { TEXT_JOIN pieces }
+defprim join (List Text):pieces with Text:sep { TEXT_JOIN_WITH pieces sep }
+defprim split Text:t { TEXT_SPLIT t }
+defprim split Text:text by Text:sep { TEXT_SPLIT_BY text sep }
+
+define range from Int:start to Int:stop {
+    var count := start
+    let result = []
+    WHILE (count < stop + 1) {
+        LIST_ADD count result
+        count := count + 1
+    }
+    result
 }
 
-reset y
-y
+define fib Float:n {
+    IF_THEN_ELSE (n < 2.0) 1.0 ((fib (n - 1.0)) + (fib (n - 2.0)))
+}
+
+range from 1 to 10
 

@@ -247,6 +247,11 @@ class DeclareCell(Node):
     def __init__(self, name, value):
         self.name = name
         self.value = value
+        value.set_parent(self)
+
+    def replace(self, child, other):
+        assert child == self.value
+        self.value = other
 
     def sexpr(self):
         return "(declare " + self.name.sexpr() + " " + self.value.sexpr() + ")"
@@ -280,6 +285,11 @@ class StoreCell(Node):
     def __init__(self, name, value):
         self.name = name
         self.value = value
+        value.set_parent(self)
+
+    def replace(self, child, other):
+        assert child == self.value
+        self.value = other
 
     def sexpr(self):
         return "(set " + self.name.sexpr() + " " + self.value.sexpr() + ")"
@@ -644,8 +654,9 @@ class TEXT_SPLIT_BY(InfixBuiltin):
         return left.split_by(right)
 
 
-
 _a = Generic.ALPHA
+_Block = Type.get('Block')
+_Line = Internal.get('Line')
 
 class IF_THEN_ELSE(Builtin):
     type = _a
@@ -667,4 +678,37 @@ class IF_THEN_ELSE(Builtin):
         elif cond == Value.FALSE:
             return self.fv.evaluate(frame)
         assert False
+
+class WHILE(Builtin):
+    # TODO move to preamble
+    type = _Line
+    arg_types = [Bool, _Block]
+
+    def __init__(self, values, type_):
+        self.cond, self.body = values
+        self.cond.set_parent(self)
+        self.body.set_parent(self)
+
+    def sexpr(self):
+        return "(WHILE " + self.cond.sexpr() + " " + self.body.sexpr() + ")"
+
+    def evaluate(self, frame):
+        cond = self.cond.evaluate(frame)
+        while cond is Value.TRUE:
+            self.body.evaluate(frame)
+            cond = self.cond.evaluate(frame)
+        assert cond is Value.FALSE
+
+
+_List = List.get(_a)
+
+class LIST_ADD(InfixBuiltin):
+    type = _Line
+    arg_types = [_a, _List.get(_a)]
+    def evaluate(self, frame):
+        item = self.left.evaluate(frame)
+        list_ = self.right.evaluate(frame)
+        assert isinstance(list_, W_List)
+        list_.items.append(item)
+
 
