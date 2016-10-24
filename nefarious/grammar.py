@@ -495,7 +495,7 @@ class DynamicCallMacro(Macro):
         else:
             return Call(func, [], type_)
 
-grammar.add(Line, ws_not_null([
+grammar.add(Generic.ALPHA, ws_not_null([
     Word.word("call"), Type.BLOCK
 ]), DynamicCallMacro)
 grammar.add(Generic.ALPHA, ws_not_null([

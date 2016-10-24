@@ -306,6 +306,7 @@ class StoreCell(Node):
         cell = frame.lookup(self.name)
         assert isinstance(cell, W_Var)
         value = self.value.evaluate(frame)
+        if value is None: value = Value.NULL # TODO move this elsewhere
         cell.set(value)
     # TODO opt
 

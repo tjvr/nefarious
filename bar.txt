@@ -23,10 +23,12 @@ define item last of (List Any):l { item length of l of l }
 
 define repeat Int:count Block:body {
     var c := count
+    var result
     WHILE (0 < c) {
-        call body
+        result := call body
         c := c - 1
     }
+    result
 }
 
 define range from Int:start to Int:stop {
@@ -55,5 +57,7 @@ define fastfib Int:n {
     item last of seq
 }
 
-fastfib 30
+repeat 10 {
+    fastfib 30
+}
 
