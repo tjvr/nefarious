@@ -220,10 +220,10 @@ grammar.add(Iden, [Word.WS_NOT_NULL], Identity)
 Spec = Internal.get('Spec')
 
 class ArgSpec(Tree):
-    def __init__(self, type_, name):
-        assert isinstance(name, Word)
+    def __init__(self, type_, word):
+        assert isinstance(word, Word)
         assert isinstance(type_, Type)
-        self.name = name
+        self.word = word
         self.type = type_
 @singleton
 class ArgSpecMacro(Macro):
@@ -271,11 +271,9 @@ class DefineMacro(Macro):
         # Define arguments
         args = []
         for s in spec:
-            if self._is_arg(s):
-                assert isinstance(s, ArgSpec)
-                assert isinstance(s.name, Word)
-                arg = Name(s.name.value)
-                grammar.add(s.type, [s.name], LoadMacro(arg, s.type))
+            if isinstance(s, ArgSpec):
+                arg = Name.from_word(s.word)
+                grammar.add(s.type, [s.word], LoadMacro(arg, s.type))
                 args.append(arg)
         DefineMacro.current_definition_args.append(args)
 
@@ -357,8 +355,8 @@ class LambdaMacro(Macro):
         args = []
         for s in spec:
             assert isinstance(s, ArgSpec)
-            arg = Name(s.name.value)
-            grammar.add(s.type, [s.name], LoadMacro(arg, s.type))
+            arg = Name.from_word(s.word)
+            grammar.add(s.type, [s.word], LoadMacro(arg, s.type))
             args.append(arg)
         LambdaMacro.current_definition_args.append(args)
 
@@ -438,7 +436,6 @@ grammar.add(Line, ws_not_null([
 # Var
 
 Var = Internal.get("Var")
-VAR = Function("var")
 
 @singleton
 class Declare(Macro):
@@ -481,7 +478,6 @@ class StoreCellMacro(Macro):
 grammar.add(Line, [
     Var, Word.WS_NOT_NULL, Word.word(":"), Word.word("="), Word.WS_NOT_NULL, Type.ANY
 ], StoreCellMacro)
-
 
 
 # Dynamic calls.

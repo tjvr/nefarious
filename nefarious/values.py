@@ -174,6 +174,12 @@ class Name(Tree):
         self.name = name # String name really is just a debugging aid
         self._parent = None
 
+    @staticmethod
+    def from_word(word):
+        from .lex import Word
+        assert isinstance(word, Word)
+        return Name(word.value)
+
     def __repr__(self):
         return "Name({!r})".format(self.name)
 
@@ -184,9 +190,6 @@ class Name(Tree):
 class Symbol(Name):
     """Name, specialised for let-bindings & arguments."""
     _cache = {}
-
-    def get(self, name):
-        assert isinstance(name, str)
 
     @staticmethod
     def get(name):
