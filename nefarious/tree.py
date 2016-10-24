@@ -286,6 +286,7 @@ class StoreCell(Node):
 
     def evaluate(self, frame):
         cell = frame.lookup(self.name)
+        assert isinstance(cell, W_Var)
         value = self.value.evaluate(frame)
         cell.set(value)
     # TODO opt

@@ -468,6 +468,7 @@ grammar.add(Line, [
 class LoadCellMacro(Macro):
     def build(self, values, type_):
         load = values[0]
+        assert isinstance(load, Load) # TODO iffy
         return LoadCell(load.name, type_)
 grammar.add(Generic.ALPHA, [Var], LoadCellMacro)
 
@@ -475,6 +476,7 @@ grammar.add(Generic.ALPHA, [Var], LoadCellMacro)
 class StoreCellMacro(Macro):
     def build(self, values, type_):
         load = values[0]
+        assert isinstance(load, Load) # TODO iffy
         return StoreCell(load.name, values[5])
 grammar.add(Line, [
     Var, Word.WS_NOT_NULL, Word.word(":"), Word.word("="), Word.WS_NOT_NULL, Type.ANY
