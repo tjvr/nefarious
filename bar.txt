@@ -25,6 +25,8 @@ defprim item Int:i of (List Any):l { LIST_GET l i }
 define item last of (List Any):l { item length of l of l }
 define item first of (List Any):l { item 1 of l }
 
+define # Text:comment {}
+
 define repeat Int:count Block:body {
     var c := count
     let result = []
@@ -46,6 +48,9 @@ define range from Int:start to Int:stop {
     result
 }
 
+#" end preamble "
+
+
 
 define fib Float:n {
     IF_THEN_ELSE (n < 2.0) 1.0 ((fib (n - 1.0)) + (fib (n - 2.0)))
@@ -63,6 +68,4 @@ define fastfib Int:n {
 }
 
 repeat 20 { random from 0 to 10 }
-
-[(round 1234.5)]
 

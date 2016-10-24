@@ -1,5 +1,6 @@
 
 from .types import Tree, Type, List, Generic
+from .lex import Word
 
 from rpython.rlib.rbigint import rbigint
 from rpython.rlib import rope
@@ -128,10 +129,11 @@ class W_Text(Value):
         self.text = text
 
     @staticmethod
-    @jit.elidable
-    def fromstr(string):
-        # TODO tokenizer should understand utf-8
+    def fromword(word):
+        assert isinstance(word, Word)
+        string = word.value
         return W_Text(rope.LiteralUnicodeNode(string.decode('utf-8')))
+        # TODO tokenizer should understand utf-8
 
     def __repr__(self):
         return 'W_Text({!r})'.format(self.text)
@@ -186,7 +188,6 @@ class Name(Tree):
 
     @staticmethod
     def from_word(word):
-        from .lex import Word
         assert isinstance(word, Word)
         return Name(word.value)
 

@@ -220,17 +220,24 @@ grammar.add(Iden, [Word.WS_NOT_NULL], Identity)
 Spec = Internal.get('Spec')
 
 class ArgSpec(Tree):
-    def __init__(self, type_, word):
+    def __init__(self, type_, word, is_seq):
         assert isinstance(word, Word)
         assert isinstance(type_, Type)
         self.word = word
         self.type = type_
+        self.is_seq = is_seq
 @singleton
 class ArgSpecMacro(Macro):
     def build(self, values, type_):
-        type_, _, name = values
-        return ArgSpec(type_, name)
+        repeat = False
+        if len(values) > 3:
+            _star, type_, _, name = values
+            repeat = True
+        else:
+            type_, _, name = values
+        return ArgSpec(type_, name, repeat)
 grammar.add(Spec, [Type.TYPE, Word.word(":"), Word.WORD], ArgSpecMacro)
+grammar.add(Spec, [Word.word("*"), Type.TYPE, Word.word(":"), Word.WORD], ArgSpecMacro)
 
 grammar.add(Spec, [Iden], Identity)
 
@@ -315,7 +322,7 @@ class DefineMacro(Macro):
         grammar.add(type_, symbols, macro)
 
     def _macro(self, spec, func):
-        symbols = [(s.type if self._is_arg(s) else s) for s in spec]
+        symbols = [((Repeat.get(s.type) if s.is_seq else s.type) if self._is_arg(s) else s) for s in spec]
         arg_indexes = [index for index, s in enumerate(spec) if self._is_arg(s)]
         return symbols, CallMacro(func, arg_indexes)
 
@@ -584,6 +591,7 @@ Bool = Type.get('Bool')
 
 grammar.add(Type.TYPE, [Word.word("Block")], LiteralMacro(Type.get('Block')))
 grammar.add(Type.TYPE, [Word.word("Func")], LiteralMacro(Type.FUNC))
+grammar.add(Type.TYPE, [Word.word("Word")], LiteralMacro(Internal.get('Word')))
 add_type(Var)
 
 add_type(Int)
@@ -596,6 +604,16 @@ add_type(Record)
 #Digits = Type.get('Digits')
 #grammar.add(Digits, [Word.word("Digits")], Identity)
 #add_type(Digits)
+
+
+@singleton
+class ParseWord(Macro):
+    def build(self, values, type_):
+        word, = values
+        return Literal(W_Text.fromword(word), Text)
+grammar.add(Internal.get('Word'), [Word.WORD], ParseWord)
+grammar.add(Text, [Internal.get('Word')], Identity)
+# TODO words parse as symbols??
 
 
 # Built-in builtins
@@ -622,8 +640,7 @@ grammar.add(Float, [Word.DIGITS, Word.word("."), Word.DIGITS], ParseFloat)
 class ParseText(Macro):
     def build(self, values, type_):
         word = values[0]
-        assert isinstance(word, Word)
-        return Literal(W_Text.fromstr(word.value), type_)
+        return Literal(W_Text.fromword(word), type_)
 grammar.add(Text, [Word.TEXT], ParseText)
 
 grammar.add(Bool, [Word.word("yes")], LiteralMacro(Literal(Value.TRUE, Bool)))

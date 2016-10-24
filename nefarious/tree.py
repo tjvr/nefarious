@@ -351,6 +351,9 @@ class Lambda(Node):
 
 class Call(Node):
     def __init__(self, func, args, type_):
+        # TODO handle Repeat better
+        args = [(ListLiteral(arg.items, _List) if isinstance(arg, W_List) else arg) for arg in args]
+
         self._parent = None
         self.func = func
         self.args = args
