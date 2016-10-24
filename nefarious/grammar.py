@@ -418,14 +418,14 @@ class LetMacro(Macro):
         for iden in identifier:
             assert isinstance(iden, Word)
             name += iden.value
-        var = Name(name) # TODO Symbol?
+        ref = Name(name) # TODO Symbol?
 
         type_ = value.type
         if type_ is None:
             type_ = Generic.ALPHA # TODO this doesn't work
 
-        grammar.add(type_, identifier, LoadMacro(var, type_))
-        return Let(var, value)
+        grammar.add(type_, identifier, LoadMacro(ref, type_))
+        return Let(ref, value)
 
 grammar.add(Seq.get(Iden), [Iden], StartList)
 grammar.add(Seq.get(Iden), [Seq.get(Iden), Iden], ContinueList)
@@ -437,51 +437,48 @@ grammar.add(Line, ws_not_null([
 
 # Var
 
-# Var = Internal.get("Var")
-# VAR = Function("var")
-# add_type(Var)
-# 
-# @singleton
-# class Declare(Macro):
-#     def build(self, values, type_):
-#         identifier = values[2].args
-#         name = ""
-#         for iden in identifier:
-#             assert isinstance(iden, Word)
-#             name += iden.value
-# 
-#         var = Name(name)
-# 
-#         # TODO var = LoadCell
-# 
-#         # fit Var slot
-#         #grammar.add(Var, identifier, LoadCellMacro(var))
-# 
-#         if len(values) > 3:
-#             value = values[7]
-#             return Call(VAR, type_, [var, value])
-#         else:
-#             return Call(VAR, type_, [var])
-# 
-# grammar.add(Line, [
-#     Word.word("var"), Word.WS_NOT_NULL, Seq.get(Iden)
-# ], Declare)
-# grammar.add(Line, [
-#     Word.word("var"), Word.WS_NOT_NULL, Seq.get(Iden), Word.WS_NOT_NULL, Word.word(":"), Word.word("="), Word.WS_NOT_NULL, Type.ANY
-# ], Declare)
-# 
-# GET = Function("get")
-# grammar.add(Generic.ALPHA, [Var], CallMacro(GET, [0]))
-# 
-# 
-# SET = Function("set")
-# 
-# # TODO don't parse `y := 4` as (set (get y) 4)
-# grammar.add(Line, [
-#     Var, Word.WS_NOT_NULL, Word.word(":"), Word.word("="), Word.WS_NOT_NULL, Type.ANY
-# ], CallMacro(SET, [0, 5]))
-# 
-# # TODO pass var cells by reference!
+Var = Internal.get("Var")
+VAR = Function("var")
+
+@singleton
+class Declare(Macro):
+    def build(self, values, type_):
+        identifier = values[2].items
+        name = ""
+        for iden in identifier:
+            assert isinstance(iden, Word)
+            name += iden.value
+
+        ref = Name(name)
+        grammar.add(Var, identifier, LoadMacro(ref, Var))
+
+        if len(values) > 3:
+            value = values[7]
+            return DeclareCell(ref, value)
+        else:
+            return NewCell(ref)
+grammar.add(Line, [
+    Word.word("var"), Word.WS_NOT_NULL, Seq.get(Iden)
+], Declare)
+grammar.add(Line, [
+    Word.word("var"), Word.WS_NOT_NULL, Seq.get(Iden), Word.WS_NOT_NULL, Word.word(":"), Word.word("="), Word.WS_NOT_NULL, Type.ANY
+], Declare)
+
+@singleton
+class LoadCellMacro(Macro):
+    def build(self, values, type_):
+        load = values[0]
+        return LoadCell(load.name, type_)
+grammar.add(Generic.ALPHA, [Var], LoadCellMacro)
+
+@singleton
+class StoreCellMacro(Macro):
+    def build(self, values, type_):
+        load = values[0]
+        return StoreCell(load.name, values[5])
+grammar.add(Line, [
+    Var, Word.WS_NOT_NULL, Word.word(":"), Word.word("="), Word.WS_NOT_NULL, Type.ANY
+], StoreCellMacro)
 
 
 
@@ -583,6 +580,7 @@ Float = Type.get('Float')
 Text = Type.get('Text')
 Bool = Type.get('Bool')
 
+add_type(Var)
 add_type(Int)
 add_type(Float)
 add_type(Text)

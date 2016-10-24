@@ -227,6 +227,70 @@ class Let(Node):
         return "(let " + self.name.sexpr() + " " + self.value.sexpr() + ")"
 
 
+class NewCell(Node):
+    type = Internal.get('Var')
+
+    def __init__(self, name):
+        self.name = name
+
+    def sexpr(self):
+        return "(var " + self.name.sexpr() + ")"
+
+    def evaluate(self, frame):
+        cell = W_Var(Value.NULL)
+        frame.set(self.name, cell)
+        return cell
+    # TODO opt
+
+
+class DeclareCell(Node):
+    def __init__(self, name, value):
+        self.name = name
+        self.value = value
+
+    def sexpr(self):
+        return "(declare " + self.name.sexpr() + " " + self.value.sexpr() + ")"
+
+    def evaluate(self, frame):
+        value = self.value.evaluate(frame)
+        cell = W_Var(value)
+        cell.set(value)
+        frame.set(self.name, cell)
+    # TODO opt
+
+
+class LoadCell(Node):
+    def __init__(self, name, type_):
+        self.name = name
+        self.type = type_
+
+    def sexpr(self):
+        return "(get " + self.name.sexpr() + ")"
+
+    def evaluate(self, frame):
+        cell = frame.lookup(self.name)
+        assert isinstance(cell, W_Var)
+        value = cell.get()
+        # TODO check Var read is correct type
+        return value
+    # TODO opt
+
+
+class StoreCell(Node):
+    def __init__(self, name, value):
+        self.name = name
+        self.value = value
+
+    def sexpr(self):
+        return "(set " + self.name.sexpr() + " " + self.value.sexpr() + ")"
+
+    def evaluate(self, frame):
+        cell = frame.lookup(self.name)
+        value = self.value.evaluate(frame)
+        cell.set(value)
+    # TODO opt
+
+
 class Define(Node):
     """A little like `let rec` I suppose"""
     def __init__(self, name, func):
@@ -389,20 +453,6 @@ class Return(Node):
 #         return closure.func.body.evaluate(inner)
 
 
-# class LoadCell(Node):
-#     def __init__(self, name, type_):
-#         pass # TODO 
-# 
-#     def evaluate(self, frame):
-#         pass # TODO check Var read is correct type
-# 
-# class StoreCell(Node):
-#     def __init__(self, name, value):
-#         pass # TODO 
-# 
-#     def evaluate(self, frame):
-#         value = self.value.evaluate() # ...
-#         pass # TODO
 
 class Builtin(Node):
     type = None
@@ -484,14 +534,6 @@ class BOOL_AND(InfixBuiltin):
             return Value.FALSE
         assert right is Value.TRUE
         return Value.TRUE
-
-
-
-
-
-# TODO BOOL_AND
-# TODO BOOL_OR
-
 
 
 Int = Type.get('Int')
@@ -624,5 +666,4 @@ class IF_THEN_ELSE(Builtin):
         elif cond == Value.FALSE:
             return self.fv.evaluate(frame)
         assert False
-
 

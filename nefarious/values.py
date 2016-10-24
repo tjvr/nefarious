@@ -19,9 +19,8 @@ class Value(Tree):
 class W_Var(Value):
     """a mutable cell"""
 
-    def __init__(self):
-        self.value = None
-        self.set(Value.NULL)
+    def __init__(self, value):
+        self.value = value
 
     def __repr__(self):
         return "<W_Var {}>".format(hex(id(self))[-6:-2])
