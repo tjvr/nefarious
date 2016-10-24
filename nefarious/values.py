@@ -1,9 +1,13 @@
 
 from .types import Tree, Type, List, Generic
 
-from rpython.rlib.rbigint import rbigint
-from rpython.rlib import rope
-from rpython.rlib import jit
+try:
+    from rpython.rlib.rbigint import rbigint
+    from rpython.rlib import rope
+    from rpython.rlib import jit
+except ImportError:
+    # TODO can we write cpython stubs for these? or is that too much work?
+    raise ImportError("Please run `make pypy`")
 
 
 class Value(Tree):
