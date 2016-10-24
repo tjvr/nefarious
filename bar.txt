@@ -20,6 +20,7 @@ defprim add Any:x to (List Any):l { LIST_ADD l x }
 defprim length of (List Any):l { LIST_LEN l }
 defprim item Int:i of (List Any):l { LIST_GET l i }
 define item last of (List Any):l { item length of l of l }
+define item first of (List Any):l { item 1 of l }
 
 define repeat Int:count Block:body {
     var c := count
@@ -60,4 +61,6 @@ define fastfib Int:n {
 repeat 10 {
     fastfib 30
 }
+
+item first of [1 2 3]
 
