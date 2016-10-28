@@ -54,14 +54,21 @@ class Node(Tree):
         assert isinstance(other, Node)
         parent = self._parent
         #self._parent = None # TODO omit
-        parent.replace(self, other)
+        parent.replace_child(self, other)
         other._parent = parent
 
-    def replace(self, child, other):
-        raise NotImplementedError
+    def replace_child(self, child, other):
+        raise NotImplementedError, self
 
     def evaluate(self, frame):
         raise NotImplementedError
+
+    def copy(self):
+        raise NotImplementedError, self
+
+    def children(self):
+        raise NotImplementedError, self
+
 
 # TODO annotate nodes with SourceSections
 
@@ -77,7 +84,13 @@ class Block(Node):
             assert isinstance(node, Node), node
             node.set_parent(self)
 
-    def replace(self, child, other):
+    def children(self):
+        return self.nodes
+
+    def copy(self):
+        return Block([n.copy() for n in self.nodes])
+
+    def replace_child(self, child, other):
         for index in range(len(self.nodes)):
             if self.nodes[index] is child:
                 self.nodes[index] = other
@@ -108,6 +121,9 @@ class Literal(Node):
         self.value = value
         self.type = type_
 
+    def copy(self): return Literal(self.value, self.type)
+    def children(self): return []
+
     def __repr__(self):
         return "Literal({!r})".format(self.value)
 
@@ -127,6 +143,9 @@ class ListLiteral(Node):
         for item in items:
             item.set_parent(self)
 
+    def copy(self): return ListLiteral([n.copy() for n in self.items], self.type)
+    def children(self): return self.items
+
     def __repr__(self):
         return "ListLiteral({!r})".format(self.items)
 
@@ -144,8 +163,13 @@ class Load(Node):
         self.name = name
         self.type = type_
 
+    def copy(self): return Load(self.name, self.type)
+    def children(self): return []
+
     def __repr__(self):
         return "Load({!r})".format(self.name)
+
+    def children(self): return []
 
     def evaluate(self, frame):
         shape = frame.shape
@@ -200,10 +224,13 @@ class Let(Node):
         self.value = value
         value.set_parent(self)
 
+    def copy(self): return Let(self.name, self.value.copy())
+    def children(self): return [self.value]
+
     def __repr__(self):
         return "Let({!r}, {!r})".format(self.name, self.value)
 
-    def replace(self, child, other):
+    def replace_child(self, child, other):
         assert child is self.value
         self.value = other
 
@@ -224,6 +251,9 @@ class NewCell(Node):
     def __init__(self, name):
         self.name = name
 
+    def copy(self): return NewCell(self.name)
+    def children(self): return []
+
     def sexpr(self):
         return "(var " + self.name.sexpr() + ")"
 
@@ -240,7 +270,10 @@ class DeclareCell(Node):
         self.value = value
         value.set_parent(self)
 
-    def replace(self, child, other):
+    def copy(self): return DeclareCell(self.name, self.value.copy())
+    def children(self): return [self.value]
+
+    def replace_child(self, child, other):
         assert child == self.value
         self.value = other
 
@@ -260,6 +293,9 @@ class LoadCell(Node):
         self.name = name
         self.type = type_
 
+    def copy(self): return LoadCell(self.name, self.type)
+    def children(self): return []
+
     def sexpr(self):
         return "(get " + self.name.sexpr() + ")"
 
@@ -278,7 +314,10 @@ class StoreCell(Node):
         self.value = value
         value.set_parent(self)
 
-    def replace(self, child, other):
+    def copy(self): return StoreCell(self.name, self.value.copy())
+    def children(self): return [self.value]
+
+    def replace_child(self, child, other):
         assert child == self.value
         self.value = other
 
@@ -320,6 +359,9 @@ class Lambda(Node):
         assert isinstance(func, Func)
         self.func = func
 
+    def copy(self): return Lambda(Func(self.func.shape.names_list(), self.func.body.copy()))
+    def children(self): return [self.func.body]
+
     def evaluate(self, frame):
         closure = W_Func(frame, self.func)
         return closure
@@ -335,14 +377,20 @@ class Call(Node):
         self._parent = None
         self.func = func
         self.args = args
+        self.type = type_
         func.set_parent(self)
-        assert isinstance(args, list)
         for arg in args:
-            assert isinstance(arg, Node), arg
+            assert isinstance(arg, Node)
             arg.set_parent(self)
         self.type = type_
 
-    def replace(self, child, other):
+    def copy(self): return Call(self.func.copy(), [a.copy() for a in self.args], self.type)
+    def children(self): return [self.func] + self.args
+
+    def sexpr(self):
+        return "(" + self.func.sexpr() + " " + " ".join([a.sexpr() for a in self.args]) + ")"
+
+    def replace_child(self, child, other):
         if child is self.func:
             self.func = other
             return
@@ -352,7 +400,7 @@ class Call(Node):
                 return
         assert False, "child not found"
 
-    def evaluate(self, frame): # TODO OPT
+    def evaluate(self, frame):
         closure = self.func.evaluate(frame)
         assert isinstance(closure, W_Func)
 
@@ -366,6 +414,8 @@ class Call(Node):
     def sexpr(self):
         return "(" + self.func.sexpr() + " " + " ".join([a.sexpr() for a in self.args]) + ")"
 
+
+
 class Apply(Node):
     def __init__(self, func, arg_list, type_):
         self._parent = None
@@ -375,7 +425,7 @@ class Apply(Node):
         arg_list.set_parent(self)
         self.type = type_
 
-    def replace(self, child, other):
+    def replace_child(self, child, other):
         if child is self.func:
             self.func = other
             return
@@ -408,7 +458,7 @@ class Return(Node):
         self.child = child
         child.set_parent(self)
 
-    def replace(self, child, other):
+    def replace_child(self, child, other):
         assert child is self.child
         self.child = other
 
@@ -462,8 +512,18 @@ class Builtin(Node):
     def __init__(self, args, type_):
         raise NotImplementedError
 
+    def _args(self):
+        raise NotImplementedError
+
     def sexpr(self):
         return "(" + self.__class__.__name__ + " " + " ".join([a.sexpr() for a in self._args()]) + ")"
+
+    def copy(self):
+        return self.__class__([a.copy() for a in self._args()], self.type)
+
+    def children(self):
+        return self._args()
+
 
 class UnaryBuiltin(Builtin):
     def __init__(self, args, type_):
@@ -472,7 +532,7 @@ class UnaryBuiltin(Builtin):
         self.child.set_parent(self)
     def _args(self):
         return [self.child]
-    def replace(self, child, other):
+    def replace_child(self, child, other):
         if child is self.child:
             self.child = other
         else:
@@ -487,7 +547,7 @@ class InfixBuiltin(Builtin):
         self.right.set_parent(self)
     def _args(self):
         return [self.left, self.right]
-    def replace(self, child, other):
+    def replace_child(self, child, other):
         if child is self.left:
             self.left = other
         elif child is self.right:
@@ -707,6 +767,11 @@ class IF_THEN_ELSE(Builtin):
         self.tv.set_parent(self)
         self.fv.set_parent(self)
 
+    def _args(self):
+        return [self.cond, self.tv, self.fv]
+
+    # TODO replace_child
+
     def sexpr(self):
         return "(IF_THEN_ELSE " + self.cond.sexpr() + " " + self.tv.sexpr() + " " + self.fv.sexpr() + ")"
 
@@ -728,6 +793,11 @@ class WHILE(Builtin):
         self.cond.set_parent(self)
         assert isinstance(self.body, Block)
         self.body.set_parent(self)
+
+    def _args(self):
+        return [self.cond, self.body]
+
+    # TODO replace_child
 
     def sexpr(self):
         return "(WHILE " + self.cond.sexpr() + " " + self.body.sexpr() + ")"

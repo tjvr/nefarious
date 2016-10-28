@@ -237,7 +237,7 @@ class Shape:
         return self.names.get(key, -1)
 
     def transition(self, new_name):
-        assert isinstance(new_name, Name), repr(new_name)
+        assert isinstance(new_name, Name)
         if new_name in self.names:
             raise ValueError("symbol already in record: " + new_name.sexpr())
         if new_name in self._transitions:
@@ -248,12 +248,19 @@ class Shape:
         return shape
 
     def compatible(self, other):
+        # TODO opt?
         shape = self
         while shape.previous:
             shape = shape.previous
             if shape is other:
                 return True
         return False
+
+    def names_list(self):
+        result = [None] * len(self.names)
+        for name, index in self.names.items():
+            result[index] = name
+        return result
 
     @staticmethod
     def get(names):
@@ -284,9 +291,6 @@ class W_Record(Value):
             self.values.append(value)
         else:
             self.values[index] = value
-
-    def _set_shape(self, shape):
-        self.shape = shape
 
     def lookup(self, key):
         assert isinstance(key, Symbol)
@@ -363,12 +367,13 @@ class Frame:
         ]) + "]"
 
 
-class Func:
+class Func: # TODO naming
     """a Block plus arg names ??"""
     def __init__(self, arg_names, body):
         #assert isinstance(body, Tree)
         #assert isinstance(body, Block)
         self.body = body
+        self.original_body = None if body is None else body.copy()
 
         # map for accessing locals in Frame
         self.shape = Shape.get(arg_names)
@@ -378,7 +383,7 @@ class Func:
         return " ".join([n.sexpr() for n in self.shape.names]) + " " + self.body.sexpr()
 
 
-class W_Func(Value):
+class W_Func(Value): # TODO naming
     """a Closure: function + scope"""
     type = Type.get('Func')
 
@@ -387,7 +392,7 @@ class W_Func(Value):
         assert isinstance(scope, Frame)
         self.scope = scope
 
-        self.func = func # copy onto closure? TODO opt
+        self.func = func
 
     def call(self, arg_list):
         func = self.func
