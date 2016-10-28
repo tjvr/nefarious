@@ -124,6 +124,8 @@ class ListLiteral(Node):
         assert isinstance(items, list)
         self.items = items
         self.type = type_
+        for item in items:
+            item.set_parent(self)
 
     def __repr__(self):
         return "ListLiteral({!r})".format(self.items)
@@ -148,7 +150,7 @@ class Load(Node):
     def evaluate(self, frame):
         shape = frame.shape
         index = shape.lookup(self.name)
-        if index == -1: # upvalue?
+        if index == -1: # upvalue? TODO opt
             other = LoadGeneric(self.name)
         else:
             other = LoadOffset(self.name, shape, index)
@@ -338,7 +340,6 @@ class Call(Node):
         for arg in args:
             assert isinstance(arg, Node), arg
             arg.set_parent(self)
-
         self.type = type_
 
     def replace(self, child, other):
@@ -359,7 +360,7 @@ class Call(Node):
         inner = closure.call(arg_list)
         try:
             return closure.func.body.evaluate(inner)
-        except ReturnValue as ret:
+        except ReturnValue as ret: # TODO opt
             return ret.value
 
     def sexpr(self):
@@ -472,7 +473,7 @@ class UnaryBuiltin(Builtin):
     def _args(self):
         return [self.child]
     def replace(self, child, other):
-        if child == self.child:
+        if child is self.child:
             self.child = other
         else:
             assert False
@@ -487,10 +488,10 @@ class InfixBuiltin(Builtin):
     def _args(self):
         return [self.left, self.right]
     def replace(self, child, other):
-        if child == self.left:
-            self.left = child
-        elif child == self.right:
-            self.right = child
+        if child is self.left:
+            self.left = other
+        elif child is self.right:
+            self.right = other
         else:
             assert False
 
