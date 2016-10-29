@@ -301,12 +301,7 @@ class W_Record(Value):
 
     def sexpr(self):
         values = self.values
-        symbols = []
-        lookup = self.shape.names
-        for index in range(len(values)):
-            for key in lookup:
-                if lookup[key] == index:
-                    symbols.append(key)
+        symbols = self.shape.names_list()
         return "[" + " ".join([
             ":" + symbols[i].name + " " + values[i].sexpr()
             for i in range(len(symbols))
@@ -321,11 +316,14 @@ class Frame:
         self.func = func
         self.values = values
 
+        assert len(self.shape.names) == len(self.values)
+
         #self.stack = [] # for threading TODO
         #self.calls = [] # for threading
 
     @property
     def shape(self):
+        # TODO there are synchronisation problems here.
         return self.func.shape
 
     def set(self, key, value):
@@ -334,11 +332,10 @@ class Frame:
         index = shape.lookup(key)
         if index == -1:
             shape = shape.transition(key)
-            assert shape.lookup(key) == len(self.values) # DEBUG
-            self.values.append(value)
             self.func.shape = shape
-        else:
-            self.values[index] = value
+        while len(self.values) < len(shape.names): # TODO this sucks
+            self.values.append(None)
+        self.values[index] = value
 
     def lookup(self, key):
         assert isinstance(key, Name)
@@ -349,18 +346,9 @@ class Frame:
             raise KeyError(key)
         return self.values[index]
 
-    def _set_shape(self, shape):
-        self.shape = self.func.shape = shape
-        # TODO also modify other frames on the stack!
-
     def _print(self):
         values = self.values
-        symbols = []
-        lookup = self.shape.names
-        for index in range(len(values)):
-            for key in lookup:
-                if lookup[key] == index:
-                    symbols.append(key)
+        symbols = self.shape.names_list()
         print "<Frame [" + " ".join([
             ":" + symbols[i].name + " " + ("None" if values[i] is None else values[i].sexpr())
             for i in range(len(symbols))
