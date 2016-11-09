@@ -530,10 +530,10 @@ class GetAttr(Node):
 
     def evaluate(self, frame):
         record = self.record.evaluate(frame)
+        assert isinstance(record, W_Record)
         return self.evaluate_record(record)
 
     def evaluate_record(self, record):
-        assert isinstance(record, W_Record)
         shape = record.shape
         index = shape.lookup(self.symbol)
         other = GetAttrOffset(self.symbol, self.record, shape, index)
@@ -584,11 +584,33 @@ class SetAttr(Node):
     def evaluate(self, frame):
         record = self.record.evaluate(frame)
         assert isinstance(record, W_Record)
-        # TODO specialise for shape
         value = self.value.evaluate(frame)
-        record.set(self.symbol, value)
+        return self.evaluate_record(record, value)
+
+    def evaluate_record(self, record, value):
+        shape = record.shape
+        index = shape.lookup(self.symbol)
+        other = SetAttrOffset(self.symbol, self.record, self.value, shape, index)
+        self._replace(other)
+        return other.evaluate_record(record, value)
 
     def sexpr(self):
         return "(set-attr " + self.record.sexpr() + " " + self.symbol.sexpr() + " " + self.value.sexpr() + ")"
 
+class SetAttrOffset(SetAttr):
+    def __init__(self, symbol, record, value, shape, index):
+        SetAttr.__init__(self, symbol, record, value)
+        self.shape = shape
+        self.index = index
+
+    def evaluate_record(self, record, value):
+        # shape guard
+        if record.shape is not self.shape:
+            other = SetAttrGeneric(self.symbol, self.record, self.value)
+            return other.evaluate_record(record, value)
+        record.values[self.index] = value
+
+class SetAttrGeneric(SetAttr):
+    def evaluate_record(self, record, value):
+        record.set(self.symbol, value)
 
