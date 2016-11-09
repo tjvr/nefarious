@@ -536,7 +536,7 @@ class GetAttr(Node):
         return value
 
     def sexpr(self):
-        return "(attr " + self.symbol.sexpr() + " " + self.record.sexpr() + ")"
+        return "(get-attr " + self.record.sexpr() + " " + self.symbol.sexpr() + ")"
 
 
 class SetAttr(Node):
@@ -567,7 +567,7 @@ class SetAttr(Node):
         record.set(self.symbol, value)
 
     def sexpr(self):
-        return "(set-attr " + self.symbol.sexpr() + " " + self.record.sexpr() + " " + self.value.sexpr() + ")"
+        return "(set-attr " + self.record.sexpr() + " " + self.symbol.sexpr() + " " + self.value.sexpr() + ")"
 
 
 class Builtin(Node):
