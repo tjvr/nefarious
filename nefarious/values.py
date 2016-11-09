@@ -217,6 +217,9 @@ class Symbol(Name):
     def __repr__(self):
         return "Symbol({!r})".format(self.name)
 
+    def sexpr(self):
+        return ":" + self.name.replace(" ", "_")
+
 
 
 #------------------------------------------------------------------------------

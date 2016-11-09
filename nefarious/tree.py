@@ -160,6 +160,43 @@ class ListLiteral(Node):
         return W_List([item.evaluate(frame) for item in self.items])
 
 
+class RecordLiteral(Node):
+    type = Type.get('Record')
+
+    def __init__(self, keys, values, type_):
+        self._parent = None
+        self.keys = keys
+        self.values = values
+        self.type = type_
+        for item in keys:
+            assert isinstance(item, Symbol)
+        for item in values:
+            item.set_parent(self)
+
+    def copy(self): return RecordLiteral(self.keys, [n.copy() for n in self.values], self.type)
+    def children(self): return self.keys + self.values
+
+    def replace_child(self, child, other):
+        index = self.values.index(child)
+        self.values[index] = other
+
+    def __repr__(self):
+        return "RecordLiteral({!r})".format(self.keys, self.values)
+
+    def sexpr(self):
+        items = []
+        for i in range(len(self.keys)):
+            items.append(self.keys[i])
+            items.append(self.values[i])
+        return "(record " + " ".join([n.sexpr() for n in items]) + ")"
+
+    def evaluate(self, frame):
+        values = [item.evaluate(frame) for item in self.values]
+        return W_Record(self.keys, values)
+
+
+
+
 class Load(Node):
     def __init__(self, name, type_):
         self._parent = None

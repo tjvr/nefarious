@@ -564,7 +564,7 @@ class RecordMacro(Macro):
             assert isinstance(p, KVPair)
             keys.append(p.key)
             values.append(p.value)
-        return Literal(W_Record(keys, values), type_)
+        return RecordLiteral(keys, values, type_)
 grammar.add(Type.get('Record'), [Word.word("["), Internal.SEP, Seq.get(Pair), Internal.SEP, Word.word("]")], RecordMacro)
 
 

@@ -476,12 +476,12 @@ class LanguageTests(BaseParser):
         """, "{ (list 1 2 3) }")
 
     def test_11(self):
-        self._parse("[:x 1 :y 2 :z 3]", "{ [:x 1 :y 2 :z 3] }")
+        self._parse("[:x 1 :y 2 :z 3]", "{ (record :x 1 :y 2 :z 3) }")
         self._parse("""
         [
             :x 1
             :y 2
             :z 3
         ]
-        """, "{ [:x 1 :y 2 :z 3] }")
+        """, "{ (record :x 1 :y 2 :z 3) }")
 
