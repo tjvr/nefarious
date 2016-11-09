@@ -499,6 +499,9 @@ class Return(Node):
         self.child = child
         child.set_parent(self)
 
+    def copy(self): return Return(self.child.copy())
+    def children(self): return [self.child]
+
     def replace_child(self, child, other):
         assert child is self.child
         self.child = other
@@ -511,40 +514,30 @@ class Return(Node):
         return "(return " + self.child.sexpr() + ")"
 
 
-# class StaticCall(Node):
-#     def __init__(self, func, args, closure):
-#         self._parent = None
-#         self.func = func
-#         self.args = args
-#         self.closure = closure
-# 
-#     def evaluate(self, frame):
-#         closure = self.func.evaluate()
-#         if closure != self.closure:
-#             other = DynamicCall(self._parent, self.func, self.args)
-#             self._replace(other)
-# 
-#         arg_list = [arg.evaluate(frame) for arg in self.args]
-#         inner = closure.call(arg_list)
-#         return closure.func.body.evaluate(inner)
-# 
-#     # inline? TODO opt
-#     # StaticNamedCall? TODO opt
-# 
-# class DynamicCall(Node):
-#     def __init__(self, func, args):
-#         self._parent = None
-#         self.func = func
-#         self.args = args
-# 
-#     def evaluate(self, frame):
-#         closure = self.func.evaluate(frame)
-#         assert isinstance(closure, W_Func)
-# 
-#         arg_list = [arg.evaluate(frame) for arg in self.args]
-#         inner = closure.call(arg_list)
-#         return closure.func.body.evaluate(inner)
+class GetAttr(Node):
+    def __init__(self, symbol, child):
+        self._parent = None
+        self.symbol = symbol
+        self.child = child
+        child.set_parent(self)
 
+    def copy(self): return GetAttr(self.symbol, self.child.copy())
+    def children(self): return [self.child]
+
+    def replace_child(self, child, other):
+        assert child is self.child
+        self.child = other
+
+    def evaluate(self, frame):
+        record = self.child.evaluate(frame)
+        assert isinstance(record, W_Record)
+        # TODO specialise?
+        value = record.lookup(self.symbol)
+        assert value
+        return value
+
+    def sexpr(self):
+        return "(attr " + self.symbol.sexpr() + " " + self.child.sexpr() + ")"
 
 
 class Builtin(Node):
@@ -646,9 +639,9 @@ class INT_ADD(InfixBuiltin):
     arg_types = [Int, Int]
     def evaluate(self, frame):
         left = self.left.evaluate(frame)
-        assert isinstance(left, W_Int)
+        assert isinstance(left, W_Int), left.sexpr()
         right = self.right.evaluate(frame)
-        assert isinstance(right, W_Int)
+        assert isinstance(right, W_Int), right.sexpr()
         return W_Int(left.value.add(right.value))
 
 class INT_SUB(InfixBuiltin):
@@ -656,9 +649,9 @@ class INT_SUB(InfixBuiltin):
     arg_types = [Int, Int]
     def evaluate(self, frame): # this is expensive
         left = self.left.evaluate(frame)
-        assert isinstance(left, W_Int)
+        assert isinstance(left, W_Int), left.sexpr()
         right = self.right.evaluate(frame)
-        assert isinstance(right, W_Int)
+        assert isinstance(right, W_Int), right.sexpr()
         return W_Int(left.value.sub(right.value))
 
 # TODO INT_EQ
@@ -668,9 +661,9 @@ class INT_LT(InfixBuiltin):
     arg_types = [Int, Int]
     def evaluate(self, frame):
         left = self.left.evaluate(frame)
-        assert isinstance(left, W_Int)
+        assert isinstance(left, W_Int), left.sexpr()
         right = self.right.evaluate(frame)
-        assert isinstance(right, W_Int)
+        assert isinstance(right, W_Int), right.sexpr()
         return W_Bool.get(left.value.lt(right.value))
 
 class INT_RANDOM(InfixBuiltin):
@@ -681,9 +674,9 @@ class INT_RANDOM(InfixBuiltin):
 
     def evaluate(self, frame):
         left = self.left.evaluate(frame)
-        assert isinstance(left, W_Int)
+        assert isinstance(left, W_Int), left.sexpr()
         right = self.right.evaluate(frame)
-        assert isinstance(right, W_Int)
+        assert isinstance(right, W_Int), right.sexpr()
         # TODO random for bigints.
         start = left.value.toint()
         end = right.value.toint()
@@ -696,7 +689,7 @@ class INT_FLOAT(UnaryBuiltin):
     arg_types = [Int]
     def evaluate(self, frame):
         child = self.child.evaluate(frame)
-        assert isinstance(child, W_Int)
+        assert isinstance(child, W_Int), child.sexpr()
         return W_Float(child.value.tofloat())
 
 
