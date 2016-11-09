@@ -145,3 +145,33 @@ PRINT report energy
 offset momentum sun
 PRINT report energy
 
+define advance Float:dt {
+    var pair
+    for pair in pairs {
+        let a = pair.a
+        let b = pair.b
+        let dx = a.pos.x - b.pos.x
+        let dy = a.pos.y - b.pos.y
+        let dz = a.pos.z - b.pos.z
+        let mag = dt * (((dx * dx) + (dy * dy) + (dz * dz)) ^ -1.5)
+        let b1m = a.mass * mag
+        let b2m = b.mass * mag
+        a.vel.x := a.vel.x - (dx * b2m)
+        a.vel.y := a.vel.y - (dy * b2m)
+        a.vel.z := a.vel.z - (dz * b2m)
+        b.vel.x := b.vel.x + (dx * b1m)
+        b.vel.y := b.vel.y + (dy * b1m)
+        b.vel.z := b.vel.z + (dz * b1m)
+    }
+    var body
+    for body in bodies {
+        body.pos.x := body.pos.x + (dt * body.vel.x)
+        body.pos.y := body.pos.y + (dt * body.vel.y)
+        body.pos.z := body.pos.z + (dt * body.vel.z)
+    }
+}
+
+repeat 500000 {
+    advance 0.01
+}
+PRINT report energy
