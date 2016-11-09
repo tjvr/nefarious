@@ -146,6 +146,10 @@ class ListLiteral(Node):
     def copy(self): return ListLiteral([n.copy() for n in self.items], self.type)
     def children(self): return self.items
 
+    def replace_child(self, child, other):
+        index = self.items.index(child)
+        self.items[index] = other
+
     def __repr__(self):
         return "ListLiteral({!r})".format(self.items)
 

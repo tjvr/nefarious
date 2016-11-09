@@ -467,3 +467,21 @@ class LanguageTests(BaseParser):
         1 2
         """)
 
+    def test_10(self):
+        self._parse("[1 2 3]", "{ (list 1 2 3) }")
+        self._parse("""
+        [
+        1 2 3
+        ]
+        """, "{ (list 1 2 3) }")
+
+    def test_11(self):
+        self._parse("[:x 1 :y 2 :z 3]", "{ [:x 1 :y 2 :z 3] }")
+        self._parse("""
+        [
+            :x 1
+            :y 2
+            :z 3
+        ]
+        """, "{ [:x 1 :y 2 :z 3] }")
+

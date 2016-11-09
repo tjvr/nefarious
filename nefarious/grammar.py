@@ -76,6 +76,22 @@ class Null(Macro):
 grammar.add(Word.WS, [], Null)
 
 
+# Internal whitespace helpers
+
+# NLS -> WS* NL (WS | NL)*
+Internal.NLS = Internal.get("NLS")
+grammar.add(Internal.NLS, [Word.NL], Null)
+grammar.add(Internal.NLS, [Word.WS, Internal.NLS], Null)
+grammar.add(Internal.NLS, [Internal.NLS, Word.WS], Null)
+grammar.add(Internal.NLS, [Internal.NLS, Word.NL], Null)
+
+# SEP -> (WS | NL)*
+Internal.SEP = Internal.get("SEP")
+grammar.add(Internal.SEP, [], Null)
+grammar.add(Internal.SEP, [Internal.SEP, Word.WS], Null)
+grammar.add(Internal.SEP, [Internal.SEP, Word.NL], Null)
+
+
 
 # List -- After all, this is "Nefarious Scheme"
 
@@ -109,18 +125,18 @@ ALPHA = Generic.ALPHA
 class EmptyListMacro(Macro):
     def build(self, values, type_):
         return ListLiteral([], type_)
-grammar.add(List.get(ALPHA), ws([
-    Word.word("["), Word.word("]"),
-]), EmptyListMacro)
+grammar.add(List.get(ALPHA), [
+    Word.word("["), Internal.SEP, Word.word("]"),
+], EmptyListMacro)
 
 @singleton
 class ListMacro(Macro):
     def build(self, values, type_):
         # TODO some kind of type unification on items?
         return ListLiteral(values[2].items, type_)
-grammar.add(List.get(ALPHA), ws([
-    Word.word("["), Repeat.get(ALPHA), Word.word("]"),
-]), ListMacro)
+grammar.add(List.get(ALPHA), [
+    Word.word("["), Internal.SEP, Repeat.get(ALPHA), Internal.SEP, Word.word("]"),
+], ListMacro)
 
 
 # Repeat
@@ -144,19 +160,6 @@ grammar.add(ALPHA, ws([Word.word("("), ALPHA, Word.word(")")]), Parens)
 
 Line = Type.get('Line')
 grammar.add(Line, [Type.ANY], Identity)
-
-# NLS -> WS* NL (WS | NL)*
-Internal.NLS = Internal.get("NLS")
-grammar.add(Internal.NLS, [Word.NL], Null)
-grammar.add(Internal.NLS, [Word.WS, Internal.NLS], Null)
-grammar.add(Internal.NLS, [Internal.NLS, Word.WS], Null)
-grammar.add(Internal.NLS, [Internal.NLS, Word.NL], Null)
-
-# SEP -> (WS | NL)*
-Internal.SEP = Internal.get("SEP")
-grammar.add(Internal.SEP, [], Null)
-grammar.add(Internal.SEP, [Internal.SEP, Word.WS], Null)
-grammar.add(Internal.SEP, [Internal.SEP, Word.NL], Null)
 
 grammar.add(Seq.get(Line), [], EmptyList)
 grammar.add(Seq.get(Line), [Line], StartList)
@@ -562,7 +565,7 @@ class RecordMacro(Macro):
             keys.append(p.key)
             values.append(p.value)
         return Literal(W_Record(keys, values), type_)
-grammar.add(Type.get('Record'), ws([Word.word("["), Seq.get(Pair), Word.word("]")]), RecordMacro)
+grammar.add(Type.get('Record'), [Word.word("["), Internal.SEP, Seq.get(Pair), Internal.SEP, Word.word("]")], RecordMacro)
 
 
 
