@@ -514,6 +514,7 @@ class Return(Node):
 
 
 class GetAttr(Node):
+    type = Generic.ALPHA
     def __init__(self, symbol, record):
         self._parent = None
         self.symbol = symbol
@@ -529,14 +530,35 @@ class GetAttr(Node):
 
     def evaluate(self, frame):
         record = self.record.evaluate(frame)
+        return self.evaluate_record(record)
+
+    def evaluate_record(self, record):
         assert isinstance(record, W_Record)
-        # TODO specialise for shape
-        value = record.lookup(self.symbol)
-        assert value
-        return value
+        shape = record.shape
+        index = shape.lookup(self.symbol)
+        other = GetAttrOffset(self.symbol, self.record, shape, index)
+        self._replace(other)
+        return other.evaluate_record(record)
 
     def sexpr(self):
         return "(get-attr " + self.record.sexpr() + " " + self.symbol.sexpr() + ")"
+
+class GetAttrOffset(GetAttr):
+    def __init__(self, symbol, record, shape, index):
+        GetAttr.__init__(self, symbol, record)
+        self.shape = shape
+        self.index = index
+
+    def evaluate_record(self, record):
+        # shape guard
+        if record.shape is not self.shape:
+            other = GetAttrGeneric(self.symbol, self.record)
+            return other.evaluate_record(record)
+        return record.values[self.index]
+
+class GetAttrGeneric(GetAttr):
+    def evaluate_record(self, record):
+        return record.lookup(self.symbol)
 
 
 class SetAttr(Node):
@@ -568,4 +590,5 @@ class SetAttr(Node):
 
     def sexpr(self):
         return "(set-attr " + self.record.sexpr() + " " + self.symbol.sexpr() + " " + self.value.sexpr() + ")"
+
 

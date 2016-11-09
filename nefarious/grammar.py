@@ -36,6 +36,8 @@ class Macro:
     #   So, we invent Macros. These are just functions which are evaluated at
     #   compile-time, and return a piece of AST.
 
+    # TODO fix the above erroneous description
+
     def build(self, children, type_):
         raise NotImplementedError
 
