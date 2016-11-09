@@ -49,9 +49,10 @@ src: pypy \
 		nefarious/lex.py \
 		nefarious/types.py \
 		nefarious/parser.py \
-		nefarious/grammar.py \
+		nefarious/values.py \
 		nefarious/tree.py \
-		nefarious/values.py
+		nefarious/builtins.py \
+		nefarious/grammar.py
 .TODO:
 	#@rem --cc=afl-clang
 

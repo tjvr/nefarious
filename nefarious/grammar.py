@@ -4,6 +4,7 @@ from .values import *
 from .lex import Word, Lexer
 
 from .tree import *
+from .builtins import Builtin
 
 def Function(name):
     return Name(name)
@@ -690,9 +691,9 @@ def add_builtin(cls):
     assert len(arg_indexes) == len(args)
     grammar.add(out, symbols, BuiltinMacro(cls, arg_indexes))
 
-import tree
-for name in dir(tree):
-    cls = getattr(tree, name)
+import builtins
+for name in dir(builtins):
+    cls = getattr(builtins, name)
     if name.replace("_", "").isupper():
         if cls is not Builtin and issubclass(cls, Builtin):
             add_builtin(cls)
