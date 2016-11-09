@@ -586,7 +586,7 @@ class SetAttrMacro(Macro):
         assert isinstance(word, Word)
         symbol = Symbol.get(word.value)
         return SetAttr(symbol, record, child)
-grammar.add(Generic.ALPHA, [
+grammar.add(Line, [
     Type.get('Record'), Word.word("."), Word.WORD, Word.WS, Word.word(":"), Word.word("="), Word.WS, Type.ANY,
 ], SetAttrMacro)
 
