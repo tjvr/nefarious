@@ -1,4 +1,5 @@
 
+import math
 import struct
 import time
 
@@ -279,8 +280,6 @@ class Let(Node):
         value = self.value.evaluate(frame)
         frame.set(self.name, value)
     # TODO opt
-
-    # TODO evaluate_float
 
     def sexpr(self):
         return "(let " + self.name.sexpr() + " " + self.value.sexpr() + ")"
@@ -701,44 +700,40 @@ class FLOAT_ADD(InfixBuiltin):
     arg_types = [Float, Float]
     def evaluate(self, frame):
         left = self.left.evaluate(frame)
-        assert isinstance(left, W_Float), left
+        assert isinstance(left, W_Float), left.sexpr()
         right = self.right.evaluate(frame)
-        assert isinstance(right, W_Float)
+        assert isinstance(right, W_Float), right.sexpr()
         return W_Float(left.value + right.value)
-    # TODO evaluate_float
 
 class FLOAT_SUB(InfixBuiltin):
     type = Float
     arg_types = [Float, Float]
     def evaluate(self, frame):
         left = self.left.evaluate(frame)
-        assert isinstance(left, W_Float)
+        assert isinstance(left, W_Float), left.sexpr()
         right = self.right.evaluate(frame)
-        assert isinstance(right, W_Float)
+        assert isinstance(right, W_Float), right.sexpr()
         return W_Float(left.value - right.value)
-    # TODO evaluate_float
 
 class FLOAT_MUL(InfixBuiltin):
     type = Float
     arg_types = [Float, Float]
     def evaluate(self, frame):
         left = self.left.evaluate(frame)
-        assert isinstance(left, W_Float), left
+        assert isinstance(left, W_Float), left.sexpr()
         right = self.right.evaluate(frame)
-        assert isinstance(right, W_Float)
+        assert isinstance(right, W_Float), right.sexpr()
         return W_Float(left.value * right.value)
-    # TODO evaluate_float
 
 class FLOAT_DIV(InfixBuiltin):
     type = Float
     arg_types = [Float, Float]
     def evaluate(self, frame):
         left = self.left.evaluate(frame)
-        assert isinstance(left, W_Float)
+        assert isinstance(left, W_Float), left.sexpr()
         right = self.right.evaluate(frame)
-        assert isinstance(right, W_Float)
+        assert isinstance(right, W_Float), right.sexpr()
         return W_Float(left.value / right.value)
-    # TODO evaluate_float
 
 
 class FLOAT_LT(InfixBuiltin):
@@ -746,11 +741,10 @@ class FLOAT_LT(InfixBuiltin):
     arg_types = [Float, Float]
     def evaluate(self, frame):
         left = self.left.evaluate(frame)
-        assert isinstance(left, W_Float)
+        assert isinstance(left, W_Float), left.sexpr()
         right = self.right.evaluate(frame)
-        assert isinstance(right, W_Float)
+        assert isinstance(right, W_Float), right.sexpr()
         return W_Bool.get(left.value < right.value)
-    # TODO evaluate_float
 
 class FLOAT_ROUND(UnaryBuiltin):
     type = Int
@@ -759,7 +753,16 @@ class FLOAT_ROUND(UnaryBuiltin):
         f = self.child.evaluate(frame)
         assert isinstance(f, W_Float)
         return W_Int.fromfloat(f.value + 0.5)
-    # TODO evaluate_float
+
+class FLOAT_POW(InfixBuiltin):
+    type = Float
+    arg_types = [Float, Float]
+    def evaluate(self, frame):
+        left = self.left.evaluate(frame)
+        assert isinstance(left, W_Float), left.sexpr()
+        right = self.right.evaluate(frame)
+        assert isinstance(right, W_Float), right.sexpr()
+        return W_Float(math.pow(left.value, right.value))
 
 
 
