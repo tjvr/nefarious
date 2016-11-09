@@ -570,18 +570,28 @@ grammar.add(Type.get('Record'), [Word.word("["), Internal.SEP, Seq.get(Pair), In
 @singleton
 class AttrMacro(Macro):
     def build(self, values, type_):
-        record = values[0]
-        word = values[4]
+        record, _, word = values
         assert isinstance(word, Word)
         symbol = Symbol.get(word.value)
         return GetAttr(symbol, record)
-grammar.add(Generic.ALPHA, ws([Type.get('Record'), Word.word("."), Word.WORD]), AttrMacro)
+grammar.add(Generic.ALPHA, [Type.get('Record'), Word.word("."), Word.WORD], AttrMacro)
 
+@singleton
+
+class SetAttrMacro(Macro):
+    def build(self, values, type_):
+        record = values[0]
+        word = values[2]
+        child = values[-1]
+        assert isinstance(word, Word)
+        symbol = Symbol.get(word.value)
+        return SetAttr(symbol, record, child)
+grammar.add(Generic.ALPHA, [
+    Type.get('Record'), Word.word("."), Word.WORD, Word.WS, Word.word(":"), Word.word("="), Word.WS, Type.ANY,
+], SetAttrMacro)
 
 
 # Types
-
-# TODO type grammar
 
 class LiteralMacro(Macro):
     def __init__(self, value):

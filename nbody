@@ -130,5 +130,16 @@ define report energy {
     e
 }
 
+define offset momentum {
+    let p = vec 0.0 0.0 0.0
+    var body
+    for body in bodies {
+        p.x -= body.vel.x * body.mass
+        p.y -= body.vel.y * body.mass
+        p.z -= body.vel.z * body.mass
+    }
+
+}
+
 report energy
 

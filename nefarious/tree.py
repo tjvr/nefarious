@@ -514,29 +514,60 @@ class Return(Node):
 
 
 class GetAttr(Node):
-    def __init__(self, symbol, child):
+    def __init__(self, symbol, record):
         self._parent = None
         self.symbol = symbol
-        self.child = child
-        child.set_parent(self)
+        self.record = record
+        record.set_parent(self)
 
-    def copy(self): return GetAttr(self.symbol, self.child.copy())
-    def children(self): return [self.child]
+    def copy(self): return GetAttr(self.symbol, self.record.copy())
+    def children(self): return [self.record]
 
-    def replace_child(self, child, other):
-        assert child is self.child
-        self.child = other
+    def replace_child(self, record, other):
+        assert record is self.record
+        self.record = other
 
     def evaluate(self, frame):
-        record = self.child.evaluate(frame)
+        record = self.record.evaluate(frame)
         assert isinstance(record, W_Record)
-        # TODO specialise?
+        # TODO specialise for shape
         value = record.lookup(self.symbol)
         assert value
         return value
 
     def sexpr(self):
-        return "(attr " + self.symbol.sexpr() + " " + self.child.sexpr() + ")"
+        return "(attr " + self.symbol.sexpr() + " " + self.record.sexpr() + ")"
+
+
+class SetAttr(Node):
+    def __init__(self, symbol, record, value):
+        self._parent = None
+        self.symbol = symbol
+        self.record = record
+        record.set_parent(self)
+        self.value = value
+        value.set_parent(self)
+
+    def copy(self): return SetAttr(self.symbol, self.record.copy(), self.value.copy())
+    def children(self): return [self.record, self.value]
+
+    def replace_child(self, child, other):
+        if child is self.record:
+            self.record = other
+        elif child is self.value:
+            self.value = other
+        else:
+            assert False
+
+    def evaluate(self, frame):
+        record = self.record.evaluate(frame)
+        assert isinstance(record, W_Record)
+        # TODO specialise for shape
+        value = self.value.evaluate(frame)
+        record.set(self.symbol, value)
+
+    def sexpr(self):
+        return "(set-attr " + self.symbol.sexpr() + " " + self.record.sexpr() + " " + self.value.sexpr() + ")"
 
 
 class Builtin(Node):
