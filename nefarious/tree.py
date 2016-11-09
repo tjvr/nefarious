@@ -677,9 +677,9 @@ class INT_ADD(InfixBuiltin):
     arg_types = [Int, Int]
     def evaluate(self, frame):
         left = self.left.evaluate(frame)
-        assert isinstance(left, W_Int), left.sexpr()
+        assert isinstance(left, W_Int)
         right = self.right.evaluate(frame)
-        assert isinstance(right, W_Int), right.sexpr()
+        assert isinstance(right, W_Int)
         return W_Int(left.value.add(right.value))
 
 class INT_SUB(InfixBuiltin):
@@ -687,9 +687,9 @@ class INT_SUB(InfixBuiltin):
     arg_types = [Int, Int]
     def evaluate(self, frame): # this is expensive
         left = self.left.evaluate(frame)
-        assert isinstance(left, W_Int), left.sexpr()
+        assert isinstance(left, W_Int)
         right = self.right.evaluate(frame)
-        assert isinstance(right, W_Int), right.sexpr()
+        assert isinstance(right, W_Int)
         return W_Int(left.value.sub(right.value))
 
 # TODO INT_EQ
@@ -699,9 +699,9 @@ class INT_LT(InfixBuiltin):
     arg_types = [Int, Int]
     def evaluate(self, frame):
         left = self.left.evaluate(frame)
-        assert isinstance(left, W_Int), left.sexpr()
+        assert isinstance(left, W_Int)
         right = self.right.evaluate(frame)
-        assert isinstance(right, W_Int), right.sexpr()
+        assert isinstance(right, W_Int)
         return W_Bool.get(left.value.lt(right.value))
 
 class INT_RANDOM(InfixBuiltin):
@@ -712,9 +712,9 @@ class INT_RANDOM(InfixBuiltin):
 
     def evaluate(self, frame):
         left = self.left.evaluate(frame)
-        assert isinstance(left, W_Int), left.sexpr()
+        assert isinstance(left, W_Int)
         right = self.right.evaluate(frame)
-        assert isinstance(right, W_Int), right.sexpr()
+        assert isinstance(right, W_Int)
         # TODO random for bigints.
         start = left.value.toint()
         end = right.value.toint()
@@ -727,7 +727,7 @@ class INT_FLOAT(UnaryBuiltin):
     arg_types = [Int]
     def evaluate(self, frame):
         child = self.child.evaluate(frame)
-        assert isinstance(child, W_Int), child.sexpr()
+        assert isinstance(child, W_Int)
         return W_Float(child.value.tofloat())
 
 
@@ -739,9 +739,9 @@ class FLOAT_ADD(InfixBuiltin):
     arg_types = [Float, Float]
     def evaluate(self, frame):
         left = self.left.evaluate(frame)
-        assert isinstance(left, W_Float), left.sexpr()
+        assert isinstance(left, W_Float)
         right = self.right.evaluate(frame)
-        assert isinstance(right, W_Float), right.sexpr()
+        assert isinstance(right, W_Float)
         return W_Float(left.value + right.value)
 
 class FLOAT_SUB(InfixBuiltin):
@@ -749,9 +749,9 @@ class FLOAT_SUB(InfixBuiltin):
     arg_types = [Float, Float]
     def evaluate(self, frame):
         left = self.left.evaluate(frame)
-        assert isinstance(left, W_Float), left.sexpr()
+        assert isinstance(left, W_Float)
         right = self.right.evaluate(frame)
-        assert isinstance(right, W_Float), right.sexpr()
+        assert isinstance(right, W_Float)
         return W_Float(left.value - right.value)
 
 class FLOAT_MUL(InfixBuiltin):
@@ -759,9 +759,9 @@ class FLOAT_MUL(InfixBuiltin):
     arg_types = [Float, Float]
     def evaluate(self, frame):
         left = self.left.evaluate(frame)
-        assert isinstance(left, W_Float), left.sexpr()
+        assert isinstance(left, W_Float)
         right = self.right.evaluate(frame)
-        assert isinstance(right, W_Float), right.sexpr()
+        assert isinstance(right, W_Float)
         return W_Float(left.value * right.value)
 
 class FLOAT_DIV(InfixBuiltin):
@@ -769,9 +769,9 @@ class FLOAT_DIV(InfixBuiltin):
     arg_types = [Float, Float]
     def evaluate(self, frame):
         left = self.left.evaluate(frame)
-        assert isinstance(left, W_Float), left.sexpr()
+        assert isinstance(left, W_Float)
         right = self.right.evaluate(frame)
-        assert isinstance(right, W_Float), right.sexpr()
+        assert isinstance(right, W_Float)
         return W_Float(left.value / right.value)
 
 
@@ -780,9 +780,9 @@ class FLOAT_LT(InfixBuiltin):
     arg_types = [Float, Float]
     def evaluate(self, frame):
         left = self.left.evaluate(frame)
-        assert isinstance(left, W_Float), left.sexpr()
+        assert isinstance(left, W_Float)
         right = self.right.evaluate(frame)
-        assert isinstance(right, W_Float), right.sexpr()
+        assert isinstance(right, W_Float)
         return W_Bool.get(left.value < right.value)
 
 class FLOAT_ROUND(UnaryBuiltin):
@@ -798,9 +798,9 @@ class FLOAT_POW(InfixBuiltin):
     arg_types = [Float, Float]
     def evaluate(self, frame):
         left = self.left.evaluate(frame)
-        assert isinstance(left, W_Float), left.sexpr()
+        assert isinstance(left, W_Float)
         right = self.right.evaluate(frame)
-        assert isinstance(right, W_Float), right.sexpr()
+        assert isinstance(right, W_Float)
         return W_Float(math.pow(left.value, right.value))
 
 
