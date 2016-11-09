@@ -684,6 +684,29 @@ class FLOAT_SUB(InfixBuiltin):
         return W_Float(left.value - right.value)
     # TODO evaluate_float
 
+class FLOAT_MUL(InfixBuiltin):
+    type = Float
+    arg_types = [Float, Float]
+    def evaluate(self, frame):
+        left = self.left.evaluate(frame)
+        assert isinstance(left, W_Float), left
+        right = self.right.evaluate(frame)
+        assert isinstance(right, W_Float)
+        return W_Float(left.value * right.value)
+    # TODO evaluate_float
+
+class FLOAT_DIV(InfixBuiltin):
+    type = Float
+    arg_types = [Float, Float]
+    def evaluate(self, frame):
+        left = self.left.evaluate(frame)
+        assert isinstance(left, W_Float)
+        right = self.right.evaluate(frame)
+        assert isinstance(right, W_Float)
+        return W_Float(left.value / right.value)
+    # TODO evaluate_float
+
+
 class FLOAT_LT(InfixBuiltin):
     type = Bool
     arg_types = [Float, Float]
