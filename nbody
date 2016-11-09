@@ -28,8 +28,6 @@ defprim item Int:i of (List Any):l { LIST_GET l i }
 define item last of (List Any):l { item length of l of l }
 define item first of (List Any):l { item 1 of l }
 
-define sqrt Float:x { x ^ 0.5 }
-
 define repeat Int:count Block:body {
     var c := count
     let result = []
@@ -130,16 +128,20 @@ define report energy {
     e
 }
 
-define offset momentum {
-    let p = vec 0.0 0.0 0.0
+define offset momentum Record:ref {
+    let p = vec 0.0, 0.0, 0.0
     var body
     for body in bodies {
-        p.x -= body.vel.x * body.mass
-        p.y -= body.vel.y * body.mass
-        p.z -= body.vel.z * body.mass
+        p.x := p.x - (body.vel.x * body.mass)
+        p.y := p.y - (body.vel.y * body.mass)
+        p.z := p.z - (body.vel.z * body.mass)
     }
-
+    let m = ref.mass
+    ref.vel := vec p.x / m, p.y / m, p.z / m
+    yes
 }
 
-report energy
+PRINT report energy
+offset momentum sun
+PRINT report energy
 

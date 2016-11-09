@@ -620,6 +620,14 @@ class InfixBuiltin(Builtin):
             assert False
 
 
+class PRINT(UnaryBuiltin):
+    type = Internal.get('Line')
+    arg_types = [Type.ANY]
+    def evaluate(self, frame):
+        value = self.child.evaluate(frame)
+        print(value.sexpr())
+
+
 Bool = Type.get('Bool')
 
 class BOOL_NOT(UnaryBuiltin):
