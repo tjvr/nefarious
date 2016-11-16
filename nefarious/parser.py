@@ -146,6 +146,7 @@ class Item:
         children = self.evaluate_children(stack)
 
         value = rule.call.build(children, rule.target)
+        assert isinstance(value, Node)
 
         self.value = value
         assert stack.pop() == self
@@ -211,16 +212,16 @@ class Column:
         if word.has_value:
             if word in previous.wants:
                 item = self.add(previous, word)
-                item.value = word
+                item.value = WordNode(word)
             token = Word.get(word.kind)
         else:
             token = word
         if token in previous.wants:
             item = self.add(previous, token)
-            item.value = word
+            item.value = WordNode(word)
         if token == Word.WS:
             item = self.add(previous, Word.WS_NOT_NULL)
-            item.value = word
+            item.value = WordNode(word)
         return len(self.items) > 0
 
     def predict(self, tag):

@@ -73,7 +73,7 @@ class Select(Macro):
 @singleton
 class Null(Macro):
     def build(self, values, type_):
-        return Word.NULL_WS
+        return WordNode(Word.NULL_WS)
 # whitespace is always optional, but only permitted if it appears in the defition.
 # eg. "Int <> Int" would not allow a space between < and >.
 grammar.add(Word.WS, [], Null)
@@ -101,23 +101,23 @@ grammar.add(Internal.SEP, [Internal.SEP, Word.NL], Null)
 @singleton
 class EmptyList(Macro):
     def build(self, values, type_):
-        return W_List([])
+        return ListLiteral([], type_)
 @singleton
 class StartList(Macro):
     def build(self, values, type_):
-        return W_List([values[0]])
+        return ListLiteral([values[0]], type_)
 @singleton
 class PairList(Macro):
     def build(self, values, type_):
-        return W_List([values[0], values[-1]])
+        return ListLiteral([values[0], values[-1]], type_)
 @singleton
 class ContinueList(Macro):
     def build(self, values, type_):
         list_ = values[0]
-        assert isinstance(list_, W_List), type_
+        assert isinstance(list_, ListLiteral), type_
         items = list(list_.items)
         items.append(values[-1])
-        return W_List(items)
+        return ListLiteral(items, type_)
 
 
 # Generic lists
@@ -178,7 +178,7 @@ grammar.add(Seq.get(Line), [Seq.get(Line), Internal.NLS, Line], ContinueList)
 class BlockMacro(Macro):
     def build(self, values, type_):
         children = values[2]
-        if isinstance(children, W_List):
+        if isinstance(children, ListLiteral):
             return Block(children.items)
         else:
             return Block([children])
@@ -196,7 +196,7 @@ grammar.add(Type.BLOCK, [Word.word("{"), Word.word("}")], EmptyBlock)
 class Program(Macro):
     def build(self, values, type_):
         list_ = values[1]
-        assert isinstance(list_, W_List)
+        assert isinstance(list_, ListLiteral)
         return Block(list_.items)
 grammar.add(Type.PROGRAM, [Internal.SEP, Seq.get(Line), Internal.SEP], Program)
 
@@ -215,12 +215,14 @@ grammar.add(Iden, [Word.WS_NOT_NULL], Identity)
 
 Spec = Internal.get('Spec')
 
-class ArgSpec(Tree):
+class ArgSpec(Node):
     def __init__(self, type_, word):
-        assert isinstance(word, Word)
-        assert isinstance(type_, Type)
-        self.word = word
-        self.type = type_
+        assert isinstance(word, WordNode)
+        assert isinstance(type_, Literal)
+        w_type = type_.value
+        assert isinstance(w_type, W_Type)
+        self.word = word.word
+        self.type = w_type.type
 @singleton
 class ArgSpecMacro(Macro):
     def build(self, values, type_):
@@ -244,7 +246,7 @@ class DefineMacro(Macro):
 
     def _get_spec(self, values):
         spec = values[2]
-        assert isinstance(spec, W_List)
+        assert isinstance(spec, ListLiteral)
         symbols = list(spec.items)
         return symbols
 
@@ -264,8 +266,8 @@ class DefineMacro(Macro):
                 assert isinstance(s.type, Type)
                 debug_name += s.type._str()
             else:
-                assert isinstance(s, Word)
-                debug_name += s.value
+                assert isinstance(s, WordNode)
+                debug_name += s.word.value
         func = Function(debug_name)
         DefineMacro.current_definitions.append(func)
 
@@ -303,7 +305,7 @@ class DefineMacro(Macro):
 
         # Define rule
         symbols, macro = self._macro(spec, func)
-        if values[0] is Word.word('defprim'):
+        if values[0].word is Word.word('defprim'):
             node, = body.nodes
             assert isinstance(node, Builtin)
             arg_indexes = []
@@ -316,7 +318,7 @@ class DefineMacro(Macro):
         grammar.add(type_, symbols, macro)
 
     def _macro(self, spec, func):
-        symbols = [(s.type if self._is_arg(s) else s) for s in spec]
+        symbols = [(s.type if self._is_arg(s) else s.word) for s in spec]
         arg_indexes = [index for index, s in enumerate(spec) if self._is_arg(s)]
         return symbols, CallMacro(func, arg_indexes)
 
@@ -435,9 +437,11 @@ class LetMacro(Macro):
         value = values[6]
 
         identifier = values[2].items
+        for v in identifier:
+            assert isinstance(v, WordNode)
+        identifier = [v.word for v in identifier]
         name = ""
         for iden in identifier:
-            assert isinstance(iden, Word)
             name += iden.value
         ref = Name(name) # TODO Symbol?
 
@@ -465,12 +469,14 @@ class Declare(Macro):
     def build(self, values, type_):
         identifier = values[2].items
         name = ""
+        symbols = []
         for iden in identifier:
-            assert isinstance(iden, Word)
-            name += iden.value
+            assert isinstance(iden, WordNode)
+            symbols.append(iden.word)
+            name += iden.word.value
 
         ref = Name(name)
-        grammar.add(Var, identifier, LoadMacro(ref, Var))
+        grammar.add(Var, symbols, LoadMacro(ref, Var))
 
         if len(values) > 3:
             value = values[7]
@@ -538,7 +544,7 @@ grammar.add(Generic.ALPHA, ws_not_null([
 # Records
 
 Pair = Internal.get('Pair')
-class KVPair(Tree):
+class KVPair(Node):
     def __init__(self, key, value):
         assert isinstance(key, Symbol)
         self.key = key
@@ -547,7 +553,8 @@ class KVPair(Tree):
 class PairMacro(Macro):
     def build(self, values, type_):
         _, key, _w, value = values
-        assert isinstance(key, Word)
+        assert isinstance(key, WordNode)
+        key = key.word
         return KVPair(Symbol.get(key.value), value)
 grammar.add(Pair, [Word.word(":"), Word.WORD, Word.WS_NOT_NULL, Type.ANY], PairMacro)
 
@@ -560,7 +567,7 @@ Record = Type.get('Record')
 class RecordMacro(Macro):
     def build(self, values, type_):
         pairs = values[2]
-        assert isinstance(pairs, W_List)
+        assert isinstance(pairs, ListLiteral)
         keys = []
         values = []
         for p in pairs.items:
@@ -574,8 +581,8 @@ grammar.add(Type.get('Record'), [Word.word("["), Internal.SEP, Seq.get(Pair), In
 class AttrMacro(Macro):
     def build(self, values, type_):
         record, _, word = values
-        assert isinstance(word, Word)
-        symbol = Symbol.get(word.value)
+        assert isinstance(word, WordNode)
+        symbol = Symbol.get(word.word.value)
         return GetAttr(symbol, record)
 grammar.add(Generic.ALPHA, [Type.get('Record'), Word.word("."), Word.WORD], AttrMacro)
 
@@ -586,8 +593,8 @@ class SetAttrMacro(Macro):
         record = values[0]
         word = values[2]
         child = values[-1]
-        assert isinstance(word, Word)
-        symbol = Symbol.get(word.value)
+        assert isinstance(word, WordNode)
+        symbol = Symbol.get(word.word.value)
         return SetAttr(symbol, record, child)
 grammar.add(Line, [
     Type.get('Record'), Word.word("."), Word.WORD, Word.WS, Word.word(":"), Word.word("="), Word.WS, Type.ANY,
@@ -598,19 +605,24 @@ grammar.add(Line, [
 
 class LiteralMacro(Macro):
     def __init__(self, value):
+        assert isinstance(value, Value)
         self.value = value
     def build(self, values, type_):
-        return self.value
+        return Literal(self.value, type_)
 
 def add_type(type_):
     name = type_._str()
     assert len(name.split(" ")) == 1
-    grammar.add(Type.TYPE, [Word.word(name)], LiteralMacro(type_))
+    grammar.add(Type.TYPE, [Word.word(name)], LiteralMacro(W_Type(type_)))
 
 @singleton
 class ListTypeMacro(Macro):
     def build(self, values, type_):
-        return List.get(values[4])
+        child_type = values[4]
+        assert isinstance(child_type, Literal)
+        child_type = child_type.value
+        assert isinstance(child_type, W_Type)
+        return Literal(W_Type(List.get(child_type.type)), type_)
 grammar.add(Type.TYPE, ws([Word.word("("), Word.word("List"), Type.TYPE, Word.word(")")]), ListTypeMacro)
 
 Int = Type.get('Int')
@@ -618,8 +630,8 @@ Float = Type.get('Float')
 Text = Type.get('Text')
 Bool = Type.get('Bool')
 
-grammar.add(Type.TYPE, [Word.word("Block")], LiteralMacro(Type.get('Block')))
-grammar.add(Type.TYPE, [Word.word("Func")], LiteralMacro(Type.FUNC))
+grammar.add(Type.TYPE, [Word.word("Block")], LiteralMacro(W_Type(Type.get('Block'))))
+grammar.add(Type.TYPE, [Word.word("Func")], LiteralMacro(W_Type(Type.FUNC)))
 add_type(Var)
 
 add_type(Int)
@@ -641,8 +653,8 @@ add_type(Record)
 class ParseInt(Macro):
     def build(self, values, type_):
         digits, = values
-        assert isinstance(digits, Word)
-        return Literal(W_Int.fromstr(digits.value), type_)
+        assert isinstance(digits, WordNode)
+        return Literal(W_Int.fromstr(digits.word.value), type_)
 grammar.add(Int, [Word.DIGITS], ParseInt)
 
 @singleton
@@ -650,8 +662,8 @@ class ParseFloat(Macro):
     def build(self, values, type_):
         string = ""
         for word in values:
-            assert isinstance(word, Word)
-            string += word.value
+            assert isinstance(word, WordNode)
+            string += word.word.value
         return Literal(W_Float.fromstr(string), type_)
 grammar.add(Float, [Word.DIGITS, Word.word("."), Word.DIGITS], ParseFloat)
 grammar.add(Float, [Word.DIGITS, Word.word("."), Word.DIGITS, Word.word("e"), Word.word("+"), Word.DIGITS], ParseFloat)
@@ -661,12 +673,13 @@ grammar.add(Float, [Word.DIGITS, Word.word("."), Word.DIGITS, Word.word("e"), Wo
 class ParseText(Macro):
     def build(self, values, type_):
         word = values[0]
-        assert isinstance(word, Word)
+        assert isinstance(word, WordNode)
+        word = word.word
         return Literal(W_Text.fromstr(word.value), type_)
 grammar.add(Text, [Word.TEXT], ParseText)
 
-grammar.add(Bool, [Word.word("yes")], LiteralMacro(Literal(Value.TRUE, Bool)))
-grammar.add(Bool, [Word.word("no")], LiteralMacro(Literal(Value.FALSE, Bool)))
+grammar.add(Bool, [Word.word("yes")], LiteralMacro(Value.TRUE))
+grammar.add(Bool, [Word.word("no")], LiteralMacro(Value.FALSE))
 #grammar.add(Null, [Word.word("nil")], Literal(Value.NULL))
 
 
@@ -706,7 +719,7 @@ for name in dir(builtins):
 
 def parse(source, debug=False):
     tree = grammar_parse(source, grammar, debug)
-    assert isinstance(tree, Tree)
+    assert isinstance(tree, Node)
     if isinstance(tree, Error):
         return tree.message
     return tree.sexpr()
@@ -714,7 +727,7 @@ def parse(source, debug=False):
 
 def parse_and_run(source, debug=False):
     tree = grammar_parse(source, grammar, debug)
-    assert isinstance(tree, Tree)
+    assert isinstance(tree, Node)
     if isinstance(tree, Error):
         return tree.message
     assert isinstance(tree, Block)
@@ -737,7 +750,7 @@ def parse_and_run(source, debug=False):
 
     print
     print("=> " + retval.sexpr())
-    print(retval.type.sexpr())
+    print(retval.type._str())
     #print(retval) # Useless on RPython!
 
     return ""

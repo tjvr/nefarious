@@ -1,5 +1,5 @@
 
-from .types import Tree, Type, List, Generic
+from .types import Type, List, Generic
 
 try:
     from rpython.rlib.rbigint import rbigint
@@ -11,7 +11,7 @@ except ImportError:
     raise ImportError("Please run `make pypy`")
 
 
-class Value(Tree):
+class Value:
     def __init__(self, type_, value):
         assert isinstance(desc, str)
         self.type = type_
@@ -180,12 +180,22 @@ class W_List(Value):
         return "[" + " ".join([c.sexpr() for c in self.items]) + "]"
 
 
+class W_Type(Value):
+    type = Type.TYPE
+    def __init__(self, type_):
+        self.type = type_
+
+    def __repr__(self):
+        return "W_Type({})".format(repr(self.type))
+
+    def sexpr(self):
+        return "<" + self.type._str() + ">"
+
 
 #------------------------------------------------------------------------------
 
 
-
-class Name(Tree):
+class Name:
     """Symbol-like. Compared by identity, not value, so shadowing works."""
     def __init__(self, name):
         assert isinstance(name, str)

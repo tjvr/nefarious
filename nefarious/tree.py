@@ -47,35 +47,6 @@ jitdriver = JitDriver(
 from .types import *
 from .values import *
 
-class Node(Tree):
-    type = None
-
-    def set_parent(self, parent):
-        self._parent = parent
-
-    def compile(self, stack):
-        for child in self.children():
-            child.compile(stack)
-
-    def _replace(self, other):
-        assert isinstance(other, Node)
-        parent = self._parent
-        #self._parent = None # TODO omit
-        parent.replace_child(self, other)
-        other._parent = parent
-
-    def replace_child(self, child, other):
-        raise NotImplementedError, self
-
-    def evaluate(self, frame):
-        raise NotImplementedError
-
-    def copy(self):
-        raise NotImplementedError, self
-
-    def children(self):
-        raise NotImplementedError, self
-
 
 # TODO annotate nodes with SourceSections
 
@@ -191,11 +162,11 @@ class RecordLiteral(Node):
         return "RecordLiteral({!r})".format(self.keys, self.values)
 
     def sexpr(self):
-        items = []
+        strings = []
         for i in range(len(self.keys)):
-            items.append(self.keys[i])
-            items.append(self.values[i])
-        return "(record " + " ".join([n.sexpr() for n in items]) + ")"
+            strings.append(self.keys[i].sexpr()) # Symbol
+            strings.append(self.values[i].sexpr()) # Node
+        return "(record " + " ".join(strings) + ")"
 
     def evaluate(self, frame):
         values = [item.evaluate(frame) for item in self.values]
