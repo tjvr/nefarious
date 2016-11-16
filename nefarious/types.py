@@ -353,6 +353,7 @@ Type.VAR = Internal.get('Var')
 class Node:
     type = None
     _immutable_fields_ = ['type'] #...
+    #__slots__ = ['type', '_parent']
     # TODO make more memory-efficient
 
     def set_parent(self, parent):

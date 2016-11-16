@@ -5,6 +5,7 @@ import time
 
 try:
     from rpython.rlib.objectmodel import we_are_translated
+    from rpython.rlib.debug import make_sure_not_resized
     from rpython.rlib.rrandom import Random
 except ImportError:
     def we_are_translated(): return False
@@ -33,12 +34,13 @@ def get_location(node):
 
 # greens: loop constants. identify loop.                eg. code object & instruction pointer
 # reds: everything else used in the execution loop.     eg. frame object & execution context
-jitdriver = JitDriver(
+call_driver = JitDriver(
     greens = ['self'],
     virtualizables = ['frame'],
-    reds = ['frame'], # 'arguments'?
+    reds = ['arguments', 'func', 'scope', 'frame'],
     is_recursive = True,
     get_printable_location = get_location,
+    #should_unroll_one_iteration = lambda self: True, # may or may not be necessary?
 )
 
 
@@ -46,7 +48,6 @@ jitdriver = JitDriver(
 
 from .types import *
 from .values import *
-
 
 # TODO annotate nodes with SourceSections
 
@@ -84,7 +85,8 @@ class Block(Node):
         inner = indent + ("\n" + indent).join(inner.split("\n"))
         return "{\n" + inner + "\n}"
 
-    def evaluate(self, frame): # TODO OPT ??
+    @jit.unroll_safe
+    def evaluate(self, frame):
         value = None
         for node in self.nodes:
             value = node.evaluate(frame)
@@ -412,26 +414,30 @@ class Call(Node):
                 return
         assert False, "child not found"
 
-    #@jit.unroll_safe
+    @jit.unroll_safe
     def evaluate(self, frame):
-        jitdriver.jit_merge_point(self=self, frame=frame)
+        closure = self.func.evaluate(frame)
+        assert isinstance(closure, W_Func)
+        scope = closure.scope
+        func = closure.func
+        assert len(self.args) == func.arg_length
 
         arguments = [arg.evaluate(frame) for arg in self.args]
 
-        closure = self.func.evaluate(frame)
-        assert isinstance(closure, W_Func)
-        body = closure.func
-        jit.promote(body)
+        return self.evaluate_arguments(arguments, scope, func)
 
-        n = body.arg_length
-        jit.promote(n)
-        assert len(arguments) == n # TODO dynamic calls
-        inner = Frame(closure.scope, body.shape)
-        for i in range(len(arguments)):
-            inner.set_offset(i, arguments[i])
+    @jit.unroll_safe
+    def evaluate_arguments(self, arguments, scope, func):
+        make_sure_not_resized(arguments)
+
+        frame = Frame(scope, func.shape)
+        for index, value in enumerate(arguments):
+            frame.set_offset(index, value)
+
+        call_driver.jit_merge_point(self=self, frame=frame, scope=scope, func=func, arguments=arguments)
 
         try:
-            result = body.body.evaluate(inner)
+            result = func.body.evaluate(frame)
         except ReturnValue as ret: # TODO opt
             result = ret.value
         return result

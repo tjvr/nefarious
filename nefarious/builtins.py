@@ -1,9 +1,19 @@
 from .tree import *
 
+def get_while_location(node, cond, body):
+    return get_location(node)
+
+while_driver = jit.JitDriver(
+    greens = ['node', 'cond', 'body'],
+    reds = 'auto',
+    is_recursive = True,
+    get_printable_location = get_while_location,
+)
 
 
 class Builtin(Node):
     type = None
+    #__slots__ = ['type', '_parent']
 
     def __init__(self, args, type_):
         raise NotImplementedError
@@ -22,7 +32,7 @@ class Builtin(Node):
 
 
 class UnaryBuiltin(Builtin):
-    __slots__ = ['_parent', 'child']
+    #__slots__ = ['type', '_parent', 'child']
     def __init__(self, args, type_):
         self._parent = None
         self.child, = args
@@ -37,7 +47,7 @@ class UnaryBuiltin(Builtin):
 
 
 class InfixBuiltin(Builtin):
-    __slots__ = ['_parent', 'left', 'right']
+    #__slots__ = ['type', '_parent', 'left', 'right']
     def __init__(self, args, type_):
         self._parent = None
         self.left, self.right = args
@@ -336,14 +346,21 @@ class WHILE(Builtin):
         return "(WHILE " + self.cond.sexpr() + " " + self.body.sexpr() + ")"
 
     def evaluate(self, frame):
-        cond = self.cond.evaluate(frame)
-        while cond is Value.TRUE:
-            self.body.evaluate(frame)
-            cond = self.cond.evaluate(frame)
+        cond = self.cond
+        body = self.body
+
+        while True:
+            while_driver.jit_merge_point(node=self, cond=cond, body=body)
+
+            cond_value = cond.evaluate(frame)
+
+            if cond_value is Value.FALSE:
+                break
+            assert cond_value is Value.TRUE
+
+            body.evaluate(frame)
 
             # jitdriver.can_enter_jit(self=self, frame=frame) # TODO
-
-        assert cond is Value.FALSE
 
 
 _List = List.get(_a)

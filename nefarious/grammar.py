@@ -136,7 +136,9 @@ grammar.add(List.get(ALPHA), [
 class ListMacro(Macro):
     def build(self, values, type_):
         # TODO some kind of type unification on items?
-        return ListLiteral(values[2].items, type_)
+        list_ = values[2]
+        assert isinstance(list_, ListLiteral)
+        return ListLiteral(list_.items, type_) # TODO redundant!
 grammar.add(List.get(ALPHA), [
     Word.word("["), Internal.SEP, Repeat.get(ALPHA), Internal.SEP, Word.word("]"),
 ], ListMacro)
@@ -467,7 +469,10 @@ Var = Internal.get("Var")
 @singleton
 class Declare(Macro):
     def build(self, values, type_):
-        identifier = values[2].items
+        list_ = values[2]
+        assert isinstance(list_, ListLiteral)
+        identifier = list_.items
+        assert isinstance(identifier, list)
         name = ""
         symbols = []
         for iden in identifier:

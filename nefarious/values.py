@@ -104,6 +104,7 @@ class W_Float(Value):
 
 class W_Int(Value):
     type = Type.get('Int')
+    _immutable_fields_ = ['value']
 
     def __init__(self, prim):
         assert isinstance(prim, rbigint)
@@ -133,6 +134,7 @@ class W_Int(Value):
 
 class W_Text(Value):
     type = Type.get('Text')
+    _immutable_fields_ = ['value']
 
     def __init__(self, prim):
         assert isinstance(prim, rope.StringNode)
@@ -211,6 +213,9 @@ class Name:
     _immutable_fields_ = ['name']
 
     """Symbol-like. Compared by identity, not value, so shadowing works."""
+    _immutable_fields_ = ['name']
+    #__slots__ = ['name']
+
     def __init__(self, name):
         assert isinstance(name, str)
         self.name = name # String name really is just a debugging aid
