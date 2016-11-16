@@ -3,12 +3,12 @@ from .tree import *
 def get_while_location(node, cond, body):
     return get_location(node)
 
-while_driver = jit.JitDriver(
-    greens = ['node', 'cond', 'body'],
-    reds = 'auto',
-    is_recursive = True,
-    get_printable_location = get_while_location,
-)
+# while_driver = jit.JitDriver(
+#     greens = ['node', 'cond', 'body'],
+#     reds = 'auto',
+#     is_recursive = True,
+#     get_printable_location = get_while_location,
+# )
 
 
 class Builtin(Node):
@@ -350,7 +350,7 @@ class WHILE(Builtin):
         body = self.body
 
         while True:
-            while_driver.jit_merge_point(node=self, cond=cond, body=body)
+            #while_driver.jit_merge_point(node=self, cond=cond, body=body)
 
             cond_value = cond.evaluate(frame)
 
