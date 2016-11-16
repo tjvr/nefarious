@@ -51,6 +51,10 @@ class Node(Tree):
     def set_parent(self, parent):
         self._parent = parent
 
+    def compile(self, stack):
+        for child in self.children():
+            child.compile(stack)
+
     def _replace(self, other):
         assert isinstance(other, Node)
         parent = self._parent
@@ -175,7 +179,7 @@ class RecordLiteral(Node):
             item.set_parent(self)
 
     def copy(self): return RecordLiteral(self.keys, [n.copy() for n in self.values], self.type)
-    def children(self): return self.keys + self.values
+    def children(self): return self.values
 
     def replace_child(self, child, other):
         index = self.values.index(child)
@@ -204,6 +208,19 @@ class Load(Node):
         assert isinstance(name, Name)
         self.name = name
         self.type = type_
+        self.index = -1
+        self.depth = -1
+
+    def compile(self, stack):
+        for depth in range(len(stack)):
+            shape = stack[len(stack) - depth - 1]
+            index = shape.lookup(self.name)
+            if index != -1:
+                self.index = index
+                self.depth = depth
+                break
+        else:
+            raise ValueError(self.name)
 
     def copy(self): return Load(self.name, self.type)
     def children(self): return []
@@ -213,47 +230,20 @@ class Load(Node):
 
     def children(self): return []
 
+    # TODO are lookups elidable?
+    @jit.unroll_safe
     def evaluate(self, frame):
-        shape = frame.shape
-        index = shape.lookup(self.name)
-        if index == -1: # upvalue? TODO opt
-            other = LoadGeneric(self.name)
-        else:
-            other = LoadOffset(self.name, shape, index)
-        self._replace(other)
-        return other.evaluate(frame)
+        if self.index == -1:
+            raise ValueError("Load was not compiled")
+        #assert frame.shape is self.shape # DEBUG
+        for i in range(self.depth):
+            frame = frame.parent
+        #assert frame, self.depth
+        #assert frame.shape.lookup(self.name) == self.index, self.sexpr() # DEBUG
+        return frame.lookup_offset(self.index)
 
     def sexpr(self):
         return self.name.sexpr()
-
-class LoadOffset(Load):
-    def __init__(self, name, shape, index):
-        self._parent = None
-        self.name = name
-        self.shape = shape
-        self.index = index
-
-    def evaluate(self, frame):
-        # shape guard
-        if frame.shape is not self.shape:
-            # Ugh. frame could have added stuff to shape since last time...
-            if frame.shape.compatible(self.shape):
-                self.shape = frame.shape
-            else:
-                frame._print()
-                #print self.shape.names
-                #print frame.shape.names
-                assert False # ???
-                other = LoadGeneric(self.name)
-                self._replace(other)
-                return other.evaluate(frame)
-        return frame.values[self.index]
-
-class LoadGeneric(Load):
-    def __init__(self, name):
-        self.name = name
-    def evaluate(self, frame):
-        return frame.lookup(self.name)
 
 
 class Let(Node):
@@ -265,6 +255,15 @@ class Let(Node):
 
         self.value = value
         value.set_parent(self)
+
+    def compile(self, stack):
+        self.value.compile(stack)
+
+        shape = stack.pop()
+        index, shape = shape.lookup_or_insert(self.name)
+        stack.append(shape)
+
+        self._replace(LetOffset(self.name, self.value, shape, index))
 
     def copy(self): return Let(self.name, self.value.copy())
     def children(self): return [self.value]
@@ -279,17 +278,34 @@ class Let(Node):
     def evaluate(self, frame):
         value = self.value.evaluate(frame)
         frame.set(self.name, value)
-    # TODO opt
 
     def sexpr(self):
         return "(let " + self.name.sexpr() + " " + self.value.sexpr() + ")"
+
+class LetOffset(Let):
+    def __init__(self, name, value, shape, index):
+        Let.__init__(self, name, value)
+        self.shape = shape
+        self.index = index
+
+    def evaluate(self, frame):
+        value = self.value.evaluate(frame)
+        assert frame.shape.lookup(self.name) == self.index # DEBUG
+        frame.set_offset(self.index, value)
 
 
 class NewCell(Node):
     type = Internal.get('Var')
 
     def __init__(self, name):
+        self._parent = None
         self.name = name
+        self.index = -1
+
+    def compile(self, stack):
+        shape = stack.pop()
+        self.index, shape = shape.lookup_or_insert(self.name)
+        stack.append(shape)
 
     def copy(self): return NewCell(self.name)
     def children(self): return []
@@ -299,78 +315,57 @@ class NewCell(Node):
 
     def evaluate(self, frame):
         cell = W_Var(Value.NULL)
-        frame.set(self.name, cell)
+        frame.set_offset(self.index, cell)
         return cell
-    # TODO opt
-
-
-class DeclareCell(Node):
-    def __init__(self, name, value):
-        self.name = name
-        self.value = value
-        value.set_parent(self)
-
-    def copy(self): return DeclareCell(self.name, self.value.copy())
-    def children(self): return [self.value]
-
-    def replace_child(self, child, other):
-        assert child == self.value
-        self.value = other
-
-    def sexpr(self):
-        return "(declare " + self.name.sexpr() + " " + self.value.sexpr() + ")"
-
-    def evaluate(self, frame):
-        value = self.value.evaluate(frame)
-        cell = W_Var(value)
-        cell.set(value)
-        frame.set(self.name, cell)
-    # TODO opt
 
 
 class LoadCell(Node):
-    def __init__(self, name, type_):
-        self.name = name
+    def __init__(self, cell, type_):
+        assert isinstance(cell, Node)
+        self.cell = cell
         self.type = type_
 
-    def copy(self): return LoadCell(self.name, self.type)
-    def children(self): return []
+    def copy(self): return LoadCell(self.cell, self.type)
+    def children(self): return [self.cell]
 
     def sexpr(self):
-        return "(get " + self.name.sexpr() + ")"
+        return "(get " + self.cell.sexpr() + ")"
 
     def evaluate(self, frame):
-        cell = frame.lookup(self.name)
+        cell = self.cell.evaluate(frame)
         assert isinstance(cell, W_Var)
         value = cell.get()
         # TODO check Var read is correct type
         return value
-    # TODO opt
 
 
 class StoreCell(Node):
-    def __init__(self, name, value):
-        self.name = name
+    def __init__(self, cell, value):
+        self.cell = cell
+        cell.set_parent(self)
         self.value = value
         value.set_parent(self)
 
-    def copy(self): return StoreCell(self.name, self.value.copy())
-    def children(self): return [self.value]
+    def copy(self): return StoreCell(self.cell, self.value.copy())
+    def children(self): return [self.cell, self.value]
 
     def replace_child(self, child, other):
-        assert child == self.value
-        self.value = other
+        if child is self.value:
+            self.value = other
+        elif child is self.cell:
+            self.cell = other
+        else:
+            assert False
 
     def sexpr(self):
-        return "(set " + self.name.sexpr() + " " + self.value.sexpr() + ")"
+        return "(set " + self.cell.sexpr() + " " + self.value.sexpr() + ")"
 
     def evaluate(self, frame):
-        cell = frame.lookup(self.name)
+        cell = self.cell.evaluate(frame)
         assert isinstance(cell, W_Var)
         value = self.value.evaluate(frame)
         if value is None: value = Value.NULL # TODO move this elsewhere
         cell.set(value)
-    # TODO opt
 
 
 class Define(Node):
@@ -380,12 +375,22 @@ class Define(Node):
         assert isinstance(name, Name)
         self.name = name
         self.func = func
+        self.index = -1
+
+    def compile(self, stack):
+        shape = stack.pop()
+        self.index, shape = shape.lookup_or_insert(self.name)
+        stack.append(shape)
+
+        shape = self.func.shape
+        stack.append(shape)
+        self.func.body.compile(stack)
+        self.func.shape = stack.pop()
 
     def evaluate(self, frame):
         closure = W_Func(frame, self.func)
-        frame.set(self.name, closure)
+        frame.set_offset(self.index, closure)
         return None
-    # TODO opt?? cache Closures?
 
     def sexpr(self):
         return "(define " + self.name.sexpr() + " " + self.func.sexpr() + ")"
@@ -399,14 +404,18 @@ class Lambda(Node):
         assert isinstance(func, Func)
         self.func = func
 
+    def compile(self, stack):
+        shape = self.func.shape
+        stack.append(shape)
+        self.func.body.compile(stack)
+        self.func.shape = stack.pop()
+
     def copy(self): return Lambda(Func(self.func.shape.names_list(), self.func.body.copy()))
     def children(self): return [self.func.body]
 
     def evaluate(self, frame):
         closure = W_Func(frame, self.func)
         return closure
-
-    # TODO opt?? cache Closures?
 
     def sexpr(self):
         return "(fun " + self.func.sexpr() + ")"

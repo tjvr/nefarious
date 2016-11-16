@@ -474,7 +474,7 @@ class Declare(Macro):
 
         if len(values) > 3:
             value = values[7]
-            return DeclareCell(ref, value)
+            return StoreCell(NewCell(ref), value)
         else:
             return NewCell(ref)
 grammar.add(Line, [
@@ -489,7 +489,7 @@ class LoadCellMacro(Macro):
     def build(self, values, type_):
         load = values[0]
         assert isinstance(load, Load) # TODO iffy
-        return LoadCell(load.name, type_)
+        return LoadCell(load, type_)
 grammar.add(Generic.ALPHA, [Var], LoadCellMacro)
 
 @singleton
@@ -497,7 +497,7 @@ class StoreCellMacro(Macro):
     def build(self, values, type_):
         load = values[0]
         assert isinstance(load, Load) # TODO iffy
-        return StoreCell(load.name, values[5])
+        return StoreCell(load, values[5])
 grammar.add(Line, [
     Var, Word.WS_NOT_NULL, Word.word(":"), Word.word("="), Word.WS_NOT_NULL, Type.ANY
 ], StoreCellMacro)
@@ -723,8 +723,12 @@ def parse_and_run(source, debug=False):
     #print(repr(tree))
     print
 
+    stack = [Shape.get([])]
+    tree.compile(stack)
+    shape = stack.pop()
+
     main = Func([], None)
-    root = Frame(None, main, [])
+    root = Frame(None, shape, [])
 
     retval = tree.evaluate(root)
     if retval is None:

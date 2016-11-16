@@ -23,6 +23,8 @@ class Value(Tree):
 class W_Var(Value):
     """a mutable cell"""
 
+    # TODO can this be virtualized?
+
     def __init__(self, value):
         self.value = value
 
@@ -232,14 +234,17 @@ class Shape:
         self._transitions = {}
         self.previous = previous
 
+    @jit.elidable
     def size(self):
         return len(self.names)
 
+    @jit.elidable
     def lookup(self, key):
         assert isinstance(key, Name)
         return self.names.get(key, -1)
 
-    def transition(self, new_name):
+    @jit.elidable
+    def insert(self, new_name):
         assert isinstance(new_name, Name)
         if new_name in self.names:
             raise ValueError("symbol already in record: " + new_name.sexpr())
@@ -250,6 +255,16 @@ class Shape:
         shape = self._transitions[new_name] = Shape(names, self)
         return shape
 
+    @jit.elidable
+    def lookup_or_insert(self, new_name):
+        if new_name in self.names:
+            shape = self
+        else:
+            shape = self.insert(new_name)
+        index = shape.lookup(new_name)
+        return index, shape
+
+    @jit.elidable
     def compatible(self, other):
         # TODO opt?
         shape = self
@@ -259,6 +274,7 @@ class Shape:
                 return True
         return False
 
+    @jit.elidable
     def names_list(self):
         result = [None] * len(self.names)
         for name, index in self.names.items():
@@ -266,10 +282,11 @@ class Shape:
         return result
 
     @staticmethod
+    @jit.elidable
     def get(names):
         shape = Shape.EMPTY
         for name in names:
-            shape = shape.transition(name)
+            shape = shape.insert(name)
         return shape
 
 Shape.EMPTY = Shape({})
@@ -277,6 +294,8 @@ Shape.EMPTY = Shape({})
 
 class W_Record(Value):
     type = Type.get('Record')
+
+    # TODO should records be immutable?
 
     def __init__(self, keys, values):
         self.shape = Shape.get(keys)
@@ -289,7 +308,7 @@ class W_Record(Value):
         shape = self.shape
         index = shape.lookup(key)
         if index == -1:
-            shape = self.shape = shape.transition(key)
+            shape = self.shape = shape.insert(key)
             assert shape.lookup(key) == len(self.values) # DEBUG
             self.values.append(value)
         else:
@@ -317,32 +336,36 @@ class W_Record(Value):
 
 
 class Frame:
-    def __init__(self, parent, func, values):
+    #_virtualizable_ = ['values[*]']
+    # TODO make sure values array is not resized at run-time!
+
+    def __init__(self, parent, shape, args=None):
         self.parent = parent # from Closure
 
-        assert isinstance(func, Func)
-        self.func = func
-        self.values = values
+        assert isinstance(shape, Shape)
+        self.shape = shape
+        if args is None:
+            self.values = [None] * shape.size()
+        else:
+            self.values = args + [None] * (shape.size() - len(args))
 
         #self.stack = [] # for threading TODO
         #self.calls = [] # for threading
 
-    @property
-    def shape(self):
-        return self.func.shape
-
     def set(self, key, value):
+        # Can assign each slot exactly once.
         assert isinstance(key, Name)
         shape = self.shape
         index = shape.lookup(key)
         if index == -1:
-            shape = shape.transition(key)
-            assert shape.lookup(key) == len(self.values) # DEBUG
-            self.values.append(value)
-            self.func.shape = shape
-        else:
-            self.values[index] = value
+            raise KeyError(key)
+        assert self.values[index] is None # DEBUG
+        self.values[index] = value
 
+    def set_offset(self, index, value):
+        self.values[index] = value
+
+    @jit.elidable
     def lookup(self, key):
         assert isinstance(key, Name)
         index = self.shape.lookup(key)
@@ -352,9 +375,9 @@ class Frame:
             raise KeyError(key)
         return self.values[index]
 
-    def _set_shape(self, shape):
-        self.shape = self.func.shape = shape
-        # TODO also modify other frames on the stack!
+    @jit.elidable
+    def lookup_offset(self, index):
+        return self.values[index]
 
     def _print(self):
         values = self.values
@@ -403,7 +426,7 @@ class W_Func(Value): # TODO naming
         assert len(arg_list) == n # TODO dynamic calls
         values = arg_list + [None] * (func.shape.size() - n)
 
-        inner = Frame(self.scope, func, values)
+        inner = Frame(self.scope, func.shape, values)
         return inner
 
     def call_named(self, arg_record):
