@@ -52,6 +52,7 @@ from .values import *
 # TODO annotate nodes with SourceSections
 
 class Block(Node):
+    _immutable_fields_ = ['nodes']
     # TODO W_Block ??
 
     def __init__(self, nodes):
@@ -94,6 +95,7 @@ class Block(Node):
 
 
 class Literal(Node):
+    _immutable_fields_ = ['value']
     def __init__(self, value, type_):
         self._parent = None
         assert isinstance(value, Value)
@@ -136,13 +138,15 @@ class ListLiteral(Node):
     def sexpr(self):
         return "(list " + " ".join([n.sexpr() for n in self.items]) + ")" # TODO
 
+    @jit.unroll_safe
     def evaluate(self, frame):
-        return W_List([item.evaluate(frame) for item in self.items])
+        items = self.items
+        jit.promote(items)
+        return W_List([item.evaluate(frame) for item in items])
 
 
 class RecordLiteral(Node):
     type = Type.get('Record')
-
     def __init__(self, keys, values, type_):
         self._parent = None
         self.keys = keys
@@ -170,10 +174,14 @@ class RecordLiteral(Node):
             strings.append(self.values[i].sexpr()) # Node
         return "(record " + " ".join(strings) + ")"
 
+    @jit.unroll_safe
     def evaluate(self, frame):
-        values = [item.evaluate(frame) for item in self.values]
-        return W_Record(self.keys, values)
-
+        keys = self.keys
+        values = self.values
+        #jit.promote(keys)
+        jit.promote(values)
+        eval_values = [item.evaluate(frame) for item in self.values]
+        return W_Record(keys, eval_values)
 
 
 
@@ -205,15 +213,16 @@ class Load(Node):
 
     def children(self): return []
 
-    # TODO are lookups elidable?
     @jit.unroll_safe
     def evaluate(self, frame):
-        #assert frame.shape is self.shape # DEBUG
-        for i in range(self.depth):
+        depth = self.depth
+        jit.promote(depth)
+        for i in range(depth):
             frame = frame.parent
-        #assert frame, self.depth
-        #assert frame.shape.lookup(self.name) == self.index, self.sexpr() # DEBUG
-        return frame.lookup_offset(self.index)
+
+        index = self.index
+        jit.promote(index)
+        return frame.lookup_offset(index)
 
     def sexpr(self):
         return self.name.sexpr()
@@ -249,8 +258,9 @@ class Let(Node):
 
     def evaluate(self, frame):
         value = self.value.evaluate(frame)
-        assert frame.shape.lookup(self.name) == self.index # DEBUG
-        frame.set_offset(self.index, value)
+        index = self.index
+        jit.promote(index)
+        frame.set_offset(index, value)
 
     def sexpr(self):
         return "(let " + self.name.sexpr() + " " + self.value.sexpr() + ")"
@@ -278,8 +288,10 @@ class NewCell(Node):
     def evaluate(self, frame):
         if self.index == -1:
             raise ValueError("NewCell was not compiled")
+        index = self.index
+        jit.promote(index)
         cell = W_Var(Value.NULL)
-        frame.set_offset(self.index, cell)
+        frame.set_offset(index, cell)
         return cell
 
 
@@ -353,8 +365,9 @@ class Define(Node):
 
     def evaluate(self, frame):
         closure = W_Func(frame, self.func)
-        assert frame.shape.lookup(self.name) == self.index # DEBUG
-        frame.set_offset(self.index, closure)
+        index = self.index
+        jit.promote(index)
+        frame.set_offset(index, closure)
         return None
 
     def sexpr(self):
@@ -542,14 +555,21 @@ class GetAttrOffset(GetAttr):
 
     def evaluate_record(self, record):
         # shape guard
-        if record.shape is not self.shape:
+        shape = self.shape
+        jit.promote(shape)
+        if record.shape is not shape:
             other = GetAttrGeneric(self.symbol, self.record)
             return other.evaluate_record(record)
-        return record.values[self.index]
+
+        index = self.index
+        jit.promote(index)
+        return record.values[index]
 
 class GetAttrGeneric(GetAttr):
     def evaluate_record(self, record):
-        return record.lookup(self.symbol)
+        symbol = self.symbol
+        jit.promote(symbol)
+        return record.lookup(symbol)
 
 
 class SetAttr(Node):
@@ -596,12 +616,19 @@ class SetAttrOffset(SetAttr):
 
     def evaluate_record(self, record, value):
         # shape guard
-        if record.shape is not self.shape:
+        shape = self.shape
+        jit.promote(shape)
+        if record.shape is not shape:
             other = SetAttrGeneric(self.symbol, self.record, self.value)
             return other.evaluate_record(record, value)
-        record.values[self.index] = value
+
+        index = self.index
+        jit.promote(index)
+        record.values[index] = value
 
 class SetAttrGeneric(SetAttr):
     def evaluate_record(self, record, value):
-        record.set(self.symbol, value)
+        symbol = self.symbol
+        jit.promote(symbol)
+        record.set(symbol, value)
 
