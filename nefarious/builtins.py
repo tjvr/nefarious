@@ -22,6 +22,7 @@ class Builtin(Node):
 
 
 class UnaryBuiltin(Builtin):
+    __slots__ = ['_parent', 'child']
     def __init__(self, args, type_):
         self._parent = None
         self.child, = args
@@ -36,6 +37,7 @@ class UnaryBuiltin(Builtin):
 
 
 class InfixBuiltin(Builtin):
+    __slots__ = ['_parent', 'left', 'right']
     def __init__(self, args, type_):
         self._parent = None
         self.left, self.right = args
@@ -112,7 +114,7 @@ class INT_ADD(InfixBuiltin):
         assert isinstance(left, W_Int)
         right = self.right.evaluate(frame)
         assert isinstance(right, W_Int)
-        return W_Int(left.value.add(right.value))
+        return W_Int(left.prim.add(right.prim))
 
 class INT_SUB(InfixBuiltin):
     type = Int
@@ -122,7 +124,7 @@ class INT_SUB(InfixBuiltin):
         assert isinstance(left, W_Int)
         right = self.right.evaluate(frame)
         assert isinstance(right, W_Int)
-        return W_Int(left.value.sub(right.value))
+        return W_Int(left.prim.sub(right.prim))
 
 # TODO INT_EQ
 
@@ -134,7 +136,7 @@ class INT_LT(InfixBuiltin):
         assert isinstance(left, W_Int)
         right = self.right.evaluate(frame)
         assert isinstance(right, W_Int)
-        return W_Bool.get(left.value.lt(right.value))
+        return W_Bool.get(left.prim.lt(right.prim))
 
 class INT_RANDOM(InfixBuiltin):
     type = Int
@@ -148,8 +150,8 @@ class INT_RANDOM(InfixBuiltin):
         right = self.right.evaluate(frame)
         assert isinstance(right, W_Int)
         # TODO random for bigints.
-        start = left.value.toint()
-        end = right.value.toint()
+        start = left.prim.toint()
+        end = right.prim.toint()
         f = INT_RANDOM.random.random()
         value = int(0.5 + start + f * (end - start))
         return W_Int.fromint(value)
@@ -160,7 +162,7 @@ class INT_FLOAT(UnaryBuiltin):
     def evaluate(self, frame):
         child = self.child.evaluate(frame)
         assert isinstance(child, W_Int)
-        return W_Float(child.value.tofloat())
+        return W_Float(child.prim.tofloat())
 
 
 
@@ -174,7 +176,7 @@ class FLOAT_ADD(InfixBuiltin):
         assert isinstance(left, W_Float)
         right = self.right.evaluate(frame)
         assert isinstance(right, W_Float)
-        return W_Float(left.value + right.value)
+        return W_Float(left.prim + right.prim)
 
 class FLOAT_SUB(InfixBuiltin):
     type = Float
@@ -184,7 +186,7 @@ class FLOAT_SUB(InfixBuiltin):
         assert isinstance(left, W_Float)
         right = self.right.evaluate(frame)
         assert isinstance(right, W_Float)
-        return W_Float(left.value - right.value)
+        return W_Float(left.prim - right.prim)
 
 class FLOAT_MUL(InfixBuiltin):
     type = Float
@@ -194,7 +196,7 @@ class FLOAT_MUL(InfixBuiltin):
         assert isinstance(left, W_Float)
         right = self.right.evaluate(frame)
         assert isinstance(right, W_Float)
-        return W_Float(left.value * right.value)
+        return W_Float(left.prim * right.prim)
 
 class FLOAT_DIV(InfixBuiltin):
     type = Float
@@ -204,7 +206,7 @@ class FLOAT_DIV(InfixBuiltin):
         assert isinstance(left, W_Float)
         right = self.right.evaluate(frame)
         assert isinstance(right, W_Float)
-        return W_Float(left.value / right.value)
+        return W_Float(left.prim / right.prim)
 
 
 class FLOAT_LT(InfixBuiltin):
@@ -215,7 +217,7 @@ class FLOAT_LT(InfixBuiltin):
         assert isinstance(left, W_Float)
         right = self.right.evaluate(frame)
         assert isinstance(right, W_Float)
-        return W_Bool.get(left.value < right.value)
+        return W_Bool.get(left.prim < right.prim)
 
 class FLOAT_ROUND(UnaryBuiltin):
     type = Int
@@ -223,7 +225,7 @@ class FLOAT_ROUND(UnaryBuiltin):
     def evaluate(self, frame):
         f = self.child.evaluate(frame)
         assert isinstance(f, W_Float)
-        return W_Int.fromfloat(f.value + 0.5)
+        return W_Int.fromfloat(f.prim + 0.5)
 
 class FLOAT_POW(InfixBuiltin):
     type = Float
@@ -233,7 +235,7 @@ class FLOAT_POW(InfixBuiltin):
         assert isinstance(left, W_Float)
         right = self.right.evaluate(frame)
         assert isinstance(right, W_Float)
-        return W_Float(math.pow(left.value, right.value))
+        return W_Float(math.pow(left.prim, right.prim))
 
 
 
@@ -353,7 +355,7 @@ class LIST_ADD(InfixBuiltin):
         list_ = self.left.evaluate(frame)
         item = self.right.evaluate(frame)
         assert isinstance(list_, W_List)
-        list_.items.append(item)
+        list_.items().append(item)
 
 class LIST_GET(InfixBuiltin):
     type = _a
@@ -363,10 +365,10 @@ class LIST_GET(InfixBuiltin):
         assert isinstance(list_, W_List)
         int_ = self.right.evaluate(frame)
         assert isinstance(int_, W_Int)
-        index = int_.value.toint()
-        if not 1 <= index <= len(list_.items):
+        index = int_.prim.toint()
+        if not 1 <= index <= len(list_.items()):
             raise IndexError(index) # TODO error handling
-        return list_.items[index - 1]
+        return list_.items()[index - 1]
 
 class LIST_LEN(UnaryBuiltin):
     type = Int
@@ -374,5 +376,5 @@ class LIST_LEN(UnaryBuiltin):
     def evaluate(self, frame):
         list_ = self.child.evaluate(frame)
         assert isinstance(list_, W_List)
-        return W_Int.fromint(len(list_.items))
+        return W_Int.fromint(len(list_.items()))
 

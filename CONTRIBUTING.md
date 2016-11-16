@@ -20,6 +20,6 @@ There are four kinds of object:
 
 * Names -- used to access Records, and also Frames.
 
-    :bob 
+    :bob
     let foo bar = 1
 

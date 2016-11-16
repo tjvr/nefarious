@@ -222,7 +222,7 @@ class ArgSpec(Node):
         w_type = type_.value
         assert isinstance(w_type, W_Type)
         self.word = word.word
-        self.type = w_type.type
+        self.type = w_type.prim
 @singleton
 class ArgSpecMacro(Macro):
     def build(self, values, type_):
@@ -622,7 +622,7 @@ class ListTypeMacro(Macro):
         assert isinstance(child_type, Literal)
         child_type = child_type.value
         assert isinstance(child_type, W_Type)
-        return Literal(W_Type(List.get(child_type.type)), type_)
+        return Literal(W_Type(List.get(child_type.prim)), type_)
 grammar.add(Type.TYPE, ws([Word.word("("), Word.word("List"), Type.TYPE, Word.word(")")]), ListTypeMacro)
 
 Int = Type.get('Int')

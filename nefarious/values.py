@@ -12,6 +12,9 @@ except ImportError:
 
 
 class Value:
+    __slots__ = ['type', 'prim']
+    _immutable_fields_ = ['type', 'prim']
+
     def __init__(self, type_, value):
         assert isinstance(desc, str)
         self.type = type_
@@ -23,7 +26,6 @@ class Value:
 
 class W_Var(Value):
     """a mutable cell"""
-
     # TODO can this be virtualized?
 
     def __init__(self, value):
@@ -82,9 +84,10 @@ Value.NULL = W_Null()
 
 class W_Float(Value):
     type = Type.get('Float')
-    def __init__(self, value):
-        assert isinstance(value, float)
-        self.value = value
+
+    def __init__(self, prim):
+        assert isinstance(prim, float)
+        self.prim = prim
 
     @staticmethod
     @jit.elidable
@@ -93,18 +96,18 @@ class W_Float(Value):
         return W_Float(float(string))
 
     def __repr__(self):
-        return "W_Float({!r})".format(self.value)
+        return "W_Float({!r})".format(self.prim)
 
     def sexpr(self):
-        return str(self.value)
+        return str(self.prim)
 
 
 class W_Int(Value):
     type = Type.get('Int')
 
-    def __init__(self, value):
-        assert isinstance(value, rbigint)
-        self.value = value
+    def __init__(self, prim):
+        assert isinstance(prim, rbigint)
+        self.prim = prim
 
     @staticmethod
     @jit.elidable
@@ -113,27 +116,27 @@ class W_Int(Value):
 
     @staticmethod
     @jit.elidable
-    def fromint(value):
-        return W_Int(rbigint.fromint(value))
+    def fromint(prim):
+        return W_Int(rbigint.fromint(prim))
 
     @staticmethod
     @jit.elidable
-    def fromfloat(value):
-        return W_Int(rbigint.fromfloat(value))
+    def fromfloat(prim):
+        return W_Int(rbigint.fromfloat(prim))
 
     def __repr__(self):
-        return 'W_Int({!r})'.format(self.value)
+        return 'W_Int({!r})'.format(self.prim)
 
     def sexpr(self):
-        return self.value.str()
+        return self.prim.str()
 
 
 class W_Text(Value):
     type = Type.get('Text')
 
-    def __init__(self, text):
-        assert isinstance(text, rope.StringNode)
-        self.text = text
+    def __init__(self, prim):
+        assert isinstance(prim, rope.StringNode)
+        self.prim = prim
 
     @staticmethod
     @jit.elidable
@@ -141,29 +144,33 @@ class W_Text(Value):
         # TODO tokenizer should understand utf-8
         return W_Text(rope.LiteralUnicodeNode(string.decode('utf-8')))
 
+    @jit.elidable
+    def _rope(self):
+        return self.prim
+
     def __repr__(self):
-        return 'W_Text({!r})'.format(self.text)
+        return 'W_Text({!r})'.format(self.prim)
 
     def sexpr(self):
-        return '"' + self.text.flatten_unicode().encode('utf-8') + '"'
+        return '"' + self.prim.flatten_unicode().encode('utf-8') + '"'
 
     @staticmethod
     def join(text_list):
         assert isinstance(text_list, W_List)
-        l = [t.text for t in text_list.items]
+        l = [t._rope() for t in text_list.items()]
         return W_Text(rope.rebalance(l))
 
     @staticmethod
     def join_with(text_list, sep):
-        return W_Text(rope.join(sep.text, [t.text for t in text_list.items]))
+        return W_Text(rope.join(sep._rope(), [t._rope() for t in text_list.items()]))
 
     def split(self):
         # TODO isspace() for unicode ?
-        return W_List([W_Text(x) for x in rope.split_chars(self.text,
+        return W_List([W_Text(x) for x in rope.split_chars(self.prim,
             predicate=lambda x: unichr(x) == u" ")])
 
     def split_by(self, sep):
-        return W_List([W_Text(x) for x in rope.split(self.text, sep.text)])
+        return W_List([W_Text(x) for x in rope.split(self.prim, sep._rope())])
 
 
 class W_List(Value):
@@ -171,36 +178,42 @@ class W_List(Value):
 
     def __init__(self, items):
         assert isinstance(items, list)
-        self.items = items
+        self.prim = items
+
+    @jit.elidable
+    def items(self):
+        assert isinstance(self.prim, list)
+        return self.prim
 
     def __repr__(self):
-        return "W_List({})".format(repr(self.items))
+        return "W_List({})".format(repr(self.prim))
 
     def sexpr(self):
-        return "[" + " ".join([c.sexpr() for c in self.items]) + "]"
+        return "[" + " ".join([c.sexpr() for c in self.prim]) + "]"
 
 
 class W_Type(Value):
     type = Type.TYPE
     def __init__(self, type_):
-        self.type = type_
+        self.prim = type_
 
     def __repr__(self):
-        return "W_Type({})".format(repr(self.type))
+        return "W_Type({})".format(repr(self.prim))
 
     def sexpr(self):
-        return "<" + self.type._str() + ">"
+        return "<" + self.prim._str() + ">"
 
 
 #------------------------------------------------------------------------------
 
 
 class Name:
+    _immutable_fields_ = ['name']
+
     """Symbol-like. Compared by identity, not value, so shadowing works."""
     def __init__(self, name):
         assert isinstance(name, str)
         self.name = name # String name really is just a debugging aid
-        self._parent = None
 
     @staticmethod
     def from_word(word):
@@ -241,6 +254,8 @@ class Symbol(Name):
 
 
 class Shape:
+    _immutable_fields_ = ['names', 'previous']
+
     def __init__(self, names, previous=None):
         #assert isinstance(names, dict)
         self.names = names
@@ -307,6 +322,7 @@ Shape.EMPTY = Shape({})
 
 class W_Record(Value):
     type = Type.get('Record')
+    __slots__ = ['shape', 'values']
 
     # TODO should records be immutable?
 
@@ -397,6 +413,8 @@ class Frame:
 
 class Func: # TODO naming
     """a Block plus arg names ??"""
+    _immutable_fields_ = ['original_body', 'shape', 'arg_length']
+
     def __init__(self, arg_names, body):
         #assert isinstance(body, Tree)
         #assert isinstance(body, Block)
@@ -414,6 +432,8 @@ class Func: # TODO naming
 class W_Func(Value): # TODO naming
     """a Closure: function + scope"""
     type = Type.get('Func')
+    __slots__ = ['scope', 'func']
+    _immutable_fields_ = ['scope', 'func']
 
     def __init__(self, scope, func):
         # for accessing names from outer scopes
