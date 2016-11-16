@@ -5,6 +5,7 @@ try:
     from rpython.rlib.rbigint import rbigint
     from rpython.rlib import rope
     from rpython.rlib import jit
+    from rpython.rlib.debug import make_sure_not_resized
 except ImportError:
     # TODO can we write cpython stubs for these? or is that too much work?
     raise ImportError("Please run `make pypy`")
@@ -52,6 +53,7 @@ class W_Bool(Value):
         return 'W_Bool({})'.format(self.sexpr())
 
     @staticmethod
+    @jit.elidable
     def get(value):
         return W_Bool.TRUE if value else W_Bool.FALSE
 
@@ -208,6 +210,7 @@ class Symbol(Name):
     _cache = {}
 
     @staticmethod
+    @jit.elidable
     def get(name):
         assert isinstance(name, str), name
         if name in Symbol._cache:
@@ -336,48 +339,37 @@ class W_Record(Value):
 
 
 class Frame:
-    #_virtualizable_ = ['values[*]']
-    # TODO make sure values array is not resized at run-time!
+    _virtualizable_ = ['values[*]']
+    _immutable_fields_ = ['parent', 'shape']
 
-    def __init__(self, parent, shape, args=None):
+    def __init__(self, parent, shape):
+        self = jit.hint(self, access_directly=True, fresh_virtualizable=True)
+
         self.parent = parent # from Closure
-
         assert isinstance(shape, Shape)
         self.shape = shape
-        if args is None:
-            self.values = [None] * shape.size()
-        else:
-            self.values = args + [None] * (shape.size() - len(args))
+
+        values = [None] * shape.size()
+        make_sure_not_resized(values)
+        self._values = values
 
         #self.stack = [] # for threading TODO
         #self.calls = [] # for threading
 
-    def set(self, key, value):
-        # Can assign each slot exactly once.
-        assert isinstance(key, Name)
-        shape = self.shape
-        index = shape.lookup(key)
-        if index == -1:
-            raise KeyError(key)
-        assert self.values[index] is None # DEBUG
-        self.values[index] = value
-
     def set_offset(self, index, value):
-        self.values[index] = value
+        # Can assign each slot exactly once.
+        jit.promote(index)
+        values = self._values
+        assert 0 <= index < len(values)
+        values[index] = value
 
-    @jit.elidable
-    def lookup(self, key):
-        assert isinstance(key, Name)
-        index = self.shape.lookup(key)
-        if index == -1:
-            if self.parent is not None:
-                return self.parent.lookup(key)
-            raise KeyError(key)
-        return self.values[index]
-
-    @jit.elidable
     def lookup_offset(self, index):
-        return self.values[index]
+        jit.promote(index)
+        values = self._values
+        assert 0 <= index < len(values)
+        return values[index]
+
+    # TODO use jit.hint(frame, force_virtualizable=True) for closure escape
 
     def _print(self):
         values = self.values
@@ -419,18 +411,6 @@ class W_Func(Value): # TODO naming
         self.scope = scope
 
         self.func = func
-
-    def call(self, arg_list):
-        func = self.func
-        n = func.arg_length
-        assert len(arg_list) == n # TODO dynamic calls
-        values = arg_list + [None] * (func.shape.size() - n)
-
-        inner = Frame(self.scope, func.shape, values)
-        return inner
-
-    def call_named(self, arg_record):
-        pass # TODO allow dynamic calls via Records
 
     def sexpr(self):
         return "<bound (fun " + self.func.sexpr() + ")>"

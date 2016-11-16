@@ -13,31 +13,33 @@ except ImportError:
 #------------------------------------------------------------------------------
 
 try:
-    from rpython.rlib.jit import JitDriver, purefunction
+    from rpython.rlib.jit import JitDriver
 except ImportError:
+    raise
     # Dummy class for running under standard CPython
-    class JitDriver(object):
-        def __init__(self,**kw): pass
-        def jit_merge_point(self,**kw): pass
-        def can_enter_jit(self,**kw): pass
-    def purefunction(f): return f
+    #class JitDriver(object):
+    #    def __init__(self,**kw): pass
+    #    def jit_merge_point(**kw): pass
+    #    def can_enter_jit(self,**kw): pass
 
 def jitpolicy(driver):
     from rpython.jit.codewriter.policy import JitPolicy
     return JitPolicy()
 
 
+def get_location(node):
+    return node.sexpr()
+
+
 # greens: loop constants. identify loop.                eg. code object & instruction pointer
 # reds: everything else used in the execution loop.     eg. frame object & execution context
 jitdriver = JitDriver(
-    greens=['node'], # TODO
-    virtualizables=[],
-    reds=['scope'], # TODO
-    is_recursive=True,
+    greens = ['self'],
+    virtualizables = ['frame'],
+    reds = ['frame'], # 'arguments'?
+    is_recursive = True,
+    get_printable_location = get_location,
 )
-
-def get_location(node):
-    return node.sexpr()
 
 
 #------------------------------------------------------------------------------
@@ -233,8 +235,6 @@ class Load(Node):
     # TODO are lookups elidable?
     @jit.unroll_safe
     def evaluate(self, frame):
-        if self.index == -1:
-            raise ValueError("Load was not compiled")
         #assert frame.shape is self.shape # DEBUG
         for i in range(self.depth):
             frame = frame.parent
@@ -255,15 +255,14 @@ class Let(Node):
 
         self.value = value
         value.set_parent(self)
+        self.index = -1
 
     def compile(self, stack):
         self.value.compile(stack)
 
         shape = stack.pop()
-        index, shape = shape.lookup_or_insert(self.name)
+        self.index, shape = shape.lookup_or_insert(self.name)
         stack.append(shape)
-
-        self._replace(LetOffset(self.name, self.value, shape, index))
 
     def copy(self): return Let(self.name, self.value.copy())
     def children(self): return [self.value]
@@ -277,21 +276,11 @@ class Let(Node):
 
     def evaluate(self, frame):
         value = self.value.evaluate(frame)
-        frame.set(self.name, value)
+        assert frame.shape.lookup(self.name) == self.index # DEBUG
+        frame.set_offset(self.index, value)
 
     def sexpr(self):
         return "(let " + self.name.sexpr() + " " + self.value.sexpr() + ")"
-
-class LetOffset(Let):
-    def __init__(self, name, value, shape, index):
-        Let.__init__(self, name, value)
-        self.shape = shape
-        self.index = index
-
-    def evaluate(self, frame):
-        value = self.value.evaluate(frame)
-        assert frame.shape.lookup(self.name) == self.index # DEBUG
-        frame.set_offset(self.index, value)
 
 
 class NewCell(Node):
@@ -314,6 +303,8 @@ class NewCell(Node):
         return "(var " + self.name.sexpr() + ")"
 
     def evaluate(self, frame):
+        if self.index == -1:
+            raise ValueError("NewCell was not compiled")
         cell = W_Var(Value.NULL)
         frame.set_offset(self.index, cell)
         return cell
@@ -389,6 +380,7 @@ class Define(Node):
 
     def evaluate(self, frame):
         closure = W_Func(frame, self.func)
+        assert frame.shape.lookup(self.name) == self.index # DEBUG
         frame.set_offset(self.index, closure)
         return None
 
@@ -449,55 +441,68 @@ class Call(Node):
                 return
         assert False, "child not found"
 
+    #@jit.unroll_safe
     def evaluate(self, frame):
+        jitdriver.jit_merge_point(self=self, frame=frame)
+
+        arguments = [arg.evaluate(frame) for arg in self.args]
+
         closure = self.func.evaluate(frame)
         assert isinstance(closure, W_Func)
+        body = closure.func
+        jit.promote(body)
 
-        arg_list = [arg.evaluate(frame) for arg in self.args]
-        inner = closure.call(arg_list)
+        n = body.arg_length
+        jit.promote(n)
+        assert len(arguments) == n # TODO dynamic calls
+        inner = Frame(closure.scope, body.shape)
+        for i in range(len(arguments)):
+            inner.set_offset(i, arguments[i])
+
         try:
-            return closure.func.body.evaluate(inner)
+            result = body.body.evaluate(inner)
         except ReturnValue as ret: # TODO opt
-            return ret.value
+            result = ret.value
+        return result
 
     def sexpr(self):
         return "(" + self.func.sexpr() + " " + " ".join([a.sexpr() for a in self.args]) + ")"
 
 
 
-class Apply(Node):
-    def __init__(self, func, arg_list, type_):
-        self._parent = None
-        self.func = func
-        self.arg_list = arg_list
-        func.set_parent(self)
-        arg_list.set_parent(self)
-        self.type = type_
-
-    def replace_child(self, child, other):
-        if child is self.func:
-            self.func = other
-            return
-        if child is self.arg_list:
-            self.arg_list = other
-            return
-        assert False, "child not found"
-
-    def evaluate(self, frame):
-        closure = self.func.evaluate(frame)
-        assert isinstance(closure, W_Func)
-
-        arg_list = self.arg_list.evaluate(frame)
-        assert isinstance(arg_list, list)
-
-        inner = closure.call(arg_list)
-        try:
-            return closure.func.body.evaluate(inner)
-        except ReturnValue as ret:
-            return ret.value
-
-    def sexpr(self):
-        return "(apply " + self.func.sexpr() + " " + self.arg_list.sexpr() + ")"
+# class Apply(Node):
+#     def __init__(self, func, arg_list, type_):
+#         self._parent = None
+#         self.func = func
+#         self.arg_list = arg_list
+#         func.set_parent(self)
+#         arg_list.set_parent(self)
+#         self.type = type_
+# 
+#     def replace_child(self, child, other):
+#         if child is self.func:
+#             self.func = other
+#             return
+#         if child is self.arg_list:
+#             self.arg_list = other
+#             return
+#         assert False, "child not found"
+# 
+#     def evaluate(self, frame):
+#         closure = self.func.evaluate(frame)
+#         assert isinstance(closure, W_Func)
+# 
+#         arg_list = self.arg_list.evaluate(frame)
+#         assert isinstance(arg_list, list)
+# 
+#         inner = closure.call(arg_list)
+#         try:
+#             return closure.func.body.evaluate(inner)
+#         except ReturnValue as ret:
+#             return ret.value
+# 
+#     def sexpr(self):
+#         return "(apply " + self.func.sexpr() + " " + self.arg_list.sexpr() + ")"
 
 
 

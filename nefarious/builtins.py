@@ -338,6 +338,9 @@ class WHILE(Builtin):
         while cond is Value.TRUE:
             self.body.evaluate(frame)
             cond = self.cond.evaluate(frame)
+
+            # jitdriver.can_enter_jit(self=self, frame=frame) # TODO
+
         assert cond is Value.FALSE
 
 

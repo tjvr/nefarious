@@ -523,14 +523,14 @@ grammar.add(Generic.ALPHA, ws_not_null([
 ]), DynamicCallMacro)
 
 
-@singleton
-class ApplyMacro(Macro):
-    def build(self, values, type_):
-        return Apply(values[2], values[6], type_)
-
-grammar.add(Generic.ALPHA, ws_not_null([
-    Word.word("apply"), Type.FUNC, Word.word("to"), List.get(Type.ANY)
-]), ApplyMacro)
+# @singleton
+# class ApplyMacro(Macro):
+#     def build(self, values, type_):
+#         return Apply(values[2], values[6], type_)
+# 
+# grammar.add(Generic.ALPHA, ws_not_null([
+#     Word.word("apply"), Type.FUNC, Word.word("to"), List.get(Type.ANY)
+# ]), ApplyMacro)
 
 # TODO better syntax: call with Record
 
@@ -728,7 +728,7 @@ def parse_and_run(source, debug=False):
     shape = stack.pop()
 
     main = Func([], None)
-    root = Frame(None, shape, [])
+    root = Frame(None, shape)
 
     retval = tree.evaluate(root)
     if retval is None:
