@@ -1,4 +1,5 @@
 *.pyc
+__pycache__/
 pypy/
 pypy.zip
 
@@ -9,3 +10,7 @@ nfsj
 # Vim excludes
 *.swp
 *.swo
+
+# Java
+*.class
+
