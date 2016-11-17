@@ -41,7 +41,7 @@ call_driver = JitDriver(
     reds = ['arguments', 'func', 'scope', 'frame'],
     is_recursive = True,
     get_printable_location = get_location,
-    should_unroll_one_iteration = lambda self: True, # may or may not be necessary?
+    # should_unroll_one_iteration = lambda self: True, # may or may not be necessary?
 )
 
 
