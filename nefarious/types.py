@@ -348,3 +348,52 @@ Type.FUNC = Type.get('Func')
 Type.WORD = Internal.get('Word')
 Type.VAR = Internal.get('Var')
 
+
+
+class Node:
+    type = None
+    #_immutable_fields_ = ['type'] #...
+    #__slots__ = ['type', '_parent']
+    # TODO make more memory-efficient
+
+    def set_parent(self, parent):
+        self._parent = parent
+
+    def compile(self, stack):
+        for child in self.children():
+            child.compile(stack)
+
+    def _replace(self, other):
+        assert isinstance(other, Node)
+        parent = self._parent
+        #self._parent = None # TODO omit
+        parent.replace_child(self, other)
+        other._parent = parent
+
+    def replace_child(self, child, other):
+        raise NotImplementedError, self
+
+    def evaluate(self, frame):
+        raise NotImplementedError
+
+    def copy(self):
+        raise NotImplementedError, self
+
+    def children(self):
+        raise NotImplementedError, self
+
+
+class WordNode(Node):
+    type = Type.WORD
+    def __init__(self, word):
+        self.word = word
+
+    def sexpr(self):
+        # should only fire in tests
+        return self.word.sexpr()
+
+
+class Error(Node):
+    def __init__(self, message):
+        self.message = message
+

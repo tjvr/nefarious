@@ -207,7 +207,6 @@ class Column:
         return item
 
     def scan(self, word, previous):
-        from .tree import WordNode 
         assert isinstance(word, Word)
         assert len(self.items) == 0
         if word.has_value:
@@ -407,7 +406,6 @@ class Scope:
 
 
 def grammar_parse(source, grammar, debug=DEBUG):
-    from .tree import Error
     lexer = Lexer(source)
 
     first = column = Column(grammar, 0)
