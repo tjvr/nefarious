@@ -124,31 +124,32 @@ class BOOL_AND(InfixBuiltin):
         return Value.TRUE
 
 
+
 Int = Type.get('Int')
 
 class INT_ADD(InfixBuiltin):
     type = Int
     arg_types = [Int, Int]
     def evaluate(self, frame):
+        return W_Int(self.evaluate_int(frame))
+    def evaluate_int(self, frame):
         jit.promote(self.left)
+        left = self.left.evaluate_int(frame)
         jit.promote(self.right)
-        left = self.left.evaluate(frame)
-        assert isinstance(left, W_Int)
-        right = self.right.evaluate(frame)
-        assert isinstance(right, W_Int)
-        return W_Int(left.prim.add(right.prim))
+        right = self.right.evaluate_int(frame)
+        return left.add(right)
 
 class INT_SUB(InfixBuiltin):
     type = Int
     arg_types = [Int, Int]
-    def evaluate(self, frame): # this is expensive
+    def evaluate(self, frame):
+        return W_Int(self.evaluate_int(frame))
+    def evaluate_int(self, frame): # this is expensive
         jit.promote(self.left)
+        left = self.left.evaluate_int(frame)
         jit.promote(self.right)
-        left = self.left.evaluate(frame)
-        assert isinstance(left, W_Int)
-        right = self.right.evaluate(frame)
-        assert isinstance(right, W_Int)
-        return W_Int(left.prim.sub(right.prim))
+        right = self.right.evaluate_int(frame)
+        return left.sub(right)
 
 # TODO INT_EQ
 
@@ -157,12 +158,10 @@ class INT_LT(InfixBuiltin):
     arg_types = [Int, Int]
     def evaluate(self, frame):
         jit.promote(self.left)
+        left = self.left.evaluate_int(frame)
         jit.promote(self.right)
-        left = self.left.evaluate(frame)
-        assert isinstance(left, W_Int)
-        right = self.right.evaluate(frame)
-        assert isinstance(right, W_Int)
-        return W_Bool.get(left.prim.lt(right.prim))
+        right = self.right.evaluate_int(frame)
+        return W_Bool.get(left.lt(right))
 
 class INT_RANDOM(InfixBuiltin):
     type = Int
@@ -188,10 +187,11 @@ class INT_FLOAT(UnaryBuiltin):
     type = Type.get('Float')
     arg_types = [Int]
     def evaluate(self, frame):
+        return W_Float(self.evaluate_float(frame))
+    def evaluate_float(self, frame):
         jit.promote(self.child)
-        child = self.child.evaluate(frame)
-        assert isinstance(child, W_Int)
-        return W_Float(child.prim.tofloat())
+        child = self.child.evaluate_int(frame)
+        return child.tofloat()
 
 
 
@@ -201,83 +201,79 @@ class FLOAT_ADD(InfixBuiltin):
     type = Float
     arg_types = [Float, Float]
     def evaluate(self, frame):
+        return W_Float(self.evaluate_float(frame))
+    def evaluate_float(self, frame):
         jit.promote(self.left)
+        left = self.left.evaluate_float(frame)
         jit.promote(self.right)
-        left = self.left.evaluate(frame)
-        assert isinstance(left, W_Float)
-        right = self.right.evaluate(frame)
-        assert isinstance(right, W_Float)
-        return W_Float(left.prim + right.prim)
+        right = self.right.evaluate_float(frame)
+        return left + right
 
 class FLOAT_SUB(InfixBuiltin):
     type = Float
     arg_types = [Float, Float]
     def evaluate(self, frame):
+        return W_Float(self.evaluate_float(frame))
+    def evaluate_float(self, frame):
         jit.promote(self.left)
+        left = self.left.evaluate_float(frame)
         jit.promote(self.right)
-        left = self.left.evaluate(frame)
-        assert isinstance(left, W_Float)
-        right = self.right.evaluate(frame)
-        assert isinstance(right, W_Float)
-        return W_Float(left.prim - right.prim)
+        right = self.right.evaluate_float(frame)
+        return left - right
 
 class FLOAT_MUL(InfixBuiltin):
     type = Float
     arg_types = [Float, Float]
     def evaluate(self, frame):
+        return W_Float(self.evaluate_float(frame))
+    def evaluate_float(self, frame):
         jit.promote(self.left)
+        left = self.left.evaluate_float(frame)
         jit.promote(self.right)
-        left = self.left.evaluate(frame)
-        assert isinstance(left, W_Float)
-        right = self.right.evaluate(frame)
-        assert isinstance(right, W_Float)
-        return W_Float(left.prim * right.prim)
+        right = self.right.evaluate_float(frame)
+        return left * right
 
 class FLOAT_DIV(InfixBuiltin):
     type = Float
     arg_types = [Float, Float]
     def evaluate(self, frame):
+        return W_Float(self.evaluate_float(frame))
+    def evaluate_float(self, frame):
         jit.promote(self.left)
+        left = self.left.evaluate_float(frame)
         jit.promote(self.right)
-        left = self.left.evaluate(frame)
-        assert isinstance(left, W_Float)
-        right = self.right.evaluate(frame)
-        assert isinstance(right, W_Float)
-        return W_Float(left.prim / right.prim)
-
+        right = self.right.evaluate_float(frame)
+        return left / right
 
 class FLOAT_LT(InfixBuiltin):
     type = Bool
     arg_types = [Float, Float]
     def evaluate(self, frame):
         jit.promote(self.left)
+        left = self.left.evaluate_float(frame)
         jit.promote(self.right)
-        left = self.left.evaluate(frame)
-        assert isinstance(left, W_Float)
-        right = self.right.evaluate(frame)
-        assert isinstance(right, W_Float)
-        return W_Bool.get(left.prim < right.prim)
+        right = self.right.evaluate_float(frame)
+        return W_Bool.get(left < right)
 
 class FLOAT_ROUND(UnaryBuiltin):
     type = Int
     arg_types = [Float]
     def evaluate(self, frame):
         jit.promote(self.child)
-        f = self.child.evaluate(frame)
-        assert isinstance(f, W_Float)
-        return W_Int.fromfloat(f.prim + 0.5)
+        f = self.child.evaluate_float(frame)
+        return W_Int.fromfloat(f + 0.5)
 
 class FLOAT_POW(InfixBuiltin):
     type = Float
     arg_types = [Float, Float]
     def evaluate(self, frame):
+        return W_Float(self.evaluate_float(frame))
+    def evaluate_float(self, frame):
         jit.promote(self.left)
+        left = self.left.evaluate_float(frame)
         jit.promote(self.right)
-        left = self.left.evaluate(frame)
-        assert isinstance(left, W_Float)
-        right = self.right.evaluate(frame)
-        assert isinstance(right, W_Float)
-        return W_Float(math.pow(left.prim, right.prim))
+        right = self.right.evaluate_float(frame)
+        return math.pow(left, right)
 
 
 
@@ -427,9 +423,8 @@ class LIST_GET(InfixBuiltin):
         jit.promote(self.right)
         list_ = self.left.evaluate(frame)
         assert isinstance(list_, W_List)
-        int_ = self.right.evaluate(frame)
-        assert isinstance(int_, W_Int)
-        index = int_.prim.toint()
+        int_ = self.right.evaluate_int(frame)
+        index = int_.toint()
         if not 1 <= index <= len(list_.items()):
             raise IndexError(index) # TODO error handling
         return list_.items()[index - 1]
