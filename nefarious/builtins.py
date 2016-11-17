@@ -1,14 +1,15 @@
 from .tree import *
 
 def get_while_location(node, cond, body):
-    return get_location(node)
+    assert isinstance(node, WHILE)
+    return node.sexpr()
 
-# while_driver = jit.JitDriver(
-#     greens = ['node', 'cond', 'body'],
-#     reds = 'auto',
-#     is_recursive = True,
-#     get_printable_location = get_while_location,
-# )
+while_driver = jit.JitDriver(
+    greens = ['body', 'cond', 'self'],
+    reds = ['frame'],
+    is_recursive = True,
+    get_printable_location = get_while_location,
+)
 
 
 class Builtin(Node):
@@ -333,6 +334,7 @@ class WHILE(Builtin):
 
     def __init__(self, values, type_):
         self.cond, self.body = values
+        assert isinstance(self.cond, Node)
         self.cond.set_parent(self)
         assert isinstance(self.body, Block)
         self.body.set_parent(self)
@@ -350,13 +352,13 @@ class WHILE(Builtin):
         body = self.body
 
         while True:
-            #while_driver.jit_merge_point(node=self, cond=cond, body=body)
+            while_driver.jit_merge_point(self=self, cond=cond, body=body, frame=frame)
 
-            cond_value = cond.evaluate(frame)
+            #cond_value = cond.evaluate(frame)
 
-            if cond_value is Value.FALSE:
+            if cond.evaluate(frame) is Value.FALSE:
                 break
-            assert cond_value is Value.TRUE
+            #assert cond_value is Value.TRUE
 
             body.evaluate(frame)
 
