@@ -112,7 +112,7 @@ class TestGrammar(unittest.TestCase):
         @singleton
         class Program(Macro):
             def build(self, values, t):
-                assert isinstance(values[0], Tree)
+                #assert isinstance(values[0], Tree)
                 return values[0]
         grammar.add(Type.PROGRAM, [Type.ANY, Word.NL], Program)
 
@@ -353,7 +353,7 @@ class BaseParser(unittest.TestCase):
         result = self._grammar_parse(source + "\n", debug=self.DEBUG)
         if isinstance(result, Error):
             return result.message
-        if isinstance(result, Tree):
+        if isinstance(result, Node):
             result = result.sexpr()
         return result
 

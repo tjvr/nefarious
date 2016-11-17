@@ -388,6 +388,10 @@ class WordNode(Node):
     def __init__(self, word):
         self.word = word
 
+    def sexpr(self):
+        # should only fire in tests
+        return self.word.sexpr()
+
 
 class Error(Node):
     def __init__(self, message):

@@ -146,7 +146,7 @@ class Item:
         children = self.evaluate_children(stack)
 
         value = rule.call.build(children, rule.target)
-        assert isinstance(value, Node)
+        #assert isinstance(value, Node)
 
         self.value = value
         assert stack.pop() == self
