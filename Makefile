@@ -78,7 +78,7 @@ pypy: pypy.zip
 	@echo Unzipping $(PYPY_SOURCE)...
 	rm -rf pypy
 	unzip -qn pypy.zip
-	mv $(PYPY_SOURCE)/ pypy
+	mv $(PYPY_SOURCE) pypy
 	touch pypy
 
 clean:
