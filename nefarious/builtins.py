@@ -12,6 +12,9 @@ while_driver = jit.JitDriver(
 )
 
 
+# TODO consider removing assertions, rely on type information instead
+# change LoadCell to check the type is as expected!
+
 class Builtin(Node):
     type = None
     #__slots__ = ['type', '_parent']
@@ -69,6 +72,7 @@ class PRINT(UnaryBuiltin):
     type = Internal.get('Line')
     arg_types = [Type.ANY]
     def evaluate(self, frame):
+        jit.promote(self.child)
         value = self.child.evaluate(frame)
         print(value.sexpr())
 
@@ -79,6 +83,7 @@ class BOOL_NOT(UnaryBuiltin):
     type = Bool
     arg_types = [Bool]
     def evaluate(self, frame):
+        jit.promote(self.child)
         child = self.child.evaluate(frame)
         if child is Value.TRUE:
             return Value.FALSE
@@ -90,6 +95,8 @@ class BOOL_OR(InfixBuiltin):
     type = Bool
     arg_types = [Bool, Bool]
     def evaluate(self, frame):
+        jit.promote(self.left)
+        jit.promote(self.right)
         left = self.left.evaluate(frame)
         if left is Value.TRUE:
             return Value.TRUE
@@ -104,6 +111,8 @@ class BOOL_AND(InfixBuiltin):
     type = Bool
     arg_types = [Bool, Bool]
     def evaluate(self, frame):
+        jit.promote(self.left)
+        jit.promote(self.right)
         left = self.left.evaluate(frame)
         if left is Value.FALSE:
             return Value.FALSE
@@ -121,6 +130,8 @@ class INT_ADD(InfixBuiltin):
     type = Int
     arg_types = [Int, Int]
     def evaluate(self, frame):
+        jit.promote(self.left)
+        jit.promote(self.right)
         left = self.left.evaluate(frame)
         assert isinstance(left, W_Int)
         right = self.right.evaluate(frame)
@@ -131,6 +142,8 @@ class INT_SUB(InfixBuiltin):
     type = Int
     arg_types = [Int, Int]
     def evaluate(self, frame): # this is expensive
+        jit.promote(self.left)
+        jit.promote(self.right)
         left = self.left.evaluate(frame)
         assert isinstance(left, W_Int)
         right = self.right.evaluate(frame)
@@ -143,6 +156,8 @@ class INT_LT(InfixBuiltin):
     type = Bool
     arg_types = [Int, Int]
     def evaluate(self, frame):
+        jit.promote(self.left)
+        jit.promote(self.right)
         left = self.left.evaluate(frame)
         assert isinstance(left, W_Int)
         right = self.right.evaluate(frame)
@@ -156,6 +171,8 @@ class INT_RANDOM(InfixBuiltin):
     random = Random(seed=int(time.time()))
 
     def evaluate(self, frame):
+        jit.promote(self.left)
+        jit.promote(self.right)
         left = self.left.evaluate(frame)
         assert isinstance(left, W_Int)
         right = self.right.evaluate(frame)
@@ -171,6 +188,7 @@ class INT_FLOAT(UnaryBuiltin):
     type = Type.get('Float')
     arg_types = [Int]
     def evaluate(self, frame):
+        jit.promote(self.child)
         child = self.child.evaluate(frame)
         assert isinstance(child, W_Int)
         return W_Float(child.prim.tofloat())
@@ -183,6 +201,8 @@ class FLOAT_ADD(InfixBuiltin):
     type = Float
     arg_types = [Float, Float]
     def evaluate(self, frame):
+        jit.promote(self.left)
+        jit.promote(self.right)
         left = self.left.evaluate(frame)
         assert isinstance(left, W_Float)
         right = self.right.evaluate(frame)
@@ -193,6 +213,8 @@ class FLOAT_SUB(InfixBuiltin):
     type = Float
     arg_types = [Float, Float]
     def evaluate(self, frame):
+        jit.promote(self.left)
+        jit.promote(self.right)
         left = self.left.evaluate(frame)
         assert isinstance(left, W_Float)
         right = self.right.evaluate(frame)
@@ -203,6 +225,8 @@ class FLOAT_MUL(InfixBuiltin):
     type = Float
     arg_types = [Float, Float]
     def evaluate(self, frame):
+        jit.promote(self.left)
+        jit.promote(self.right)
         left = self.left.evaluate(frame)
         assert isinstance(left, W_Float)
         right = self.right.evaluate(frame)
@@ -213,6 +237,8 @@ class FLOAT_DIV(InfixBuiltin):
     type = Float
     arg_types = [Float, Float]
     def evaluate(self, frame):
+        jit.promote(self.left)
+        jit.promote(self.right)
         left = self.left.evaluate(frame)
         assert isinstance(left, W_Float)
         right = self.right.evaluate(frame)
@@ -224,6 +250,8 @@ class FLOAT_LT(InfixBuiltin):
     type = Bool
     arg_types = [Float, Float]
     def evaluate(self, frame):
+        jit.promote(self.left)
+        jit.promote(self.right)
         left = self.left.evaluate(frame)
         assert isinstance(left, W_Float)
         right = self.right.evaluate(frame)
@@ -234,6 +262,7 @@ class FLOAT_ROUND(UnaryBuiltin):
     type = Int
     arg_types = [Float]
     def evaluate(self, frame):
+        jit.promote(self.child)
         f = self.child.evaluate(frame)
         assert isinstance(f, W_Float)
         return W_Int.fromfloat(f.prim + 0.5)
@@ -242,6 +271,8 @@ class FLOAT_POW(InfixBuiltin):
     type = Float
     arg_types = [Float, Float]
     def evaluate(self, frame):
+        jit.promote(self.left)
+        jit.promote(self.right)
         left = self.left.evaluate(frame)
         assert isinstance(left, W_Float)
         right = self.right.evaluate(frame)
@@ -258,6 +289,7 @@ class TEXT_JOIN(UnaryBuiltin):
     type = Text
     arg_types = [List.get(Text)]
     def evaluate(self, frame):
+        jit.promote(self.child)
         text_list = self.child.evaluate(frame)
         return W_Text.join(text_list)
 
@@ -265,6 +297,7 @@ class TEXT_SPLIT(UnaryBuiltin):
     type = List.get(Text)
     arg_types = [Text]
     def evaluate(self, frame):
+        jit.promote(self.child)
         text = self.child.evaluate(frame)
         return text.split()
 
@@ -272,6 +305,8 @@ class TEXT_JOIN_WITH(InfixBuiltin):
     type = Text
     arg_types = [List.get(Text), Text]
     def evaluate(self, frame):
+        jit.promote(self.left)
+        jit.promote(self.right)
         left = self.left.evaluate(frame)
         right = self.right.evaluate(frame)
         return W_Text.join_with(left, right)
@@ -280,6 +315,8 @@ class TEXT_SPLIT_BY(InfixBuiltin):
     type = List.get(Text)
     arg_types = [Text, Text]
     def evaluate(self, frame):
+        jit.promote(self.left)
+        jit.promote(self.right)
         left = self.left.evaluate(frame)
         right = self.right.evaluate(frame)
         return left.split_by(right)
@@ -320,11 +357,15 @@ class IF_THEN_ELSE(Builtin):
         return "(IF_THEN_ELSE " + self.cond.sexpr() + " " + self.tv.sexpr() + " " + self.fv.sexpr() + ")"
 
     def evaluate(self, frame): # TODO OPT
+        tv, fv = self.tv, self.fv
+        jit.promote(self.cond)
+        jit.promote(tv)
+        jit.promote(fv)
         cond = self.cond.evaluate(frame)
         if cond == Value.TRUE:
-            return self.tv.evaluate(frame)
+            return tv.evaluate(frame)
         elif cond == Value.FALSE:
-            return self.fv.evaluate(frame)
+            return fv.evaluate(frame)
         assert False
 
 class WHILE(Builtin):
@@ -371,6 +412,8 @@ class LIST_ADD(InfixBuiltin):
     type = _Line
     arg_types = [_List.get(_a), _a]
     def evaluate(self, frame):
+        jit.promote(self.left)
+        jit.promote(self.right)
         list_ = self.left.evaluate(frame)
         item = self.right.evaluate(frame)
         assert isinstance(list_, W_List)
@@ -380,6 +423,8 @@ class LIST_GET(InfixBuiltin):
     type = _a
     arg_types = [_List.get(_a), Int]
     def evaluate(self, frame):
+        jit.promote(self.left)
+        jit.promote(self.right)
         list_ = self.left.evaluate(frame)
         assert isinstance(list_, W_List)
         int_ = self.right.evaluate(frame)
@@ -393,6 +438,7 @@ class LIST_LEN(UnaryBuiltin):
     type = Int
     arg_types = [_List.get(_a)]
     def evaluate(self, frame):
+        jit.promote(self.child)
         list_ = self.child.evaluate(frame)
         assert isinstance(list_, W_List)
         return W_Int.fromint(len(list_.items()))

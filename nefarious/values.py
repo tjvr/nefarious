@@ -182,6 +182,7 @@ class W_List(Value):
         assert isinstance(items, list)
         self.prim = items
 
+    # TODO consider removing this property
     @jit.elidable
     def items(self):
         assert isinstance(self.prim, list)
@@ -259,17 +260,14 @@ class Symbol(Name):
 
 
 class Shape:
-    _immutable_fields_ = ['names', 'previous']
+    _immutable_fields_ = ['names', 'previous', 'size']
 
     def __init__(self, names, previous=None):
         #assert isinstance(names, dict)
         self.names = names
         self._transitions = {}
         self.previous = previous
-
-    @jit.elidable
-    def size(self):
-        return len(self.names)
+        self.size = len(self.names)
 
     @jit.elidable
     def lookup(self, key):
@@ -328,8 +326,9 @@ Shape.EMPTY = Shape({})
 class W_Record(Value):
     type = Type.get('Record')
     __slots__ = ['shape', 'values']
+    _immutable_fields_ = ['values'] # values doesn't *change*...its contents does!
 
-    # TODO should records be immutable?
+    # TODO language semantics: should record contents be immutable?
 
     def __init__(self, keys, values):
         self.shape = Shape.get(keys)
@@ -350,6 +349,7 @@ class W_Record(Value):
 
     def lookup(self, key):
         assert isinstance(key, Symbol)
+        # Consider promoting self.shape ? might be a trace-constant tbh
         index = self.shape.lookup(key)
         if index == -1:
             raise KeyError(key)
@@ -381,7 +381,7 @@ class Frame:
         assert isinstance(shape, Shape)
         self.shape = shape
 
-        values = [None] * shape.size()
+        values = [None] * shape.size
         make_sure_not_resized(values)
         self._values = values
 
@@ -419,7 +419,7 @@ class Frame:
 
 class Func: # TODO naming
     """a Block plus arg names ??"""
-    _immutable_fields_ = ['original_body', 'shape', 'arg_length']
+    _immutable_fields_ = ['body', 'original_body', 'shape', 'arg_length']
 
     def __init__(self, arg_names, body):
         #assert isinstance(body, Tree)
