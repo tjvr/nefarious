@@ -223,7 +223,7 @@ class Load(Node):
 
         index = self.index
         jit.promote(index)
-        return frame.lookup_offset(index)
+        return frame.lookup(index)
 
     def sexpr(self):
         return self.name.sexpr()
@@ -261,7 +261,7 @@ class Let(Node):
         value = self.value.evaluate(frame)
         index = self.index
         jit.promote(index)
-        frame.set_offset(index, value)
+        frame.set(index, value)
 
     def sexpr(self):
         return "(let " + self.name.sexpr() + " " + self.value.sexpr() + ")"
@@ -292,7 +292,7 @@ class NewCell(Node):
         index = self.index
         jit.promote(index)
         cell = W_Var(Value.NULL)
-        frame.set_offset(index, cell)
+        frame.set(index, cell)
         return cell
 
 
@@ -368,7 +368,7 @@ class Define(Node):
         closure = W_Func(frame, self.func)
         index = self.index
         jit.promote(index)
-        frame.set_offset(index, closure)
+        frame.set(index, closure)
         return None
 
     def sexpr(self):
@@ -446,7 +446,7 @@ class Call(Node):
 
         frame = Frame(scope, func.shape)
         for index, value in enumerate(arguments):
-            frame.set_offset(index, value)
+            frame.set(index, value)
 
         call_driver.jit_merge_point(self=self, frame=frame, scope=scope, func=func, arguments=arguments)
 

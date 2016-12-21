@@ -374,6 +374,7 @@ class Frame:
     _immutable_fields_ = ['parent', 'shape']
 
     def __init__(self, parent, shape):
+        # TODO Call.evaluate_arguments ignores this hint!
         self = jit.hint(self, access_directly=True, fresh_virtualizable=True)
 
         self.parent = parent # from Closure
@@ -387,14 +388,14 @@ class Frame:
         #self.stack = [] # for threading TODO
         #self.calls = [] # for threading
 
-    def set_offset(self, index, value):
+    def set(self, index, value):
         # Can assign each slot exactly once.
         jit.promote(index)
         values = self._values
         assert 0 <= index < len(values)
         values[index] = value
 
-    def lookup_offset(self, index):
+    def lookup(self, index):
         jit.promote(index)
         values = self._values
         assert 0 <= index < len(values)
