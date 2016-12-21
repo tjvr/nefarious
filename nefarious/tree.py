@@ -90,7 +90,6 @@ class Block(Node):
     @jit.unroll_safe
     def evaluate(self, frame):
         value = None
-        jit.promote(self.nodes) # assume replace_child won't happen in traced code
         for node in self.nodes:
             value = node.evaluate(frame)
         return value
@@ -142,8 +141,9 @@ class ListLiteral(Node):
 
     @jit.unroll_safe
     def evaluate(self, frame):
-        jit.promote(self.items)
-        return W_List([item.evaluate(frame) for item in self.items])
+        items = self.items
+        jit.promote(items)
+        return W_List([item.evaluate(frame) for item in items])
 
 
 class RecordLiteral(Node):
@@ -177,10 +177,12 @@ class RecordLiteral(Node):
 
     @jit.unroll_safe
     def evaluate(self, frame):
-        # Can't promote self.keys because it doesn't unify!
-        jit.promote(self.values)
+        keys = self.keys
+        values = self.values
+        #jit.promote(keys)
+        jit.promote(values)
         eval_values = [item.evaluate(frame) for item in self.values]
-        return W_Record(self.keys, eval_values)
+        return W_Record(keys, eval_values)
 
 
 
@@ -256,7 +258,6 @@ class Let(Node):
         self.value = other
 
     def evaluate(self, frame):
-        jit.promote(self.value)
         value = self.value.evaluate(frame)
         index = self.index
         jit.promote(index)
@@ -308,7 +309,6 @@ class LoadCell(Node):
         return "(get " + self.cell.sexpr() + ")"
 
     def evaluate(self, frame):
-        jit.promote(self.cell)
         cell = self.cell.evaluate(frame)
         assert isinstance(cell, W_Var)
         value = cell.get()
@@ -338,10 +338,8 @@ class StoreCell(Node):
         return "(set " + self.cell.sexpr() + " " + self.value.sexpr() + ")"
 
     def evaluate(self, frame):
-        jit.promote(self.cell)
         cell = self.cell.evaluate(frame)
         assert isinstance(cell, W_Var)
-        jit.promote(self.value)
         value = self.value.evaluate(frame)
         if value is None: value = Value.NULL # TODO move this elsewhere
         cell.set(value)
@@ -395,7 +393,6 @@ class Lambda(Node):
     def children(self): return [self.func.body]
 
     def evaluate(self, frame):
-        jit.promote(self.func)
         closure = W_Func(frame, self.func)
         return closure
 
@@ -537,7 +534,6 @@ class GetAttr(Node):
         self.record = other
 
     def evaluate(self, frame):
-        jit.promote(self.record)
         record = self.record.evaluate(frame)
         assert isinstance(record, W_Record)
         return self.evaluate_record(record)
@@ -598,10 +594,8 @@ class SetAttr(Node):
             assert False
 
     def evaluate(self, frame):
-        jit.promote(self.record)
         record = self.record.evaluate(frame)
         assert isinstance(record, W_Record)
-        jit.promote(self.value)
         value = self.value.evaluate(frame)
         return self.evaluate_record(record, value)
 
