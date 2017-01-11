@@ -1,8 +1,8 @@
 from .tree import *
 
-def get_while_location(node, cond, body):
-    assert isinstance(node, Node)
-    return node.sexpr()
+def get_while_location(block, cond, self):
+    #assert isinstance(self, Node)
+    return self.sexpr()
 
 while_driver = jit.JitDriver(
     greens = ['body', 'cond', 'self'],

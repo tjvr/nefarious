@@ -28,9 +28,9 @@ def jitpolicy(driver):
     return JitPolicy()
 
 
-def get_location(node):
-    assert isinstance(node, Node)
-    return node.sexpr()
+def get_location(self):
+    #assert isinstance(self, Node)
+    return self.sexpr()
 
 
 # greens: loop constants. identify loop.                eg. code object & instruction pointer
@@ -181,7 +181,6 @@ class RecordLiteral(Node):
         jit.promote(self.values)
         eval_values = [item.evaluate(frame) for item in self.values]
         return W_Record(self.keys, eval_values)
-
 
 
 class Load(Node):

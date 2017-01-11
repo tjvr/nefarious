@@ -372,6 +372,7 @@ class W_Record(Value):
 class Frame:
     _virtualizable_ = ['values[*]']
     _immutable_fields_ = ['parent', 'shape']
+    # TODO consider making values immutable?
 
     def __init__(self, parent, shape):
         # TODO Call.evaluate_arguments ignores this hint!
