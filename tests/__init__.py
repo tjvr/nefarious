@@ -10,6 +10,7 @@ sys.path.append('./pypy/')
 from nefarious.types import *
 from nefarious.lex import Word
 from nefarious.grammar import *
+from nefarious.tree import *
 from nefarious.grammar import parse as language_parse
 del grammar
 
@@ -56,7 +57,7 @@ class TestGrammar(unittest.TestCase):
         @singleton
         class Null(Macro):
             def build(self, values, t):
-                return Word.NULL_WS
+                return WordNode(None) #Word.NULL_WS
         grammar.add(Word.WS, [], Null)
 
         LIST = Function('list')
