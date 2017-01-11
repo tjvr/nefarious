@@ -368,10 +368,15 @@ grammar.add(Seq.get(Arg), ws([Seq.get(Arg), Arg]), ContinueList)
 class LambdaMacro(Macro):
     current_definition_args = []
 
+    def _get_spec(self, values):
+        # cf. DefineMacro::_get_spec()
+        spec = values[2]
+        assert isinstance(spec, ListLiteral)
+        symbols = list(spec.items)
+        return symbols
+
     def enter(self, values, type_):
-        list_ = values[2]
-        assert isinstance(list_, W_List)
-        spec = list_.items
+        spec = self._get_spec(values)
 
         grammar.save()
 
@@ -522,6 +527,9 @@ class DynamicCallMacro(Macro):
         func = values[2]
         if len(values) > 3:
             arg = values[6]
+            # TODO currently only unary functions are supported;
+            # calling a function with the wrong number of arguments will cause
+            # a crash at runtime.
             return Call(func, [arg], type_)
         else:
             return Call(func, [], type_)

@@ -1,6 +1,7 @@
-- Record types
+- Record types @done
 - blocks
 - precedence groups
+- imports, *please*
 
 - inline bytecode-only functions
 
