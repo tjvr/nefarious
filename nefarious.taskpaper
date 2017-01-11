@@ -1,0 +1,38 @@
+- Record types
+- blocks
+- precedence groups
+
+- inline bytecode-only functions
+
+[ ] lower repeat to builtin
+[ ] Non local return from blocks
+[ ] Implement H-M / pt (in Nefarious?)
+[ ] Type Funcs?
+[ ] Type-checking.
+[ ] unroll_safe on Block?
+[ ] Avoid allocation of empty lists
+[ ] Promote array size when creating a W_List
+
+Benchmarks.
+	- fib @done
+	- @clg n-body @done
+	- nqueens
+	- richards?
+	
+	- @clg binary-trees @mp(sometimes)
+	- @clg mandelbrot @mp(nope)
+	- @clg reverse-complement @mp(nope)
+	- @clg spectral-norm @mp(yes)
+	
+	- @clg fasta
+		pretty complicated?
+	- @clg fannkuch-redux
+		looks messy
+	- @clg k-nucleotide
+		pretty large
+	
+	- @clg pidigits @nope
+		requires multi-precision arithmetic
+	- @clg regex-dna @nope
+		no regex engine!
+

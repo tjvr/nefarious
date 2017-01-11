@@ -264,7 +264,7 @@ class Shape:
 
     def __init__(self, names, previous=None):
         #assert isinstance(names, dict)
-        self.names = names
+        self.names = names # {}
         self._transitions = {}
         self.previous = previous
         self.size = len(self.names)
