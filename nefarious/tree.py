@@ -436,8 +436,27 @@ class Call(Node):
 
     @jit.unroll_safe
     def evaluate(self, frame):
-        closure = self.func_node.evaluate(frame)
+        func_node = self.func_node
+        closure = func_node.evaluate(frame)
         assert isinstance(closure, Closure)
+        func = closure.func
+        self.cached_closure = closure
+
+        # fast transition
+        call_count = self.call_count
+        if call_count > 0:
+            assert self.cached_closure
+            cached_closure = self.cached_closure
+            if closure is cached_closure:
+                new_call = StaticCall(func_node, self.args, self.type, closure, call_count)
+            elif func is cached_closure.func:
+                new_call = FuncCall(func_node, self.args, self.type, func, call_count)
+            else:
+                new_call = GenericCall(func_node, self.args, self.type, call_count)
+            self._replace(new_call)
+            return new_call.evaluate_closure(frame, closure.scope, func)
+
+        self.cached_closure = closure
         return self.evaluate_closure(frame, closure.scope, closure.func)
 
     @jit.unroll_safe
@@ -463,6 +482,71 @@ class Call(Node):
             result = ret.value
         return result
 
+
+class StaticCall(Call):
+    """Call always to the same closure instance"""
+    def __init__(self, func_node, args, type_, closure, call_count=0):
+        Call.__init__(self, func_node, args, type_, call_count)
+        assert isinstance(closure, Closure)
+        self.cached_closure = closure
+
+    @jit.unroll_safe
+    def evaluate(self, frame):
+        func_node = self.func_node
+        jit.promote(func_node) # nb. this could of course change
+        closure = func_node.evaluate(frame)
+        assert isinstance(closure, Closure)
+
+        # guard: closure
+        cached_closure = self.cached_closure
+        jit.promote(cached_closure) # immutable
+        jit.promote(closure)
+        if closure is not cached_closure: # guard
+            if closure.func is cached_closure.func:
+                new_call = FuncCall(self.func_node, self.args, self.type, closure.func, self.call_count)
+            else:
+                new_call = GenericCall(self.func_node, self.args, self.type, self.call_count)
+            self._replace(new_call)
+            return new_call.evaluate_closure(frame, closure.scope, closure.func)
+
+        # TODO inline body
+
+        return self.evaluate_closure(frame, closure.scope, closure.func)
+
+class FuncCall(Call):
+    """Call always to the same func body (but different closure scopes!)"""
+    def __init__(self, func_node, args, type_, func, call_count=0):
+        Call.__init__(self, func_node, args, type_, call_count)
+        assert isinstance(func, FuncDef)
+        self.cached_func = func
+
+    @jit.unroll_safe
+    def evaluate(self, frame):
+        closure = self.func_node.evaluate(frame)
+        assert isinstance(closure, Closure)
+
+        # guard: func
+        cached_func = self.cached_func
+        jit.promote(cached_func) # immutable
+        func = closure.func
+        jit.promote(func) # this is most of the point
+        if func is not cached_func:
+            new_call = GenericCall(self.func_node, self.args, self.type, self.call_count)
+            self._replace(new_call)
+            return new_call.evaluate_closure(frame, closure.scope, func)
+
+        # TODO inline body?
+
+        return self.evaluate_closure(frame, closure.scope, cached_func)
+
+class GenericCall(Call):
+    """A completely generic call"""
+
+    @jit.unroll_safe
+    def evaluate(self, frame):
+        closure = self.func_node.evaluate(frame)
+        assert isinstance(closure, Closure)
+        return self.evaluate_closure(frame, closure.scope, closure.func)
 
 
 # class Apply(Node):
