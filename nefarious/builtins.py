@@ -38,7 +38,7 @@ class Builtin(Node):
 class UnaryBuiltin(Builtin):
     #__slots__ = ['type', '_parent', 'child']
     def __init__(self, args, type_):
-        self._parent = None
+        Node.__init__(self)
         self.child, = args
         self.child.set_parent(self)
     def _args(self):
@@ -53,7 +53,7 @@ class UnaryBuiltin(Builtin):
 class InfixBuiltin(Builtin):
     #__slots__ = ['type', '_parent', 'left', 'right']
     def __init__(self, args, type_):
-        self._parent = None
+        Node.__init__(self)
         self.left, self.right = args
         self.left.set_parent(self)
         self.right.set_parent(self)
@@ -343,6 +343,7 @@ class IF_THEN_ELSE(Builtin):
     arg_types = [Bool, _a, _a]
 
     def __init__(self, values, type_):
+        Node.__init__(self)
         self.cond, self.tv, self.fv = values
         self.cond.set_parent(self)
         self.tv.set_parent(self)
@@ -374,6 +375,7 @@ class WHILE(Builtin):
     arg_types = [Bool, _Block]
 
     def __init__(self, values, type_):
+        Node.__init__(self)
         self.cond, block = values
         assert isinstance(self.cond, Node)
         self.cond.set_parent(self)

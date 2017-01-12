@@ -216,6 +216,7 @@ Spec = Internal.get('Spec')
 
 class ArgSpec(Node):
     def __init__(self, type_, word):
+        Node.__init__(self)
         assert isinstance(word, WordNode)
         assert isinstance(type_, Literal)
         w_type = type_.value
@@ -561,6 +562,7 @@ grammar.add(Line, ws_not_null([
 Pair = Internal.get('Pair')
 class KVPair(Node):
     def __init__(self, key, value):
+        Node.__init__(self)
         assert isinstance(key, Symbol)
         self.key = key
         self.value = value
@@ -748,6 +750,7 @@ def parse_and_run(source, debug=False):
     assert isinstance(tree, Sequence)
 
     print(tree.sexpr())
+    print("weight: " + str(tree.weight))
     #print(repr(tree))
     print
 

@@ -56,6 +56,7 @@ class Sequence(Node):
     _immutable_fields_ = ['nodes']
 
     def __init__(self, nodes):
+        Node.__init__(self)
         assert isinstance(nodes, list)
         self.nodes = nodes
         for node in nodes:
@@ -98,7 +99,7 @@ class Sequence(Node):
 class Literal(Node):
     _immutable_fields_ = ['value']
     def __init__(self, value, type_):
-        self._parent = None
+        Node.__init__(self)
         assert isinstance(value, Value)
         assert not isinstance(value, Node)
         self.value = value
@@ -119,7 +120,7 @@ class Literal(Node):
 
 class ListLiteral(Node):
     def __init__(self, items, type_):
-        self._parent = None
+        Node.__init__(self)
         assert isinstance(items, list)
         self.items = items
         self.type = type_
@@ -148,7 +149,7 @@ class ListLiteral(Node):
 class RecordLiteral(Node):
     type = Type.get('Record')
     def __init__(self, keys, values, type_):
-        self._parent = None
+        Node.__init__(self)
         self.keys = keys
         self.values = values
         self.type = type_
@@ -184,7 +185,7 @@ class RecordLiteral(Node):
 
 class Load(Node):
     def __init__(self, name, type_):
-        self._parent = None
+        Node.__init__(self)
         assert isinstance(name, Name)
         self.name = name
         self.type = type_
@@ -228,7 +229,7 @@ class Load(Node):
 class Let(Node):
     """For let-bindings"""
     def __init__(self, name, value):
-        self._parent = None
+        Node.__init__(self)
         assert isinstance(name, Name)
         self.name = name
 
@@ -268,7 +269,7 @@ class NewCell(Node):
     type = Internal.get('Var')
 
     def __init__(self, name):
-        self._parent = None
+        Node.__init__(self)
         self.name = name
         self.index = -1
 
@@ -295,6 +296,7 @@ class NewCell(Node):
 
 class LoadCell(Node):
     def __init__(self, cell, type_):
+        Node.__init__(self)
         assert isinstance(cell, Node)
         self.cell = cell
         self.type = type_
@@ -316,6 +318,7 @@ class LoadCell(Node):
 
 class StoreCell(Node):
     def __init__(self, cell, value):
+        Node.__init__(self)
         self.cell = cell
         cell.set_parent(self)
         self.value = value
@@ -348,7 +351,7 @@ class StoreCell(Node):
 class Define(Node):
     """A little like `let rec` I suppose"""
     def __init__(self, name, func):
-        self._parent = None
+        Node.__init__(self)
         assert isinstance(name, Name)
         self.name = name
         self.func = func
@@ -379,7 +382,7 @@ class Lambda(Node):
     type = Type.FUNC
 
     def __init__(self, func):
-        self._parent = None
+        Node.__init__(self)
         assert isinstance(func, FuncDef)
         self.func = func
 
@@ -403,7 +406,7 @@ class Lambda(Node):
 
 class Call(Node):
     def __init__(self, func_node, args, type_, call_count=0):
-        self._parent = None
+        Node.__init__(self)
         assert isinstance(func_node, Node)
         #assert func_node.type == Type.FUNC
         self.func_node = func_node
@@ -551,7 +554,7 @@ class GenericCall(Call):
 
 # class Apply(Node):
 #     def __init__(self, func, arg_list, type_):
-#         self._parent = None
+#         Node.__init__(self)
 #         self.func = func
 #         self.arg_list = arg_list
 #         func.set_parent(self)
@@ -587,7 +590,7 @@ class GenericCall(Call):
 
 class Return(Node):
     def __init__(self, child):
-        self._parent = None
+        Node.__init__(self)
         self.child = child
         child.set_parent(self)
 
@@ -609,7 +612,7 @@ class Return(Node):
 class GetAttr(Node):
     type = Generic.ALPHA
     def __init__(self, symbol, record):
-        self._parent = None
+        Node.__init__(self)
         self.symbol = symbol
         self.record = record
         record.set_parent(self)
@@ -665,7 +668,7 @@ class GetAttrGeneric(GetAttr):
 
 class SetAttr(Node):
     def __init__(self, symbol, record, value):
-        self._parent = None
+        Node.__init__(self)
         self.symbol = symbol
         self.record = record
         record.set_parent(self)

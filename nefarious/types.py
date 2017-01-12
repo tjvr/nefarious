@@ -356,8 +356,18 @@ class Node:
     #__slots__ = ['type', '_parent']
     # TODO make more memory-efficient
 
+    def __init__(self):
+        self._parent = None
+        self.weight = 1
+
+    def weight_change(self, delta):
+        self.weight += delta
+        if self._parent:
+            self._parent.weight_change(delta)
+
     def set_parent(self, parent):
         self._parent = parent
+        parent.weight_change(self.weight)
 
     def compile(self, stack):
         for child in self.children():
@@ -368,6 +378,7 @@ class Node:
         parent = self._parent
         #self._parent = None # TODO omit
         parent.replace_child(self, other)
+        parent.weight_change(other.weight - self.weight)
         other._parent = parent
 
     def replace_child(self, child, other):
@@ -386,6 +397,7 @@ class Node:
 class WordNode(Node):
     type = Type.WORD
     def __init__(self, word):
+        self.weight = 0
         self.word = word
 
     def sexpr(self):
