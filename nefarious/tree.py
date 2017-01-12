@@ -402,26 +402,31 @@ class Lambda(Node):
 
 
 class Call(Node):
-    def __init__(self, func, args, type_):
+    def __init__(self, func_node, args, type_, call_count=0):
         self._parent = None
-        self.func = func
+        assert isinstance(func_node, Node)
+        #assert func_node.type == Type.FUNC
+        self.func_node = func_node
         self.args = args
         self.type = type_
-        func.set_parent(self)
+        func_node.set_parent(self)
+        # nb. does this require jit.unroll_safe ?
         for arg in args:
             assert isinstance(arg, Node)
             arg.set_parent(self)
-        self.type = type_
+        self.call_count = call_count
+        self.cached_func = None
+        self.cached_closure = None
 
-    def copy(self): return Call(self.func.copy(), [a.copy() for a in self.args], self.type)
-    def children(self): return [self.func] + self.args
+    def copy(self): return Call(self.func_node.copy(), [a.copy() for a in self.args], self.type)
+    def children(self): return [self.func_node] + self.args
 
     def sexpr(self):
-        return "(" + self.func.sexpr() + " " + " ".join([a.sexpr() for a in self.args]) + ")"
+        return "(" + self.func_node.sexpr() + " " + " ".join([a.sexpr() for a in self.args]) + ")"
 
     def replace_child(self, child, other):
-        if child is self.func:
-            self.func = other
+        if child is self.func_node:
+            self.func_node = other
             return
         for index in range(len(self.args)):
             if self.args[index] is child:
@@ -431,21 +436,20 @@ class Call(Node):
 
     @jit.unroll_safe
     def evaluate(self, frame):
-        closure = self.func.evaluate(frame)
-        # TODO try and promote closure
+        closure = self.func_node.evaluate(frame)
         assert isinstance(closure, Closure)
-        scope = closure.scope
-        func = closure.func
-        # TODO try and promote func
+        return self.evaluate_closure(frame, closure.scope, closure.func)
+
+    @jit.unroll_safe
+    def evaluate_closure(self, frame, scope, func):
         assert len(self.args) == func.arg_length
-
         arguments = [arg.evaluate(frame) for arg in self.args]
-
         return self.evaluate_arguments(arguments, scope, func)
 
     @jit.unroll_safe
     def evaluate_arguments(self, arguments, scope, func):
         make_sure_not_resized(arguments)
+        self.call_count += 1
 
         frame = Frame(scope, func.shape)
         for index, value in enumerate(arguments):
@@ -458,9 +462,6 @@ class Call(Node):
         except ReturnValue as ret: # TODO opt
             result = ret.value
         return result
-
-    def sexpr(self):
-        return "(" + self.func.sexpr() + " " + " ".join([a.sexpr() for a in self.args]) + ")"
 
 
 
@@ -564,6 +565,7 @@ class GetAttrOffset(GetAttr):
         jit.promote(shape)
         if record.shape is not shape:
             other = GetAttrGeneric(self.symbol, self.record)
+            # TODO rewrite
             return other.evaluate_record(record)
 
         index = self.index
@@ -627,6 +629,7 @@ class SetAttrOffset(SetAttr):
         jit.promote(shape)
         if record.shape is not shape:
             other = SetAttrGeneric(self.symbol, self.record, self.value)
+            # TODO rewrite
             return other.evaluate_record(record, value)
 
         index = self.index

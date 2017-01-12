@@ -368,6 +368,7 @@ class IF_THEN_ELSE(Builtin):
             return fv.evaluate(frame)
         assert False
 
+
 class WHILE(Builtin):
     type = _Line
     arg_types = [Bool, _Block]

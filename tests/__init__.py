@@ -44,8 +44,8 @@ class TestGrammar(unittest.TestCase):
 
         # Get old Call init, too
         self.old_init = Call.__init__
-        def init(self, func, args, t=None):
-            self.func = func
+        def init(self, func_node, args, t=None):
+            self.func_node = func_node
             self.args = args
         Call.__init__ = init
 
