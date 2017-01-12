@@ -6,9 +6,6 @@ from .lex import Word, Lexer
 from .tree import *
 from .builtins import Builtin
 
-def Function(name):
-    return Name(name)
-
 
 
 #---------------
@@ -181,15 +178,15 @@ class BlockMacro(Macro):
     def build(self, values, type_):
         children = values[2]
         if isinstance(children, ListLiteral):
-            return Block(children.items)
+            return Sequence(children.items)
         else:
-            return Block([children])
+            return Sequence([children])
 grammar.add(Type.BLOCK, [Word.word("{"), Internal.SEP, Seq.get(Line), Internal.SEP, Word.word("}")], BlockMacro)
 
 @singleton
 class EmptyBlock(Macro):
     def build(self, values, type_):
-        return Block([])
+        return Sequence([])
 grammar.add(Type.BLOCK, [Word.word("{"), Word.word("}")], EmptyBlock)
 
 
@@ -199,7 +196,7 @@ class Program(Macro):
     def build(self, values, type_):
         list_ = values[1]
         assert isinstance(list_, ListLiteral)
-        return Block(list_.items)
+        return Sequence(list_.items)
 grammar.add(Type.PROGRAM, [Internal.SEP, Seq.get(Line), Internal.SEP], Program)
 
 
@@ -270,7 +267,7 @@ class DefineMacro(Macro):
             else:
                 assert isinstance(s, WordNode)
                 debug_name += s.word.value
-        func = Function(debug_name)
+        func = Name(debug_name)
         DefineMacro.current_definitions.append(func)
 
         # Define arguments
@@ -294,7 +291,7 @@ class DefineMacro(Macro):
 
         # Type check
         body = values[-1]
-        assert isinstance(body, Block)
+        assert isinstance(body, Sequence)
         if len(body.nodes) == 0: # empty block
             type_ = Line # ??
         elif len(body.nodes) == 1:
@@ -330,7 +327,7 @@ class DefineMacro(Macro):
         body = values[4]
 
         #return Let(name, Lambda(arg_names, body))
-        return Define(name, Func(arg_names, body))
+        return Define(name, FuncDef(arg_names, body))
 
 
 class CallMacro(Macro):
@@ -343,7 +340,7 @@ class CallMacro(Macro):
         args = [values[i] for i in self.arg_indexes]
 
         # Block -> Func
-        args = [(Lambda(Func([], arg)) if isinstance(arg, Block) else arg) for arg in args]
+        args = [(Lambda(FuncDef([], arg)) if isinstance(arg, Sequence) else arg) for arg in args]
 
         # TODO Uneval -> Func
 
@@ -398,8 +395,8 @@ class LambdaMacro(Macro):
     def build(self, values, type_):
         arg_names = LambdaMacro.current_definition_args.pop()
         body = values[4]
-        assert isinstance(body, Block)
-        return Lambda(Func(arg_names, body))
+        assert isinstance(body, Sequence)
+        return Lambda(FuncDef(arg_names, body))
 
 grammar.add(Type.FUNC, ws([
     Word.word("fun"), Seq.get(Arg), Type.BLOCK,
@@ -541,6 +538,9 @@ grammar.add(Generic.ALPHA, ws_not_null([
     Word.word("call"), Type.FUNC, Word.word("with"), Type.ANY
 ]), DynamicCallMacro)
 
+grammar.add(Line, ws_not_null([
+    Word.word("run"), Type.FUNC # TODO Type.BLOCK
+]), DynamicCallMacro)
 
 # @singleton
 # class ApplyMacro(Macro):
@@ -743,7 +743,7 @@ def parse_and_run(source, debug=False):
     assert isinstance(tree, Node)
     if isinstance(tree, Error):
         return tree.message
-    assert isinstance(tree, Block)
+    assert isinstance(tree, Sequence)
 
     print(tree.sexpr())
     #print(repr(tree))
@@ -753,7 +753,6 @@ def parse_and_run(source, debug=False):
     tree.compile(stack)
     shape = stack.pop()
 
-    main = Func([], None)
     root = Frame(None, shape)
 
     retval = tree.evaluate(root)

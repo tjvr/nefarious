@@ -377,7 +377,7 @@ class WHILE(Builtin):
         self.cond, self.body = values
         assert isinstance(self.cond, Node)
         self.cond.set_parent(self)
-        assert isinstance(self.body, Block)
+        assert isinstance(self.body, Sequence)
         self.body.set_parent(self)
 
     def _args(self):

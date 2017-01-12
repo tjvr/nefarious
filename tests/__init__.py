@@ -16,6 +16,9 @@ del grammar
 
 SELF_PATH = os.path.dirname(os.path.abspath(__file__))
 
+def Function(x):
+    return Name(x)
+
 
 @contextmanager
 def captured_output():

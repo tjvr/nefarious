@@ -52,9 +52,8 @@ from .values import *
 
 # TODO annotate nodes with SourceSections
 
-class Block(Node):
+class Sequence(Node):
     _immutable_fields_ = ['nodes']
-    # TODO W_Block ??
 
     def __init__(self, nodes):
         assert isinstance(nodes, list)
@@ -69,7 +68,7 @@ class Block(Node):
         return self.nodes
 
     def copy(self):
-        return Block([n.copy() for n in self.nodes])
+        return Sequence([n.copy() for n in self.nodes])
 
     def replace_child(self, child, other):
         for index in range(len(self.nodes)):
@@ -79,7 +78,7 @@ class Block(Node):
         assert False
 
     def __repr__(self):
-        return "Block({!r})".format(self.nodes)
+        return "Sequence({!r})".format(self.nodes)
 
     def sexpr(self):
         indent = "  "
@@ -366,7 +365,7 @@ class Define(Node):
         self.func.shape = stack.pop()
 
     def evaluate(self, frame):
-        closure = W_Func(frame, self.func)
+        closure = Closure(frame, self.func)
         index = self.index
         jit.promote(index)
         frame.set(index, closure)
@@ -381,7 +380,7 @@ class Lambda(Node):
 
     def __init__(self, func):
         self._parent = None
-        assert isinstance(func, Func)
+        assert isinstance(func, FuncDef)
         self.func = func
 
     def compile(self, stack):
@@ -390,12 +389,12 @@ class Lambda(Node):
         self.func.body.compile(stack)
         self.func.shape = stack.pop()
 
-    def copy(self): return Lambda(Func(self.func.shape.names_list(), self.func.body.copy()))
+    def copy(self): return Lambda(FuncDef(self.func.shape.names_list(), self.func.body.copy()))
     def children(self): return [self.func.body]
 
     def evaluate(self, frame):
         jit.promote(self.func)
-        closure = W_Func(frame, self.func)
+        closure = Closure(frame, self.func)
         return closure
 
     def sexpr(self):
@@ -433,9 +432,11 @@ class Call(Node):
     @jit.unroll_safe
     def evaluate(self, frame):
         closure = self.func.evaluate(frame)
-        assert isinstance(closure, W_Func)
+        # TODO try and promote closure
+        assert isinstance(closure, Closure)
         scope = closure.scope
         func = closure.func
+        # TODO try and promote func
         assert len(self.args) == func.arg_length
 
         arguments = [arg.evaluate(frame) for arg in self.args]
@@ -483,7 +484,7 @@ class Call(Node):
 # 
 #     def evaluate(self, frame):
 #         closure = self.func.evaluate(frame)
-#         assert isinstance(closure, W_Func)
+#         assert isinstance(closure, Closure)
 # 
 #         arg_list = self.arg_list.evaluate(frame)
 #         assert isinstance(arg_list, list)

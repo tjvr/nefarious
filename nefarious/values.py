@@ -418,13 +418,22 @@ class Frame:
         ]) + "]"
 
 
-class Func: # TODO naming
-    """a Block plus arg names ??"""
+class FuncDef:
+    """a Sequence of commands, plus some arg names.
+
+    As an optimisation, the FuncDef stores the Shape, so that all Frames for this
+    function will share the same memory layout. Space in the frame is reserved
+    within compile().
+
+    Therefore this is mostly a way of sharing the arg names and Shape across
+    multiple Closures.
+    """
+    __slots__ = ['body', 'original_body', 'shape', 'arg_length']
     _immutable_fields_ = ['body', 'original_body', 'shape', 'arg_length']
 
     def __init__(self, arg_names, body):
-        #assert isinstance(body, Tree)
-        #assert isinstance(body, Block)
+        from .tree import Sequence
+        assert isinstance(body, Sequence)
         self.body = body
         self.original_body = None if body is None else body.copy()
 
@@ -436,7 +445,7 @@ class Func: # TODO naming
         return " ".join([n.sexpr() for n in self.shape.names]) + " " + self.body.sexpr()
 
 
-class W_Func(Value): # TODO naming
+class Closure(Value):
     """a Closure: function + scope"""
     type = Type.get('Func')
     __slots__ = ['scope', 'func']
@@ -446,7 +455,7 @@ class W_Func(Value): # TODO naming
         # for accessing names from outer scopes
         assert isinstance(scope, Frame)
         self.scope = scope
-
+        assert isinstance(func, FuncDef)
         self.func = func
 
     def sexpr(self):
