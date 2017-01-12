@@ -369,28 +369,40 @@ class IF_THEN_ELSE(Builtin):
         assert False
 
 class WHILE(Builtin):
-    # TODO move to preamble
     type = _Line
     arg_types = [Bool, _Block]
 
     def __init__(self, values, type_):
-        self.cond, self.body = values
+        self.cond, block = values
         assert isinstance(self.cond, Node)
         self.cond.set_parent(self)
-        assert isinstance(self.body, Sequence)
-        self.body.set_parent(self)
+        self.block = block
+        assert isinstance(block, Lambda)
+        seq = block.func.body
+        assert isinstance(seq, Sequence)
+        self.seq = seq
+        seq.set_parent(self)
 
     def _args(self):
-        return [self.cond, self.body]
+        return [self.cond, self.block]
 
-    # TODO replace_child
+    # TODO replace_child ?
+
+    def children(self):
+        # WHILE takes a Block, but sneakily looks inside it and EXTRACTS the
+        # Sequence.
+        # It also shares the Frame with the parent scope, because ARGH.
+        return [self.cond, self.seq]
+
+        # TODO it is possible that defining new variables inside a WHILE loop
+        # is currently unsupported.
 
     def sexpr(self):
-        return "(WHILE " + self.cond.sexpr() + " " + self.body.sexpr() + ")"
+        return "(WHILE " + self.cond.sexpr() + " " + self.seq.sexpr() + ")"
 
     def evaluate(self, frame):
         cond = self.cond
-        body = self.body
+        body = self.seq
 
         while True:
             while_driver.jit_merge_point(self=self, cond=cond, body=body, frame=frame)

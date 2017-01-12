@@ -160,7 +160,7 @@ grammar.add(ALPHA, ws([Word.word("("), ALPHA, Word.word(")")]), Parens)
 
 # Lines
 
-Line = Type.get('Line')
+Line = Internal.get('Line')
 grammar.add(Line, [Type.ANY], Identity)
 
 grammar.add(Seq.get(Line), [], EmptyList)
@@ -170,23 +170,23 @@ grammar.add(Seq.get(Line), [Seq.get(Line), Internal.NLS, Line], ContinueList)
 
 # TODO allow newlines inside parens?
 
-
+def Block(nodes):
+    return Lambda(FuncDef([], Sequence(nodes)))
 
 # Blocks
 @singleton
 class BlockMacro(Macro):
     def build(self, values, type_):
         children = values[2]
-        if isinstance(children, ListLiteral):
-            return Sequence(children.items)
-        else:
-            return Sequence([children])
+        items = children.items if isinstance(children, ListLiteral) else [children]
+        return Block(items)
+
 grammar.add(Type.BLOCK, [Word.word("{"), Internal.SEP, Seq.get(Line), Internal.SEP, Word.word("}")], BlockMacro)
 
 @singleton
 class EmptyBlock(Macro):
     def build(self, values, type_):
-        return Sequence([])
+        return Block([])
 grammar.add(Type.BLOCK, [Word.word("{"), Word.word("}")], EmptyBlock)
 
 
@@ -250,8 +250,6 @@ class DefineMacro(Macro):
         return symbols
 
     def _arg_type(self, s):
-        if s.type == Type.get('Block'):
-            return Type.FUNC
         return s.type
 
     def enter(self, values, type_):
@@ -291,6 +289,8 @@ class DefineMacro(Macro):
 
         # Type check
         body = values[-1]
+        assert isinstance(body, Lambda)
+        body = body.func.body
         assert isinstance(body, Sequence)
         if len(body.nodes) == 0: # empty block
             type_ = Line # ??
@@ -325,6 +325,9 @@ class DefineMacro(Macro):
         name = DefineMacro.current_definitions.pop()
         arg_names = DefineMacro.current_definition_args.pop()
         body = values[4]
+        assert isinstance(body, Lambda)
+        body = body.func.body
+        assert isinstance(body, Sequence)
 
         #return Let(name, Lambda(arg_names, body))
         return Define(name, FuncDef(arg_names, body))
@@ -338,9 +341,6 @@ class CallMacro(Macro):
 
     def build(self, values, type_):
         args = [values[i] for i in self.arg_indexes]
-
-        # Block -> Func
-        args = [(Lambda(FuncDef([], arg)) if isinstance(arg, Sequence) else arg) for arg in args]
 
         # TODO Uneval -> Func
 
@@ -395,6 +395,8 @@ class LambdaMacro(Macro):
     def build(self, values, type_):
         arg_names = LambdaMacro.current_definition_args.pop()
         body = values[4]
+        assert isinstance(body, Lambda)
+        body = body.func.body
         assert isinstance(body, Sequence)
         return Lambda(FuncDef(arg_names, body))
 
@@ -539,7 +541,7 @@ grammar.add(Generic.ALPHA, ws_not_null([
 ]), DynamicCallMacro)
 
 grammar.add(Line, ws_not_null([
-    Word.word("run"), Type.FUNC # TODO Type.BLOCK
+    Word.word("run"), Type.BLOCK
 ]), DynamicCallMacro)
 
 # @singleton
