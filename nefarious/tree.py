@@ -65,11 +65,13 @@ class Sequence(Node):
             assert isinstance(node, Node), node
             node.set_parent(self)
 
-    def children(self):
-        return self.nodes
+    def _copy(self, transform): return Sequence([n.copy(transform) for n in self.nodes])
+    def children(self): return self.nodes
 
-    def copy(self):
-        return Sequence([n.copy() for n in self.nodes])
+    @classmethod
+    def _test_cases(cls):
+        yield Sequence([])
+        yield Sequence([Literal._TEST_INT])
 
     def replace_child(self, child, other):
         for index in range(len(self.nodes)):
@@ -105,8 +107,12 @@ class Literal(Node):
         self.value = value
         self.type = type_
 
-    def copy(self): return Literal(self.value, self.type)
+    def _copy(self, transform): return Literal(self.value, self.type)
     def children(self): return []
+
+    @classmethod
+    def _test_cases(cls):
+        yield cls._TEST_INT
 
     def __repr__(self):
         return "Literal({!r})".format(self.value)
@@ -117,6 +123,7 @@ class Literal(Node):
     def evaluate(self, frame):
         return self.value
 
+Literal._TEST_INT = Literal(W_Int.fromint(42), Type.get('Int'))
 
 class ListLiteral(Node):
     def __init__(self, items, type_):
@@ -127,8 +134,12 @@ class ListLiteral(Node):
         for item in items:
             item.set_parent(self)
 
-    def copy(self): return ListLiteral([n.copy() for n in self.items], self.type)
+    def _copy(self, transform): return ListLiteral([n.copy(transform) for n in self.items], self.type)
     def children(self): return self.items
+
+    @classmethod
+    def _test_cases(cls):
+        yield cls([Literal._TEST_INT], List.get(Type.get('Int')))
 
     def replace_child(self, child, other):
         index = self.items.index(child)
@@ -158,7 +169,7 @@ class RecordLiteral(Node):
         for item in values:
             item.set_parent(self)
 
-    def copy(self): return RecordLiteral(self.keys, [n.copy() for n in self.values], self.type)
+    def _copy(self, transform): return RecordLiteral(self.keys, [n.copy(transform) for n in self.values], self.type)
     def children(self): return self.values
 
     def replace_child(self, child, other):
@@ -203,8 +214,12 @@ class Load(Node):
         else:
             raise ValueError(self.name)
 
-    def copy(self): return Load(self.name, self.type)
+    def _copy(self, transform): return Load(self.name, self.type)
     def children(self): return []
+
+    @classmethod
+    def _test_cases(cls):
+        yield cls(Name("quxx"), Type.get('Int'))
 
     def __repr__(self):
         return "Load({!r})".format(self.name)
@@ -244,8 +259,12 @@ class Let(Node):
         self.index, shape = shape.lookup_or_insert(self.name)
         stack.append(shape)
 
-    def copy(self): return Let(self.name, self.value.copy())
+    def _copy(self, transform): return Let(self.name, self.value.copy(transform))
     def children(self): return [self.value]
+
+    @classmethod
+    def _test_cases(cls):
+        yield cls(Name("quxx"), Literal._TEST_INT)
 
     def __repr__(self):
         return "Let({!r}, {!r})".format(self.name, self.value)
@@ -278,8 +297,12 @@ class NewCell(Node):
         self.index, shape = shape.lookup_or_insert(self.name)
         stack.append(shape)
 
-    def copy(self): return NewCell(self.name)
+    def _copy(self, transform): return NewCell(self.name)
     def children(self): return []
+
+    @classmethod
+    def _test_cases(cls):
+        yield cls(Name("x"))
 
     def sexpr(self):
         return "(var " + self.name.sexpr() + ")"
@@ -301,8 +324,12 @@ class LoadCell(Node):
         self.cell = cell
         self.type = type_
 
-    def copy(self): return LoadCell(self.cell, self.type)
+    def _copy(self, transform): return LoadCell(self.cell.copy(transform), self.type)
     def children(self): return [self.cell]
+
+    @classmethod
+    def _test_cases(cls):
+        yield cls(Load(Name("x"), Type.VAR), Type.get('Int'))
 
     def sexpr(self):
         return "(get " + self.cell.sexpr() + ")"
@@ -324,8 +351,12 @@ class StoreCell(Node):
         self.value = value
         value.set_parent(self)
 
-    def copy(self): return StoreCell(self.cell, self.value.copy())
+    def _copy(self, transform): return StoreCell(self.cell.copy(transform), self.value.copy(transform))
     def children(self): return [self.cell, self.value]
+
+    @classmethod
+    def _test_cases(cls):
+        yield cls(Load(Name("x"), Type.VAR), Literal._TEST_INT)
 
     def replace_child(self, child, other):
         if child is self.value:
@@ -356,6 +387,13 @@ class Define(Node):
         self.name = name
         self.func = func
         self.index = -1
+
+    def _copy(self, transform): return Define(self.name, FuncDef(self.func.shape.names_list(), self.func.body.copy(transform)))
+    def children(self): return [self.func.body]
+
+    @classmethod
+    def _test_cases(cls):
+        yield cls(Name("f"), FuncDef([], Sequence([Literal._TEST_INT])))
 
     def compile(self, stack):
         shape = stack.pop()
@@ -392,8 +430,12 @@ class Lambda(Node):
         self.func.body.compile(stack)
         self.func.shape = stack.pop()
 
-    def copy(self): return Lambda(FuncDef(self.func.shape.names_list(), self.func.body.copy()))
+    def _copy(self, transform): return Lambda(FuncDef(self.func.shape.names_list(), self.func.body.copy(transform)))
     def children(self): return [self.func.body]
+
+    @classmethod
+    def _test_cases(cls):
+        yield cls(FuncDef([], Sequence([Literal._TEST_INT])))
 
     def evaluate(self, frame):
         jit.promote(self.func)
@@ -421,7 +463,12 @@ class Call(Node):
         self.cached_func = None
         self.cached_closure = None
 
-    def copy(self): return Call(self.func_node.copy(), [a.copy() for a in self.args], self.type)
+    @classmethod
+    def _test_cases(cls):
+        yield cls(Load(Name("f"), Type.FUNC), [], Type.get('Int'))
+        yield cls(Load(Name("f"), Type.FUNC), [Literal._TEST_INT], Type.get('Int'))
+
+    def _copy(self, transform): return Call(self.func_node.copy(transform), [a.copy(transform) for a in self.args], self.type)
     def children(self): return [self.func_node] + self.args
 
     def sexpr(self):
@@ -493,6 +540,13 @@ class StaticCall(Call):
         assert isinstance(closure, Closure)
         self.cached_closure = closure
 
+    @classmethod
+    def _test_cases(cls):
+        return [] # TODO
+        # closure = None
+        # yield cls(Load(Name("f"), Type.FUNC), [], Type.get('Int'), closure)
+        # yield cls(Load(Name("f"), Type.FUNC), [Literal._TEST_INT], Type.get('Int'), closure)
+
     @jit.unroll_safe
     def evaluate(self, frame):
         func_node = self.func_node
@@ -522,6 +576,12 @@ class FuncCall(Call):
         Call.__init__(self, func_node, args, type_, call_count)
         assert isinstance(func, FuncDef)
         self.cached_func = func
+
+    @classmethod
+    def _test_cases(cls):
+        func = FuncDef([], Sequence([Literal._TEST_INT]))
+        yield cls(Load(Name("f"), Type.FUNC), [], Type.get('Int'), func)
+        yield cls(Load(Name("f"), Type.FUNC), [Literal._TEST_INT], Type.get('Int'), func)
 
     @jit.unroll_safe
     def evaluate(self, frame):
@@ -594,7 +654,7 @@ class Return(Node):
         self.child = child
         child.set_parent(self)
 
-    def copy(self): return Return(self.child.copy())
+    def _copy(self, transform): return Return(self.child.copy(transform))
     def children(self): return [self.child]
 
     def replace_child(self, child, other):
@@ -617,7 +677,7 @@ class GetAttr(Node):
         self.record = record
         record.set_parent(self)
 
-    def copy(self): return GetAttr(self.symbol, self.record.copy())
+    def _copy(self, transform): return GetAttr(self.symbol, self.record.copy(transform))
     def children(self): return [self.record]
 
     def replace_child(self, record, other):
@@ -675,7 +735,7 @@ class SetAttr(Node):
         self.value = value
         value.set_parent(self)
 
-    def copy(self): return SetAttr(self.symbol, self.record.copy(), self.value.copy())
+    def _copy(self, transform): return SetAttr(self.symbol, self.record.copy(transform), self.value.copy(transform))
     def children(self): return [self.record, self.value]
 
     def replace_child(self, child, other):
@@ -728,4 +788,10 @@ class SetAttrGeneric(SetAttr):
         symbol = self.symbol
         jit.promote(symbol)
         record.set(symbol, value)
+
+
+#------------------------------------------------------------------------------
+
+class Transform:
+    pass
 

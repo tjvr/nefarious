@@ -350,7 +350,7 @@ Type.VAR = Internal.get('Var')
 
 
 
-class Node:
+class Node(object):
     type = None
     #_immutable_fields_ = ['type'] #...
     #__slots__ = ['type', '_parent']
@@ -387,11 +387,18 @@ class Node:
     def evaluate(self, frame):
         raise NotImplementedError
 
-    def copy(self):
+    def _copy(self, transform):
         raise NotImplementedError, self
 
     def children(self):
         raise NotImplementedError, self
+
+    def copy(self, transform=None):
+        if transform is None:
+            return self._copy(None)
+        from .tree import Transform
+        assert isinstance(transform, Transform)
+        return transform.transform(self)
 
 
 class WordNode(Node):
@@ -403,6 +410,9 @@ class WordNode(Node):
     def sexpr(self):
         # should only fire in tests
         return self.word.sexpr()
+
+    def set_parent(self, parent):
+        pass
 
 
 class Error(Node):

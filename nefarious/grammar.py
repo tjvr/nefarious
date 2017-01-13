@@ -315,6 +315,7 @@ class DefineMacro(Macro):
                 arg_indexes.append(arg_names.index(arg.name))
             arg_arg_indexes = [index for index, s in enumerate(spec) if self._is_arg(s)]
             macro = BuiltinMacro(node.__class__, [arg_arg_indexes[i] for i in arg_indexes])
+
         grammar.add(type_, symbols, macro)
 
     def _macro(self, spec, func):
@@ -348,8 +349,8 @@ class CallMacro(Macro):
         return Call(Load(self.call, Type.FUNC), args, type_)
 
 
-grammar.add(Line, ws_not_null([Word.word("define"), Seq.get(Spec), Type.BLOCK,]), DefineMacro)
-grammar.add(Line, ws_not_null([Word.word("defprim"), Seq.get(Spec), Type.BLOCK,]), DefineMacro)
+grammar.add(Line, ws_not_null([Word.word("define"), Seq.get(Spec), Type.BLOCK]), DefineMacro)
+grammar.add(Line, ws_not_null([Word.word("defprim"), Seq.get(Spec), Type.BLOCK]), DefineMacro)
 
 
 

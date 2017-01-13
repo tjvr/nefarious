@@ -14,6 +14,8 @@ from nefarious.tree import *
 from nefarious.grammar import parse as language_parse
 del grammar
 
+from .tree import CopyTests
+
 SELF_PATH = os.path.dirname(os.path.abspath(__file__))
 
 def Function(x):

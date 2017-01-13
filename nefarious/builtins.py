@@ -25,11 +25,24 @@ class Builtin(Node):
     def _args(self):
         raise NotImplementedError
 
+    @classmethod
+    def _test_cases(cls):
+        values = {
+            Type.ANY: W_Text.fromstr("foo"),
+            Text: W_Text.fromstr("foo"),
+            List.get(Text): W_List([W_Text.fromstr("foo")]),
+            List.get(Generic.ALPHA): W_List([W_Int.fromint(i) for i in range(5)]),
+            Int: W_Int.fromint(42),
+            Float: W_Float(3.142),
+            Bool: W_Bool.FALSE,
+        }
+        yield cls([Literal(values[t], t) for t in cls.arg_types], cls.type)
+
     def sexpr(self):
         return "(" + self.__class__.__name__ + " " + " ".join([a.sexpr() for a in self._args()]) + ")"
 
-    def copy(self):
-        return self.__class__([a.copy() for a in self._args()], self.type)
+    def _copy(self, transform):
+        return self.__class__([a.copy(transform) for a in self._args()], self.type)
 
     def children(self):
         return self._args()
@@ -352,6 +365,11 @@ class IF_THEN_ELSE(Builtin):
     def _args(self):
         return [self.cond, self.tv, self.fv]
 
+    @classmethod
+    def _test_cases(cls):
+        # TODO test IF
+        return []
+
     # TODO replace_child
 
     def sexpr(self):
@@ -388,6 +406,12 @@ class WHILE(Builtin):
 
     def _args(self):
         return [self.cond, self.block]
+
+    @classmethod
+    def _test_cases(cls):
+        # TODO test WHILE
+        return []
+        #yield WHILE([Literal(W_Bool.TRUE, Bool), Block], _Line)
 
     # TODO replace_child ?
 
@@ -433,6 +457,11 @@ class LIST_ADD(InfixBuiltin):
         item = self.right.evaluate(frame)
         assert isinstance(list_, W_List)
         list_.items().append(item)
+
+    @classmethod
+    def _test_cases(cls):
+        # TODO test LIST_ADD
+        return []
 
 class LIST_GET(InfixBuiltin):
     type = _a
