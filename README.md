@@ -93,5 +93,7 @@ them already):
 
 For making the JIT (`make nfsj`), you'll need to run:
 
-    sudo apt-get install libffi-dev
+    sudo apt-get install libffi-dev pkg-config
+
+<s>Installing `pypy` is recommended (builds might be faster).</s>
 
