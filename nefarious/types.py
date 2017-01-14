@@ -359,6 +359,7 @@ class Node(object):
     def __init__(self):
         self._parent = None
         self.weight = 1
+        self._parents = [] # DEBUG
 
     def weight_change(self, delta):
         self.weight += delta
@@ -367,9 +368,11 @@ class Node(object):
 
     def set_parent(self, parent):
         self._parent = parent
+        self._parents.append(parent) # DEBUG
         parent.weight_change(self.weight)
 
     def compile(self, stack):
+        #print 'c', self
         for child in self.children():
             child.compile(stack)
 

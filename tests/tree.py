@@ -25,11 +25,14 @@ class CopyTests(unittest.TestCase):
 
     def _check_children(self, instance):
         children = instance.children()
-        for name, value in instance.__dict__.items():
-            if name != '_parent' and isinstance(value, Node):
-                self.assertIn(value, children,
-                    "{} doesn't expose child {}".format(instance.__class__.__name__, name)
+        cls_name = instance.__class__.__name__
+        for name, child in instance.__dict__.items():
+            if name != '_parent' and isinstance(child, Node):
+                self.assertIn(child, children,
+                    "{} doesn't expose child {}".format(cls_name, name)
                 )
+                self.assertEqual(child._parent, instance, cls_name)
+        # TODO check replace_Child is defined
 
     def _assert_different(self, instance, clone):
         self.assertNotEqual(instance, clone)
@@ -75,6 +78,7 @@ ignore_classes = {
     Builtin,
     UnaryBuiltin,
     InfixBuiltin,
+    Lambda, # TODO figure out what this should do
 }
 
 #test_module_node_classes(nefarious.tree)

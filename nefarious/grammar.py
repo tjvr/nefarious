@@ -111,6 +111,7 @@ class PairList(Macro):
 class ContinueList(Macro):
     def build(self, values, type_):
         list_ = values[0]
+        # TODO problem putting a Call at the top of a Block?
         assert isinstance(list_, ListLiteral), type_
         items = list(list_.items)
         items.append(values[-1])

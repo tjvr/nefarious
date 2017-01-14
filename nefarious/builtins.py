@@ -87,7 +87,7 @@ class PRINT(UnaryBuiltin):
     def evaluate(self, frame):
         jit.promote(self.child)
         value = self.child.evaluate(frame)
-        print(value.sexpr())
+        print(value.sexpr()) # PRINT
 
 
 Bool = Type.get('Bool')

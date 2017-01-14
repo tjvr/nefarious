@@ -374,7 +374,7 @@ class Frame:
     _immutable_fields_ = ['parent', 'shape']
     # TODO consider making values immutable?
 
-    def __init__(self, parent, shape):
+    def __init__(self, parent, shape, func=None):
         # TODO Call.evaluate_arguments ignores this hint!
         self = jit.hint(self, access_directly=True, fresh_virtualizable=True)
 
@@ -385,6 +385,10 @@ class Frame:
         values = [None] * shape.size
         make_sure_not_resized(values)
         self._values = values
+
+        if func:
+            assert isinstance(func, FuncDef)
+        self.func = func
 
         #self.stack = [] # for threading TODO
         #self.calls = [] # for threading
@@ -417,6 +421,25 @@ class Frame:
             for i in range(len(symbols))
         ]) + "]"
 
+    def all_names(self):
+        names = {}
+        scope = self
+        while scope:
+            for name in scope.shape.names:
+                names[name] = True
+            scope = scope.parent
+        return names
+
+    def shape_stack(self):
+        scope = self
+        stack = []
+        while scope:
+            stack.append(scope.shape)
+            scope = scope.parent
+        stack.reverse()
+        return stack
+
+
 
 class FuncDef:
     """a Sequence of commands, plus some arg names.
@@ -429,7 +452,7 @@ class FuncDef:
     multiple Closures.
     """
     __slots__ = ['body', 'original_body', 'shape', 'arg_length']
-    _immutable_fields_ = ['body', 'original_body', 'shape', 'arg_length']
+    _immutable_fields_ = ['original_body', 'shape', 'arg_length']
 
     def __init__(self, arg_names, body):
         from .tree import Sequence
@@ -440,6 +463,9 @@ class FuncDef:
         # map for accessing locals in Frame
         self.shape = Shape.get(arg_names)
         self.arg_length = len(arg_names)
+
+    def arg_names(self):
+        return self.shape.names_list()[:self.arg_length]
 
     def sexpr(self):
         return " ".join([n.sexpr() for n in self.shape.names]) + " " + self.body.sexpr()
