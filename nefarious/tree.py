@@ -112,10 +112,8 @@ class Sequence(Node):
 
         assert frame
         value = None
-        #print '\/', self.sexpr()
         jit.promote(self.nodes) # assume replace_child won't happen in traced code
         for node in self.nodes:
-            #print '>>', node.sexpr()
             value = node.evaluate(frame)
         return value
 
@@ -226,21 +224,15 @@ class Load(Node):
         self.depth = -1
 
     def compile(self, stack):
-        # TODO assert self._parent
-        assert self._parent
-        #assert self.index == -1, self._parents
         for depth in range(len(stack)):
             shape = stack[len(stack) - depth - 1]
             index = shape.lookup(self.name)
             if index != -1:
-                #if self.index != -1:
-                #    assert self.index == index
                 self.index = index
                 self.depth = depth
                 break
         else:
             raise ValueError(self.name)
-        self.s = list(stack)
 
     def _copy(self, transform): return Load(self.name, self.type)
     def children(self): return []
@@ -260,7 +252,6 @@ class Load(Node):
         jit.promote(depth)
         for i in range(depth):
             frame = frame.parent
-        assert frame # TODO help
 
         index = self.index
         jit.promote(index)
@@ -322,7 +313,6 @@ class NewCell(Node):
         self.index = -1
 
     def compile(self, stack):
-        #assert self.index == -1
         shape = stack.pop()
         self.index, shape = shape.lookup_or_insert(self.name)
         stack.append(shape)
@@ -340,10 +330,6 @@ class NewCell(Node):
     def evaluate(self, frame):
         if self.index == -1:
             raise ValueError("NewCell was not compiled")
-
-        # DEBUG
-        assert self.index == frame.shape.lookup(self.name)
-
         index = self.index
         jit.promote(index)
         cell = W_Var(Value.NULL)
@@ -467,9 +453,9 @@ class Lambda(Node):
         self.func.shape = stack.pop()
 
     # The interaction between Lambda and FuncDef is unpleasant.
-    #def _copy(self, transform): return Lambda(self.func)
+    # I'm not sure it really makes sense anymore for the body to be stored on the FuncDef!
+    # TODO: revisit this
     def _copy(self, transform): return Lambda(FuncDef(self.func.arg_names(), self.func.body.copy(transform)))
-    #def _copy(self, transform): return Lambda(FuncDef(self.func.shape.names_list(), self.func.body.copy(transform)))
     def children(self): return [self.func.body]
 
     @classmethod
@@ -530,7 +516,6 @@ class Call(Node):
         assert isinstance(closure, Closure)
         func = closure.func
         self.cached_closure = closure
-        #print "Call", self.func_node.sexpr(), "; shape", func.shape.names_list()
 
         # fast transition
         call_count = self.call_count
@@ -543,7 +528,6 @@ class Call(Node):
                 new_call = FuncCall(func_node, self.args, self.type, func, call_count)
             else:
                 new_call = GenericCall(func_node, self.args, self.type, call_count)
-            #print "transition", new_call.__class__.__name__
             self._replace(new_call)
             return new_call.evaluate_closure(frame, closure.scope, func)
 
@@ -558,7 +542,6 @@ class Call(Node):
 
     @jit.unroll_safe
     def evaluate_arguments(self, arguments, scope, func):
-        #print "Func", id(func)(
         make_sure_not_resized(arguments)
         self.call_count += 1
 
@@ -597,7 +580,6 @@ class StaticCall(Call):
         jit.promote(func_node) # nb. this could of course change
         closure = func_node.evaluate(frame)
         assert isinstance(closure, Closure)
-        #print "StaticCall", self.func_node.sexpr(), "; shape", closure.func.shape.names_list()
 
         # guard: closure
         cached_closure = self.cached_closure
@@ -608,7 +590,6 @@ class StaticCall(Call):
                 new_call = FuncCall(self.func_node, self.args, self.type, closure.func, self.call_count)
             else:
                 new_call = GenericCall(self.func_node, self.args, self.type, self.call_count)
-            #print "transition", new_call.__class__.__name__
             self._replace(new_call)
             return new_call.evaluate_closure(frame, closure.scope, closure.func)
 
@@ -616,7 +597,6 @@ class StaticCall(Call):
         if self.call_count == 3: # 4th call
             # can't inline into global scope.
             if frame.func:
-                #print('inlining: ' + str(closure.func.body.weight))
                 self.inline_call(frame.func, frame, closure)
             # takes effect on next call to `outer_func`.
             # TODO rewrite immediately and modify Frames on stack?
@@ -694,7 +674,6 @@ class StaticCall(Call):
         # closure --the Closure we're inlining.
 
         inlined = self.create_inlined(frame, closure)
-        #print inlined.sexpr()
 
         # Rewrite outer_func
         transform = ReplaceTransform(replace=self, with_=inlined)
@@ -708,17 +687,14 @@ class StaticCall(Call):
         #assert len(outer_func.shape.names_list()) <= stack[-1].names_list()
         outer_func.shape = stack.pop()
 
-        #print "rewrote", outer_func, "; shape", outer_func.shape.names_list()
         b = outer_func.body
         if b._parent: b = b._parent
-        #print b.sexpr()
 
     @jit.dont_look_inside
     def _inline(self, defn, scope, closure):
         func = closure.func
         # we can't mutate the tree *right now*, because we're in the middle
         # of evaluating this Frame! won't have space for variables...
-        #print self.sexpr()
         arg_nodes = self.args
         local_names = func.shape.names_list()
         arg_names = local_names[:len(arg_nodes)]
@@ -744,7 +720,6 @@ class StaticCall(Call):
 
         body = Sequence(items)
         inlined = InlinedStatic(self.func_node.copy(), self.args, self.type, closure, body, self.call_count)
-        #print inlined.sexpr()
         transform = ReplaceTransform(replace=self, with_=inlined)
         new_body = defn.body.copy(transform)
 
@@ -756,9 +731,6 @@ class StaticCall(Call):
         new_body.compile(stack) # set up new Shape.
         defn.shape = stack.pop()
         defn.body = new_body
-
-        #print "rewrote", id(scope.func), "; shape", defn.shape.names_list()
-        #print new_body.sexpr()
 
 
 class InlinedStatic(StaticCall):
@@ -790,14 +762,11 @@ class InlinedStatic(StaticCall):
         closure = func_node.evaluate(frame)
         assert isinstance(closure, Closure)
 
-        #print "eval inline", self.func_node.sexpr()
-
         # guard: closure
         cached_closure = self.cached_closure
         jit.promote(cached_closure) # immutable
         jit.promote(closure)
         if closure is not cached_closure: # guard
-            #print 'inline deopt'
             if closure.func is cached_closure.func:
                 new_call = FuncCall(self.func_node, self.args, self.type, closure.func, self.call_count)
             else:
@@ -836,7 +805,6 @@ class FuncCall(Call):
             self._replace(new_call)
             return new_call.evaluate_closure(frame, closure.scope, func)
 
-        #print "FuncCall", self.func_node.sexpr(), "; shape", func.shape.names_list()
         # TODO inline body?
 
         return self.evaluate_closure(frame, closure.scope, cached_func)
@@ -846,10 +814,6 @@ class GenericCall(Call):
 
     @jit.unroll_safe
     def evaluate(self, frame):
-        #print "GenericCall", self.func_node.sexpr()
-        #print self.func_node
-        #print self.func_node.__class__
-        #, "; shape", closure.func.shape.names_list()
         closure = self.func_node.evaluate(frame)
         assert isinstance(closure, Closure)
         return self.evaluate_closure(frame, closure.scope, closure.func)
@@ -1115,6 +1079,5 @@ class ClosureLookupTransform(Transform):
             if self.needs_closure_scope(node.name):
                 out = ClosureLoad(node.name, node.type, self.closure_node.copy())
                 self.used_closure = True
-            #print node.sexpr(), '->', out.sexpr()
         return out
 
