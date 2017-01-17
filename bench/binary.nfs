@@ -5,6 +5,7 @@ defprim not Bool:x { BOOL_NOT x }
 
 defprim print Any:x { PRINT x }
 defprim repr Any:x { REPR x }
+defprim Record:x is nil { IS_NIL x }
 
 defprim Int:a + Int:b { INT_ADD a b }
 defprim Int:a - Int:b { INT_SUB a b }
@@ -34,11 +35,11 @@ define repeat Int:count Block:body {
 }
 
 define create node Int:item {
-    [ :item item :left no :right no]
+    [ :item item :left nil :right nil]
 }
 
 define create tree Int:item Int:depth {
-    let node = create node item
+    let node = (create node item)
     IF_THEN (0 < depth) {
         node.left := (create tree (2 * item - 1) (depth - 1))
         node.right := (create tree (2 * item) (depth - 1))
@@ -47,12 +48,17 @@ define create tree Int:item Int:depth {
 }
 
 define check Record:tree {
-    IF_THEN_ELSE (1 = (tree.left)) tree.item (check tree.left - check tree.right + tree.item)
+    IF_THEN_ELSE (IS_NIL tree.left) tree.item ((check tree.left) - (check tree.right) + tree.item)
 }
 
 let min_depth = 4
 let max_depth = 20
+let stretch_depth = max_depth + 1
+
+let c = (check (create tree 0 stretch_depth))
+print join ["stretch tree of depth " (repr stretch_depth) " check: " (repr c)]
+
 let long_lived = create tree 0 max_depth
 
-PRINT join ["long lived tree of depth" (repr max_depth) " check: " (repr check long_lived)]
+print join ["long lived tree of depth " (repr max_depth) " check: " (repr check long_lived)]
 

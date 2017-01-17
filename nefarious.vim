@@ -22,6 +22,7 @@ highlight link nfsType Type
 
 syntax keyword nfsBoolean yes
 syntax keyword nfsBoolean no
+syntax keyword nfsBoolean nil
 highlight link nfsBoolean Boolean
 
 syntax match nfsNumber "[0-9]+"
@@ -75,4 +76,5 @@ syntax keyword prim IF_THEN
 syntax keyword prim WHILE
 syntax keyword prim PRINT
 syntax keyword prim REPR
+syntax keyword prim IS_NIL
 highlight link prim Special

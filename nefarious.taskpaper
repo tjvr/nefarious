@@ -7,6 +7,7 @@
 - apply
 - optimise calls some more
 - precedence groups
+- dont inline forever
 - imports, *please*
 
 [ ] lower repeat to builtin

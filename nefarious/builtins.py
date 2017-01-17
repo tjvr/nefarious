@@ -144,6 +144,15 @@ class BOOL_AND(InfixBuiltin):
         assert right is Value.TRUE
         return Value.TRUE
 
+class IS_NIL(UnaryBuiltin):
+    type = Bool
+    arg_types = [Type.ANY]
+    def evaluate(self, frame):
+        child = self.child
+        jit.promote(child)
+        value = child.evaluate(frame)
+        return W_Bool.get(value == Value.NULL)
+
 
 Int = Type.get('Int')
 
@@ -400,7 +409,15 @@ class IF_THEN_ELSE(Builtin):
         # TODO test IF
         return []
 
-    # TODO replace_child
+    def replace_child(self, child, other):
+        if child is self.cond:
+            self.cond = other
+        elif child is self.tv:
+            self.tv = other
+        elif child is self.fv:
+            self.fv = other
+        else:
+            assert False
 
     def sexpr(self):
         return "(IF_THEN_ELSE " + self.cond.sexpr() + " " + self.tv.sexpr() + " " + self.fv.sexpr() + ")"
@@ -419,20 +436,27 @@ class IF_THEN_ELSE(Builtin):
 
 
 class IF_THEN(Builtin):
-    type = _a
+    type = _Line
     arg_types = [Bool, _Block]
 
     def __init__(self, values, type_):
         Node.__init__(self)
-        self.cond, self.block = values
+        self.cond, block = values
         self.cond.set_parent(self)
-        self.block.set_parent(self)
-        seq = self.block.func.body
+        self.block = block
+        assert isinstance(block, Lambda)
+        seq = block.func.body
         assert isinstance(seq, Sequence)
         self.seq = seq
+        seq.set_parent(self)
 
     def _args(self):
         return [self.cond, self.block]
+
+    def children(self):
+        # shares the Frame with the parent scope
+        # takes a Block, but sneakily looks inside it and EXTRACTS the Sequence.
+        return [self.cond, self.seq]
 
     @classmethod
     def _test_cases(cls):
@@ -451,7 +475,6 @@ class IF_THEN(Builtin):
         cond = self.cond.evaluate(frame)
         if cond == Value.TRUE:
             self.seq.evaluate(frame)
-        assert False
 
 
 class WHILE(Builtin):
@@ -473,14 +496,6 @@ class WHILE(Builtin):
     def _args(self):
         return [self.cond, self.block]
 
-    @classmethod
-    def _test_cases(cls):
-        # TODO test WHILE
-        return []
-        #yield WHILE([Literal(W_Bool.TRUE, Bool), Block], _Line)
-
-    # TODO replace_child ?
-
     def children(self):
         # WHILE takes a Block, but sneakily looks inside it and EXTRACTS the
         # Sequence.
@@ -489,6 +504,14 @@ class WHILE(Builtin):
 
         # TODO it is possible that defining new variables inside a WHILE loop
         # is currently unsupported.
+    @classmethod
+    def _test_cases(cls):
+        # TODO test WHILE
+        return []
+        #yield WHILE([Literal(W_Bool.TRUE, Bool), Block], _Line)
+
+    # TODO replace_child ?
+
 
     def sexpr(self):
         return "(WHILE " + self.cond.sexpr() + " " + self.seq.sexpr() + ")"

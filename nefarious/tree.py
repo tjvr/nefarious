@@ -78,7 +78,8 @@ class Sequence(Node):
             if self.nodes[index] is child:
                 self.nodes[index] = other
                 return
-        assert False
+        # sometimes, we can't find the child.
+        # to do I think with not modifying frames executing on the stack
 
     def __repr__(self):
         return "Sequence({!r})".format(self.nodes)
@@ -112,8 +113,9 @@ class Sequence(Node):
 
         assert frame
         value = None
-        jit.promote(self.nodes) # assume replace_child won't happen in traced code
-        for node in self.nodes:
+        nodes = self.nodes
+        jit.promote(nodes) # assume replace_child won't happen in traced code
+        for node in nodes:
             value = node.evaluate(frame)
         return value
 
@@ -941,6 +943,9 @@ class GetAttr(Node):
     def evaluate(self, frame):
         jit.promote(self.record)
         record = self.record.evaluate(frame)
+        # TODO fix binary benchmark + inlining
+        if not isinstance(record, W_Record):
+            print "not a record:", self.record.sexpr()
         assert isinstance(record, W_Record)
 
         symbol = self.symbol
@@ -948,6 +953,7 @@ class GetAttr(Node):
         shape = record.shape
         jit.promote(shape)
         index = shape.lookup(symbol)
+        # TODO cache shape->index, for the interpreter
         return record.values[index]
 
     def sexpr(self):
@@ -987,6 +993,7 @@ class SetAttr(Node):
         shape = record.shape
         jit.promote(shape)
         index = shape.lookup(symbol)
+        # TODO cache shape->index, for the interpreter
         record.values[index] = value
 
     def sexpr(self):

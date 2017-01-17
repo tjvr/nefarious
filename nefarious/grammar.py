@@ -699,7 +699,7 @@ grammar.add(Text, [Word.TEXT], ParseText)
 
 grammar.add(Bool, [Word.word("yes")], LiteralMacro(Value.TRUE))
 grammar.add(Bool, [Word.word("no")], LiteralMacro(Value.FALSE))
-#grammar.add(Null, [Word.word("nil")], Literal(Value.NULL))
+grammar.add(Record, [Word.word("nil")], LiteralMacro(Value.NULL))
 
 
 
