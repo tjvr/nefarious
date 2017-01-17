@@ -942,42 +942,16 @@ class GetAttr(Node):
         jit.promote(self.record)
         record = self.record.evaluate(frame)
         assert isinstance(record, W_Record)
-        return self.evaluate_record(record)
 
-    def evaluate_record(self, record):
+        symbol = self.symbol
+        jit.promote(symbol)
         shape = record.shape
-        index = shape.lookup(self.symbol)
-        other = GetAttrOffset(self.symbol, self.record, shape, index)
-        self._replace(other)
-        return other.evaluate_record(record)
+        jit.promote(shape)
+        index = shape.lookup(symbol)
+        return record.values[index]
 
     def sexpr(self):
         return "(get-attr " + self.record.sexpr() + " " + self.symbol.sexpr() + ")"
-
-class GetAttrOffset(GetAttr):
-    def __init__(self, symbol, record, shape, index):
-        GetAttr.__init__(self, symbol, record)
-        self.shape = shape
-        self.index = index
-
-    def evaluate_record(self, record):
-        # shape guard
-        shape = self.shape
-        jit.promote(shape)
-        if record.shape is not shape:
-            other = GetAttrGeneric(self.symbol, self.record)
-            # TODO rewrite
-            return other.evaluate_record(record)
-
-        index = self.index
-        jit.promote(index)
-        return record.values[index]
-
-class GetAttrGeneric(GetAttr):
-    def evaluate_record(self, record):
-        symbol = self.symbol
-        jit.promote(symbol)
-        return record.lookup(symbol)
 
 
 class SetAttr(Node):
@@ -1004,44 +978,19 @@ class SetAttr(Node):
         jit.promote(self.record)
         record = self.record.evaluate(frame)
         assert isinstance(record, W_Record)
+
         jit.promote(self.value)
         value = self.value.evaluate(frame)
-        return self.evaluate_record(record, value)
 
-    def evaluate_record(self, record, value):
+        symbol = self.symbol
+        jit.promote(symbol)
         shape = record.shape
-        index = shape.lookup(self.symbol)
-        other = SetAttrOffset(self.symbol, self.record, self.value, shape, index)
-        self._replace(other)
-        return other.evaluate_record(record, value)
+        jit.promote(shape)
+        index = shape.lookup(symbol)
+        record.values[index] = value
 
     def sexpr(self):
         return "(set-attr " + self.record.sexpr() + " " + self.symbol.sexpr() + " " + self.value.sexpr() + ")"
-
-class SetAttrOffset(SetAttr):
-    def __init__(self, symbol, record, value, shape, index):
-        SetAttr.__init__(self, symbol, record, value)
-        self.shape = shape
-        self.index = index
-
-    def evaluate_record(self, record, value):
-        # shape guard
-        shape = self.shape
-        jit.promote(shape)
-        if record.shape is not shape:
-            other = SetAttrGeneric(self.symbol, self.record, self.value)
-            # TODO rewrite
-            return other.evaluate_record(record, value)
-
-        index = self.index
-        jit.promote(index)
-        record.values[index] = value
-
-class SetAttrGeneric(SetAttr):
-    def evaluate_record(self, record, value):
-        symbol = self.symbol
-        jit.promote(symbol)
-        record.set(symbol, value)
 
 
 #------------------------------------------------------------------------------
