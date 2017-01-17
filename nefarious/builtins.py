@@ -89,6 +89,14 @@ class PRINT(UnaryBuiltin):
         value = self.child.evaluate(frame)
         print(value.sexpr()) # PRINT
 
+class REPR(UnaryBuiltin):
+    type = Type.get('Text')
+    arg_types = [Type.ANY]
+    def evaluate(self, frame):
+        jit.promote(self.child)
+        value = self.child.evaluate(frame)
+        return W_Text.fromstr(value.sexpr()) # REPR
+
 
 Bool = Type.get('Bool')
 
@@ -163,7 +171,29 @@ class INT_SUB(InfixBuiltin):
         assert isinstance(right, W_Int)
         return W_Int(left.prim.sub(right.prim))
 
-# TODO INT_EQ
+class INT_MUL(InfixBuiltin):
+    type = Int
+    arg_types = [Int, Int]
+    def evaluate(self, frame):
+        jit.promote(self.left)
+        jit.promote(self.right)
+        left = self.left.evaluate(frame)
+        assert isinstance(left, W_Int)
+        right = self.right.evaluate(frame)
+        assert isinstance(right, W_Int)
+        return W_Int(left.prim.mul(right.prim))
+
+class INT_EQ(InfixBuiltin):
+    type = Bool
+    arg_types = [Int, Int]
+    def evaluate(self, frame):
+        jit.promote(self.left)
+        jit.promote(self.right)
+        left = self.left.evaluate(frame)
+        assert isinstance(left, W_Int)
+        right = self.right.evaluate(frame)
+        assert isinstance(right, W_Int)
+        return W_Bool.get(left.prim.eq(right.prim))
 
 class INT_LT(InfixBuiltin):
     type = Bool
@@ -388,6 +418,42 @@ class IF_THEN_ELSE(Builtin):
         assert False
 
 
+class IF_THEN(Builtin):
+    type = _a
+    arg_types = [Bool, _Block]
+
+    def __init__(self, values, type_):
+        Node.__init__(self)
+        self.cond, self.block = values
+        self.cond.set_parent(self)
+        self.block.set_parent(self)
+        seq = self.block.func.body
+        assert isinstance(seq, Sequence)
+        self.seq = seq
+
+    def _args(self):
+        return [self.cond, self.block]
+
+    @classmethod
+    def _test_cases(cls):
+        # TODO test IF
+        return []
+
+    # TODO replace_child
+
+    def sexpr(self):
+        return "(IF_THEN " + self.cond.sexpr() + " " + self.block.sexpr() + ")"
+
+    def evaluate(self, frame): # TODO OPT
+        block = self.block
+        jit.promote(self.cond)
+        jit.promote(block)
+        cond = self.cond.evaluate(frame)
+        if cond == Value.TRUE:
+            self.seq.evaluate(frame)
+        assert False
+
+
 class WHILE(Builtin):
     type = _Line
     arg_types = [Bool, _Block]
@@ -430,6 +496,7 @@ class WHILE(Builtin):
     def evaluate(self, frame):
         cond = self.cond
         body = self.seq
+        # jit.promote(body) # ??? TODO
 
         while True:
             while_driver.jit_merge_point(self=self, cond=cond, body=body, frame=frame)

@@ -1,9 +1,13 @@
 - Record types @done
-- blocks
+- blocks @done
+- hot code inlining @done
+
+- benchmarks!! @clg
+- replace_child for...Define? Func? Call?
+- apply
+- optimise calls some more
 - precedence groups
 - imports, *please*
-
-- inline bytecode-only functions
 
 [ ] lower repeat to builtin
 [ ] Non local return from blocks
@@ -37,3 +41,13 @@ Benchmarks.
 	- @clg regex-dna @nope
 		no regex engine!
 
+Benchmarks:
+	- fib-f
+	- fib-m
+	- nbody
+	- binary-trees @clg
+		GC test. creates binary trees.
+Implementation:
+	- hot call inlining
+	- Maps for records
+	- Frames: interesting opt

@@ -1,0 +1,58 @@
+
+defprim Bool:a and Bool:b { BOOL_AND a b }
+defprim Bool:a or Bool:b { BOOL_OR a b }
+defprim not Bool:x { BOOL_NOT x }
+
+defprim print Any:x { PRINT x }
+defprim repr Any:x { REPR x }
+
+defprim Int:a + Int:b { INT_ADD a b }
+defprim Int:a - Int:b { INT_SUB a b }
+defprim Int:a * Int:b { INT_MUL a b }
+defprim Int:a < Int:b { INT_LT a b }
+defprim Int:a = Int:b { INT_EQ a b }
+defprim random from Int:a to Int:b { INT_RANDOM a b }
+defprim float Int:a { INT_FLOAT a }
+
+defprim join (List Text):pieces { TEXT_JOIN pieces }
+defprim join (List Text):pieces with Text:sep { TEXT_JOIN_WITH pieces sep }
+defprim split Text:t { TEXT_SPLIT t }
+defprim split Text:text by Text:sep { TEXT_SPLIT_BY text sep }
+
+defprim add Any:x to (List Any):l { LIST_ADD l x }
+defprim length of (List Any):l { LIST_LEN l }
+defprim item Int:i of (List Any):l { LIST_GET l i }
+define item last of (List Any):l { item length of l of l }
+define item first of (List Any):l { item 1 of l }
+
+define repeat Int:count Block:body {
+    var c := count
+    WHILE (0 < c) {
+        run body
+        c := c - 1
+    }
+}
+
+define create node Int:item {
+    [ :item item :left no :right no]
+}
+
+define create tree Int:item Int:depth {
+    let node = create node item
+    IF_THEN (0 < depth) {
+        node.left := (create tree (2 * item - 1) (depth - 1))
+        node.right := (create tree (2 * item) (depth - 1))
+    }
+    node
+}
+
+define check Record:tree {
+    IF_THEN_ELSE (1 = (tree.left)) tree.item (check tree.left - check tree.right + tree.item)
+}
+
+let min_depth = 4
+let max_depth = 20
+let long_lived = create tree 0 max_depth
+
+PRINT join ["long lived tree of depth" (repr max_depth) " check: " (repr check long_lived)]
+

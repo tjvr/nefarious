@@ -17,7 +17,7 @@ syntax match nfsKeyword "\v\="
 syntax match nfsKeyword "\v\:\="
 highlight link nfsKeyword Operator
 
-syntax keyword nfsType Int Float Bool Text List Var Any
+syntax keyword nfsType Int Float Bool Text List Var Any Record
 highlight link nfsType Type
 
 syntax keyword nfsBoolean yes
@@ -54,7 +54,9 @@ syntax keyword prim BOOL_OR
 syntax keyword prim BOOL_NOT
 syntax keyword prim INT_ADD
 syntax keyword prim INT_SUB
+syntax keyword prim INT_MUL
 syntax keyword prim INT_LT
+syntax keyword prim INT_EQ
 syntax keyword prim INT_RANDOM
 syntax keyword prim INT_FLOAT
 syntax keyword prim FLOAT_ADD
@@ -68,6 +70,9 @@ syntax keyword prim TEXT_SPLIT_BY
 syntax keyword prim LIST_ADD
 syntax keyword prim LIST_LEN
 syntax keyword prim LIST_GET
-syntax keyword prim LIST_GET
-syntax keyword prim LIST_GET
+syntax keyword prim IF_THEN_ELSE
+syntax keyword prim IF_THEN
+syntax keyword prim WHILE
+syntax keyword prim PRINT
+syntax keyword prim REPR
 highlight link prim Special
