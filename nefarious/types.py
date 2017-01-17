@@ -419,3 +419,8 @@ class Error(Node):
     def __init__(self, message):
         self.message = message
 
+
+class Options:
+    INLINING = True
+Options = Options()
+

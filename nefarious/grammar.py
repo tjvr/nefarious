@@ -743,8 +743,8 @@ def parse(source, debug=False):
         return tree.message
     return tree.sexpr()
 
-
-def parse_and_run(source, debug=False):
+def parse_and_run(source, debug=False, inlining=True):
+    Options.INLINING = inlining
     tree = grammar_parse(source, grammar, debug)
     assert isinstance(tree, Node)
     if isinstance(tree, Error):

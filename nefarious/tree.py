@@ -594,15 +594,12 @@ class StaticCall(Call):
             return new_call.evaluate_closure(frame, closure.scope, closure.func)
 
         # inlining
-        if self.call_count == 3: # 4th call
-            # can't inline into global scope.
-            if frame.func:
-                self.inline_call(frame.func, frame, closure)
-            # takes effect on next call to `outer_func`.
-            # TODO rewrite immediately and modify Frames on stack?
-
-            # nb. if the next call is recursive, it'll use the new `outer_func`
-            # body.
+        allow_inlining = Options.INLINING
+        jit.promote(allow_inlining)
+        if allow_inlining:
+            if self.call_count == 3: # 4th call
+                if frame.func: # can't inline into global scope.
+                    self.inline_call(frame.func, frame, closure)
 
         return self.evaluate_closure(frame, closure.scope, closure.func)
 
