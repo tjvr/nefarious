@@ -2,24 +2,33 @@
 - blocks @done
 - hot code inlining @done
 
-- benchmarks!! @clg
-- replace_child for...Define? Func? Call?
-- apply
-- optimise calls some more
-- precedence groups
+- add `apply`
 - dont inline forever
+- non-local return
 - imports, *please*
+- SourceSection
 
-[ ] lower repeat to builtin
-[ ] Non local return from blocks
-[ ] Implement H-M / pt (in Nefarious?)
-[ ] Type Funcs?
-[ ] Type-checking.
-[ ] unroll_safe on Block?
-[ ] Avoid allocation of empty lists
-[ ] Promote array size when creating a W_List
+Extensions:
+	- precedence groups
+	- custom parametric types
+	- type Funcs?
+	- type-checking: implement H-M / pt
+	- continuations
 
-Benchmarks.
+Optimise:
+	- staticcall/inlinedclosure mess
+	- Record: slots for first N
+	- promote tree constants
+	- audit ALL THE THINGS
+	- Call.evaluate_arguments ignores hint!
+	- Node memory efficiency
+
+	- nested sequences
+	- avoid allocation of empty lists
+	- consider lowering builtins
+	- promote array size when creating a W_List
+
+Benchmarks:
 	- fib @done
 	- @clg n-body @done
 	- nqueens
@@ -42,13 +51,3 @@ Benchmarks.
 	- @clg regex-dna @nope
 		no regex engine!
 
-Benchmarks:
-	- fib-f
-	- fib-m
-	- nbody
-	- binary-trees @clg
-		GC test. creates binary trees.
-Implementation:
-	- hot call inlining
-	- Maps for records
-	- Frames: interesting opt

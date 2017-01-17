@@ -689,48 +689,6 @@ class StaticCall(Call):
         b = outer_func.body
         if b._parent: b = b._parent
 
-    @jit.dont_look_inside
-    def _inline(self, defn, scope, closure):
-        func = closure.func
-        # we can't mutate the tree *right now*, because we're in the middle
-        # of evaluating this Frame! won't have space for variables...
-        arg_nodes = self.args
-        local_names = func.shape.names_list()
-        arg_names = local_names[:len(arg_nodes)]
-        items = []
-        for i in range(len(arg_nodes)):
-            name = local_names[i]
-            value_node = arg_nodes[i]
-            items.append(Let(name, value_node.copy()))
-
-        name = Name("closure")
-        items.append(Let(name, self.func_node.copy()))
-        closure_node = Load(name, Type.FUNC)
-
-        whitelist = scope.all_names()
-        blacklist = closure.scope.all_names()
-        for name in local_names:
-            whitelist[name] = True
-        transform = ClosureLookupTransform(closure_node, whitelist, blacklist)
-        body = func.original_body.copy(transform)
-        items.append(body)
-
-        # TODO insert deopt node
-
-        body = Sequence(items)
-        inlined = InlinedStatic(self.func_node.copy(), self.args, self.type, closure, body, self.call_count)
-        transform = ReplaceTransform(replace=self, with_=inlined)
-        new_body = defn.body.copy(transform)
-
-        stack = [defn.shape, scope.shape]
-        while scope.parent:
-            scope = scope.parent
-            stack.append(scope.shape)
-        stack.reverse()
-        new_body.compile(stack) # set up new Shape.
-        defn.shape = stack.pop()
-        defn.body = new_body
-
 
 class InlinedStatic(StaticCall):
     def __init__(self, func_node, args, type_, closure, body, call_count=0):

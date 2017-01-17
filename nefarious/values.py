@@ -296,16 +296,6 @@ class Shape:
         return index, shape
 
     @jit.elidable
-    def compatible(self, other):
-        # TODO opt?
-        shape = self
-        while shape.previous:
-            shape = shape.previous
-            if shape is other:
-                return True
-        return False
-
-    @jit.elidable
     def names_list(self):
         result = [None] * len(self.names)
         for name, index in self.names.items():
