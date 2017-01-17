@@ -633,13 +633,18 @@ class StaticCall(Call):
         return closure_node, body_clone
 
     def create_inlined(self, frame, closure):
-        # Move argument evaluation into `Let`s
+        # Alpha-rename locals
         closure_locals = closure.func.shape.names_list()
-        items = self.inline_arguments(closure_locals)
+        alpha_locals = [Name(n.name) for n in closure_locals]
+
+        # Move argument evaluation into `Let`s
+        items = self.inline_arguments(alpha_locals)
 
         # Copy body & replace closure-scope lookups.
         closure_args = closure_locals[:len(self.args)]
         closure_node, body = self.inline_body(closure, closure_args, frame)
+        # TODO avoid copying body twice!
+        body = body.copy(RenameTransform(closure_locals, alpha_locals))
         items.append(body)
 
         # avoid evaluating func_node twice.
@@ -973,6 +978,22 @@ class ReplaceTransform(Transform):
             return self.with_
         return node._copy(self)
 
+class RenameTransform(Transform):
+    def __init__(self, replace_names, with_names):
+        self.replace = {}
+        assert len(replace_names) == len(with_names)
+        for i in range(len(replace_names)):
+            self.replace[replace_names[i]] = with_names[i]
+
+    def transform(self, node):
+        if isinstance(node, Load):
+            if node.name in self.replace:
+                return Load(self.replace[node.name], node.type)
+        elif isinstance(node, Let):
+            if node.name in self.replace:
+                return Let(self.replace[node.name], node.value.copy(self))
+        return node._copy(self)
+
 class ClosureLookupTransform(Transform):
     def __init__(self, closure_node, whitelist, blacklist):
         self.closure_node = closure_node
@@ -984,11 +1005,9 @@ class ClosureLookupTransform(Transform):
         return name in self.blacklist and not name in self.whitelist
 
     def transform(self, node):
-        out = node._copy(self)
-        assert out is not node
         if isinstance(node, Load):
             if self.needs_closure_scope(node.name):
-                out = ClosureLoad(node.name, node.type, self.closure_node.copy())
                 self.used_closure = True
-        return out
+                return ClosureLoad(node.name, node.type, self.closure_node.copy())
+        return node._copy(self)
 
