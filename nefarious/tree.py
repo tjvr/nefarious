@@ -602,11 +602,10 @@ class StaticCall(Call):
             if self.call_count == 3: # 4th call
                 if not frame.func:
                     pass # can't inline into global scope.
-                elif frame.func.body.weight > 80:
+                elif frame.func.body.weight > 40:
                     pass # this is getting silly.
                 # TODO handle recursive inlining separately?
                 else:
-                    print(frame.func.body.weight)
                     self.inline_call(frame.func, frame, closure)
 
         return self.evaluate_closure(frame, closure.scope, closure.func)

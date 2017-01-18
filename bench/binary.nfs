@@ -26,8 +26,8 @@ defprim item Int:i of (List Any):l { LIST_GET l i }
 define item last of (List Any):l { item length of l of l }
 define item first of (List Any):l { item 1 of l }
 
-define repeat Int:count Block:body {
-    var c := count
+define repeat Int:count Var:c Block:body {
+    c := count
     WHILE (0 < c) {
         run body
         c := c - 1
@@ -36,7 +36,8 @@ define repeat Int:count Block:body {
 
 define two ^ Int:n {
     var out := 1
-    repeat n {
+    var i
+    repeat n i {
         out := out * 2
     }
     out
@@ -70,11 +71,10 @@ var depth := min_depth
 WHILE (depth < stretch_depth) {
     var iterations := two ^ (mmd - depth)
     var d := 0
-    var i := 1
-    repeat iterations {
+    var i
+    repeat iterations i {
         d := d + check (tree i depth)
         d := d + check (tree (0 - i) depth)
-        i := i + 1
     }
     print join [(repr iterations * 2) " trees of depth " (repr depth) " check " (repr d)]
     depth := depth + 2
