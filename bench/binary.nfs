@@ -34,17 +34,23 @@ define repeat Int:count Block:body {
     }
 }
 
-define create node Int:item {
-    [ :item item :left nil :right nil]
+define two ^ Int:n {
+    var out := 1
+    repeat n {
+        out := out * 2
+    }
+    out
 }
 
-define create tree Int:item Int:depth {
-    let node = (create node item)
-    IF_THEN (0 < depth) {
-        node.left := (create tree (2 * item - 1) (depth - 1))
-        node.right := (create tree (2 * item) (depth - 1))
-    }
-    node
+
+define tree Int:item Int:depth {
+    IF_THEN_ELSE (0 < depth) [
+        :item item
+        :left (tree (item + 1) (depth - 1))
+        :right (tree (item) (depth - 1))
+    ] [
+        :item item :left nil :right nil
+    ]
 }
 
 define check Record:tree {
@@ -55,10 +61,24 @@ let min_depth = 4
 let max_depth = 20
 let stretch_depth = max_depth + 1
 
-let c = (check (create tree 0 stretch_depth))
-print join ["stretch tree of depth " (repr stretch_depth) " check: " (repr c)]
+let q = (check (tree 0 stretch_depth))
+print join ["stretch tree of depth " (repr stretch_depth) " check: " (repr q)]
+let long_lived = tree 0 max_depth
 
-let long_lived = create tree 0 max_depth
+let mmd = max_depth + min_depth
+var depth := min_depth
+WHILE (depth < stretch_depth) {
+    var iterations := two ^ (mmd - depth)
+    var d := 0
+    var i := 1
+    repeat iterations {
+        d := d + check (tree i depth)
+        d := d + check (tree (0 - i) depth)
+        i := i + 1
+    }
+    print join [(repr iterations * 2) " trees of depth " (repr depth) " check " (repr d)]
+    depth := depth + 2
+}
 
 print join ["long lived tree of depth " (repr max_depth) " check: " (repr check long_lived)]
 
