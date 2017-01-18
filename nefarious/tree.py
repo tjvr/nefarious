@@ -692,6 +692,7 @@ class StaticCall(Call):
         stack = frame.shape_stack()
         #stack.append(outer_func.shape)
         #assert stack[-1] == stack[-2]
+        #print outer_func.body.sexpr()
         outer_func.body.compile(stack)
         #assert len(outer_func.shape.names_list()) <= stack[-1].names_list()
         outer_func.shape = stack.pop()
@@ -997,6 +998,10 @@ class RenameTransform(Transform):
         elif isinstance(node, Let):
             if node.name in self.replace:
                 return Let(self.replace[node.name], node.value.copy(self))
+        elif isinstance(node, NewCell):
+            if node.name in self.replace:
+                return NewCell(self.replace[node.name])
+        # TODO Define also
         return node._copy(self)
 
 class ClosureLookupTransform(Transform):
