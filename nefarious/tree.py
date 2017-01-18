@@ -600,7 +600,13 @@ class StaticCall(Call):
         jit.promote(allow_inlining)
         if allow_inlining:
             if self.call_count == 3: # 4th call
-                if frame.func: # can't inline into global scope.
+                if not frame.func:
+                    pass # can't inline into global scope.
+                elif frame.func.body.weight > 80:
+                    pass # this is getting silly.
+                # TODO handle recursive inlining separately?
+                else:
+                    print(frame.func.body.weight)
                     self.inline_call(frame.func, frame, closure)
 
         return self.evaluate_closure(frame, closure.scope, closure.func)
