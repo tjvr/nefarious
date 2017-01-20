@@ -434,13 +434,13 @@ class LanguageTests(BaseParser):
             fib 123
         }
         fib 123
-        """, "{ (let-rec fib_Int (fun n { n (fib_Int 123) })) (fib_Int 123) }")
+        """, "{ (let fib_Int (fun n { n (fib_Int 123) })) (fib_Int 123) }")
 
     def test_04b(self):
         self._parse(""" define fib Int:n { n
             fib 123 }
         fib 123
-        """, "{ (let-rec fib_Int (fun n { n (fib_Int 123) })) (fib_Int 123) }")
+        """, "{ (let fib_Int (fun n { n (fib_Int 123) })) (fib_Int 123) }")
 
     def test_05(self):
         self._parse("""

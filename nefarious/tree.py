@@ -264,7 +264,8 @@ class Load(Node):
 
 
 class Let(Node):
-    """For let-bindings"""
+    """For let-bindings. Works as let-rec"""
+
     def __init__(self, name, value):
         Node.__init__(self)
         assert isinstance(name, Name)
@@ -275,11 +276,12 @@ class Let(Node):
         self.index = -1
 
     def compile(self, stack):
-        self.value.compile(stack)
-
         shape = stack.pop()
         self.index, shape = shape.lookup_or_insert(self.name)
         stack.append(shape)
+
+        # let-rec: define name before compiling value.
+        self.value.compile(stack)
 
     def _copy(self, transform): return Let(self.name, self.value.copy(transform))
     def children(self): return [self.value]
@@ -287,6 +289,7 @@ class Let(Node):
     @classmethod
     def _test_cases(cls):
         yield cls(Name("quxx"), Literal._TEST_INT)
+        yield cls(Name("f"), Lambda(FuncDef([], Sequence([Literal._TEST_INT]))))
 
     def __repr__(self):
         return "Let({!r}, {!r})".format(self.name, self.value)
@@ -304,24 +307,6 @@ class Let(Node):
 
     def sexpr(self):
         return "(let " + self.name.sexpr() + " " + self.value.sexpr() + ")"
-
-
-class LetRec(Let):
-    @classmethod
-    def _test_cases(cls):
-        yield cls(Name("f"), Lambda(FuncDef([], Sequence([Literal._TEST_INT]))))
-
-    def _copy(self, transform): return LetRec(self.name, self.value.copy(transform))
-
-    def compile(self, stack):
-        shape = stack.pop()
-        self.index, shape = shape.lookup_or_insert(self.name)
-        stack.append(shape)
-
-        self.value.compile(stack)
-
-    def sexpr(self):
-        return "(let-rec " + self.name.sexpr() + " " + self.value.sexpr() + ")"
 
 
 
