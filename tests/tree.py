@@ -28,10 +28,11 @@ class CopyTests(unittest.TestCase):
         cls_name = instance.__class__.__name__
         for name, child in instance.__dict__.items():
             if name != '_parent' and isinstance(child, Node):
-                self.assertIn(child, children,
-                    "{} doesn't expose child {}".format(cls_name, name)
-                )
-                self.assertEqual(child._parent, instance, cls_name)
+                if name not in ('cached_func',):
+                    self.assertIn(child, children,
+                        "{} doesn't expose child {}".format(cls_name, name)
+                    )
+                    self.assertEqual(child._parent, instance, cls_name)
         # TODO check replace_Child is defined
 
     def _assert_different(self, instance, clone):

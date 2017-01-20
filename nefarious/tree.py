@@ -409,34 +409,42 @@ class StoreCell(Node):
 class Lambda(Node):
     type = Type.FUNC
 
+    # __slots__ = ['body', 'original_body', 'shape', 'arg_length']
+    # _immutable_fields_ = ['original_body', 'shape', 'arg_length']
+
     def __init__(self, arg_names, body):
         Node.__init__(self)
-        # TODO replace FuncDef with Lambda.
-        self.func = FuncDef(arg_names, body)
+
+        self.shape = Shape.get(arg_names) # map for accessing locals in Frame
+        self.arg_length = len(arg_names)
+
+        assert isinstance(body, Node)
+        self.body = body
+        self.original_body = None if body is None else body.copy()
+
+    def arg_names(self):
+        return self.shape.names_list()[:self.arg_length]
+
+    def _copy(self, transform): return Lambda(self.arg_names(), self.original_body.copy(transform))
+    def children(self): return [self.body]
 
     def compile(self, stack):
-        shape = self.func.shape
+        shape = self.shape
         stack.append(shape)
-        self.func.body.compile(stack)
-        self.func.shape = stack.pop()
-
-    # The interaction between Lambda and FuncDef is unpleasant.
-    # I'm not sure it really makes sense anymore for the body to be stored on the FuncDef!
-    # TODO: revisit this
-    def _copy(self, transform): return Lambda(self.func.arg_names(), self.func.body.copy(transform))
-    def children(self): return [self.func.body]
+        self.body.compile(stack)
+        self.shape = stack.pop()
 
     @classmethod
     def _test_cases(cls):
         yield cls([], Sequence([Literal._TEST_INT]))
 
     def evaluate(self, frame):
-        jit.promote(self.func)
-        closure = Closure(frame, self.func)
-        return closure
+        return Closure(frame, self)
 
     def sexpr(self):
-        return "(fun " + self.func.sexpr() + ")"
+        return "(fun " + " ".join([n.sexpr() for n in self.shape.names]) + " " + self.body.sexpr() + ")"
+
+
 
 
 class Call(Node):
@@ -573,7 +581,7 @@ class StaticCall(Call):
                 # TODO handle recursive inlining separately?
                 else:
                     self.inline_call(frame.func, frame, closure)
-                    print frame.func.body.sexpr()
+                    #print frame.func.body.sexpr()
 
         return self.evaluate_closure(frame, closure.scope, closure.func)
 
@@ -716,12 +724,12 @@ class FuncCall(Call):
     """Call always to the same func body (but different closure scopes!)"""
     def __init__(self, func_node, args, type_, func, call_count=0):
         Call.__init__(self, func_node, args, type_, call_count)
-        assert isinstance(func, FuncDef)
+        assert isinstance(func, Lambda)
         self.cached_func = func
 
     @classmethod
     def _test_cases(cls):
-        func = FuncDef([], Sequence([Literal._TEST_INT]))
+        func = Lambda([], Sequence([Literal._TEST_INT]))
         yield cls(Load(Name("f"), Type.FUNC), [], Type.get('Int'), func)
         yield cls(Load(Name("f"), Type.FUNC), [Literal._TEST_INT], Type.get('Int'), func)
 

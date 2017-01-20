@@ -262,6 +262,8 @@ class Symbol(Name):
 class Shape:
     _immutable_fields_ = ['names', 'previous', 'size']
 
+    # TODO consider names list instead of dict; might actually be better!
+
     def __init__(self, names, previous=None):
         #assert isinstance(names, dict)
         self.names = names # {}
@@ -377,7 +379,8 @@ class Frame:
         self._values = values
 
         if func:
-            assert isinstance(func, FuncDef)
+            from .tree import Lambda
+            assert isinstance(func, Lambda)
         self.func = func
 
         #self.stack = [] # for threading TODO
@@ -430,37 +433,6 @@ class Frame:
         return stack
 
 
-
-class FuncDef:
-    """a Sequence of commands, plus some arg names.
-
-    As an optimisation, the FuncDef stores the Shape, so that all Frames for this
-    function will share the same memory layout. Space in the frame is reserved
-    within compile().
-
-    Therefore this is mostly a way of sharing the arg names and Shape across
-    multiple Closures.
-    """
-    __slots__ = ['body', 'original_body', 'shape', 'arg_length']
-    _immutable_fields_ = ['original_body', 'shape', 'arg_length']
-
-    def __init__(self, arg_names, body):
-        from .tree import Sequence
-        assert isinstance(body, Sequence)
-        self.body = body
-        self.original_body = None if body is None else body.copy()
-
-        # map for accessing locals in Frame
-        self.shape = Shape.get(arg_names)
-        self.arg_length = len(arg_names)
-
-    def arg_names(self):
-        return self.shape.names_list()[:self.arg_length]
-
-    def sexpr(self):
-        return " ".join([n.sexpr() for n in self.shape.names]) + " " + self.body.sexpr()
-
-
 class Closure(Value):
     """a Closure: function + scope"""
     type = Type.get('Func')
@@ -471,7 +443,8 @@ class Closure(Value):
         # for accessing names from outer scopes
         assert isinstance(scope, Frame)
         self.scope = scope
-        assert isinstance(func, FuncDef)
+        #from .tree import Lambda
+        #assert isinstance(func, Lambda)
         self.func = func
 
     def sexpr(self):

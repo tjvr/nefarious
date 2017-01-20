@@ -292,7 +292,7 @@ class DefineMacro(Macro):
         # Type check
         body = values[-1]
         assert isinstance(body, Lambda)
-        body = body.func.body
+        body = body.body
         assert isinstance(body, Sequence)
         if len(body.nodes) == 0: # empty block
             type_ = Line # ??
@@ -329,7 +329,7 @@ class DefineMacro(Macro):
         arg_names = DefineMacro.current_definition_args.pop()
         body = values[4]
         assert isinstance(body, Lambda)
-        body = body.func.body
+        body = body.body
         assert isinstance(body, Sequence)
 
         return Let(name, Lambda(arg_names, body))
@@ -398,7 +398,7 @@ class LambdaMacro(Macro):
         arg_names = LambdaMacro.current_definition_args.pop()
         body = values[4]
         assert isinstance(body, Lambda)
-        body = body.func.body
+        body = body.body
         assert isinstance(body, Sequence)
         return Lambda(arg_names, body)
 

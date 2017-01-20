@@ -445,7 +445,7 @@ class IF_THEN(Builtin):
         self.cond.set_parent(self)
         self.block = block
         assert isinstance(block, Lambda)
-        seq = block.func.body
+        seq = block.body
         assert isinstance(seq, Sequence)
         self.seq = seq
         seq.set_parent(self)
@@ -468,7 +468,7 @@ class IF_THEN(Builtin):
             self.cond = other
         elif child is self.seq:
             # TODO copy block instead of modifying in-place?
-            self.seq = self.block.func.body = other
+            self.seq = self.block.body = other
         else:
             assert False
 
@@ -495,7 +495,7 @@ class WHILE(Builtin):
         self.cond.set_parent(self)
         self.block = block
         assert isinstance(block, Lambda)
-        seq = block.func.body
+        seq = block.body
         assert isinstance(seq, Sequence)
         self.seq = seq
         seq.set_parent(self)

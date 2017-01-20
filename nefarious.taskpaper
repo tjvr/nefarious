@@ -19,12 +19,12 @@ Extensions:
 	- continuations
 
 Optimise:
+	- Node: slots?
 	- staticcall/inlinedclosure mess
 	- Record: slots for first N
 	- promote tree constants
 	- audit ALL THE THINGS
 	- Call.evaluate_arguments ignores hint!
-	- Node memory efficiency
 	
 	- nested sequences
 	- avoid allocation of empty lists
