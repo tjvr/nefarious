@@ -53,6 +53,7 @@ from .values import *
 # TODO annotate nodes with SourceSections
 
 class Sequence(Node):
+    __slots__ = Node.__slots__ + ['nodes']
     _immutable_fields_ = ['nodes']
 
     def __init__(self, nodes):
@@ -71,7 +72,7 @@ class Sequence(Node):
     @classmethod
     def _test_cases(cls):
         yield Sequence([])
-        yield Sequence([Literal._TEST_INT])
+        yield Sequence([TEST_INT_LITERAL])
 
     def replace_child(self, child, other):
         for index in range(len(self.nodes)):
@@ -121,7 +122,9 @@ class Sequence(Node):
 
 
 class Literal(Node):
+    __slots__ = Node.__slots__ + ['value']
     _immutable_fields_ = ['value']
+
     def __init__(self, value, type_):
         Node.__init__(self)
         assert isinstance(value, Value)
@@ -134,7 +137,7 @@ class Literal(Node):
 
     @classmethod
     def _test_cases(cls):
-        yield cls._TEST_INT
+        yield TEST_INT_LITERAL
 
     def __repr__(self):
         return "Literal({!r})".format(self.value)
@@ -145,9 +148,12 @@ class Literal(Node):
     def evaluate(self, frame):
         return self.value
 
-Literal._TEST_INT = Literal(W_Int.fromint(42), Type.get('Int'))
+TEST_INT_LITERAL = Literal(W_Int.fromint(42), Type.get('Int'))
 
 class ListLiteral(Node):
+    __slots__ = Node.__slots__ + ['items']
+    _immutable_fields_ = ['items']
+
     def __init__(self, items, type_):
         Node.__init__(self)
         assert isinstance(items, list)
@@ -161,7 +167,7 @@ class ListLiteral(Node):
 
     @classmethod
     def _test_cases(cls):
-        yield cls([Literal._TEST_INT], List.get(Type.get('Int')))
+        yield cls([TEST_INT_LITERAL], List.get(Type.get('Int')))
 
     def replace_child(self, child, other):
         index = self.items.index(child)
@@ -180,12 +186,14 @@ class ListLiteral(Node):
 
 
 class RecordLiteral(Node):
+    __slots__ = Node.__slots__ + ['keys', 'values']
+    _immutable_fields_ = ['keys', 'values']
     type = Type.get('Record')
+
     def __init__(self, keys, values, type_):
         Node.__init__(self)
         self.keys = keys
         self.values = values
-        self.type = type_
         for item in keys:
             assert isinstance(item, Symbol)
         for item in values:
@@ -217,6 +225,9 @@ class RecordLiteral(Node):
 
 
 class Load(Node):
+    __slots__ = Node.__slots__ + ['name', 'index', 'depth']
+    _immutable_fields_ = ['name', 'index', 'depth']
+
     def __init__(self, name, type_):
         Node.__init__(self)
         assert isinstance(name, Name)
@@ -265,6 +276,8 @@ class Load(Node):
 
 class Let(Node):
     """For let-bindings. Works as let-rec"""
+    __slots__ = Node.__slots__ + ['name', 'value', 'index']
+    _immutable_fields_ = ['name', 'value', 'index']
 
     def __init__(self, name, value):
         Node.__init__(self)
@@ -288,8 +301,8 @@ class Let(Node):
 
     @classmethod
     def _test_cases(cls):
-        yield cls(Name("quxx"), Literal._TEST_INT)
-        yield cls(Name("f"), Lambda([], Sequence([Literal._TEST_INT])))
+        yield cls(Name("quxx"), TEST_INT_LITERAL)
+        yield cls(Name("f"), Lambda([], Sequence([TEST_INT_LITERAL])))
 
     def __repr__(self):
         return "Let({!r}, {!r})".format(self.name, self.value)
@@ -312,6 +325,8 @@ class Let(Node):
 
 class NewCell(Node):
     type = Internal.get('Var')
+    __slots__ = Node.__slots__ + ['name', 'index']
+    _immutable_fields_ = ['name', 'index']
 
     def __init__(self, name):
         Node.__init__(self)
@@ -344,6 +359,9 @@ class NewCell(Node):
 
 
 class LoadCell(Node):
+    __slots__ = Node.__slots__ + ['cell']
+    _immutable_fields_ = ['cell']
+
     def __init__(self, cell, type_):
         Node.__init__(self)
         assert isinstance(cell, Node)
@@ -371,6 +389,9 @@ class LoadCell(Node):
 
 
 class StoreCell(Node):
+    __slots__ = Node.__slots__ + ['cell', 'value']
+    _immutable_fields_ = ['cell', 'value']
+
     def __init__(self, cell, value):
         Node.__init__(self)
         self.cell = cell
@@ -383,7 +404,7 @@ class StoreCell(Node):
 
     @classmethod
     def _test_cases(cls):
-        yield cls(Load(Name("x"), Type.VAR), Literal._TEST_INT)
+        yield cls(Load(Name("x"), Type.VAR), TEST_INT_LITERAL)
 
     def replace_child(self, child, other):
         if child is self.value:
@@ -409,8 +430,8 @@ class StoreCell(Node):
 class Lambda(Node):
     type = Type.FUNC
 
-    # __slots__ = ['body', 'original_body', 'shape', 'arg_length']
-    # _immutable_fields_ = ['original_body', 'shape', 'arg_length']
+    __slots__ = Node.__slots__ + ['body', 'original_body', 'shape', 'arg_length']
+    _immutable_fields_ = ['body', 'original_body', 'shape', 'arg_length']
 
     def __init__(self, arg_names, body):
         Node.__init__(self)
@@ -436,7 +457,7 @@ class Lambda(Node):
 
     @classmethod
     def _test_cases(cls):
-        yield cls([], Sequence([Literal._TEST_INT]))
+        yield cls([], Sequence([TEST_INT_LITERAL]))
 
     def evaluate(self, frame):
         return Closure(frame, self)
@@ -448,6 +469,9 @@ class Lambda(Node):
 
 
 class Call(Node):
+    __slots__ = Node.__slots__ + ['func_node', 'args', 'call_count', 'cached_func', 'cached_closure']
+    _immutable_fields_ = ['func_node', 'args', 'cached_func', 'cached_closure']
+
     def __init__(self, func_node, args, type_, call_count=0):
         Node.__init__(self)
         assert isinstance(func_node, Node)
@@ -467,7 +491,7 @@ class Call(Node):
     @classmethod
     def _test_cases(cls):
         yield cls(Load(Name("f"), Type.FUNC), [], Type.get('Int'))
-        yield cls(Load(Name("f"), Type.FUNC), [Literal._TEST_INT], Type.get('Int'))
+        yield cls(Load(Name("f"), Type.FUNC), [TEST_INT_LITERAL], Type.get('Int'))
 
     def _copy(self, transform): return Call(self.func_node.copy(transform), [a.copy(transform) for a in self.args], self.type)
     def children(self): return [self.func_node] + self.args
@@ -537,6 +561,9 @@ class Call(Node):
 
 
 class StaticCall(Call):
+    __slots__ = Call.__slots__
+    _immutable_fields_ = Call._immutable_fields_
+
     """Call always to the same closure instance"""
     def __init__(self, func_node, args, type_, closure, call_count=0):
         Call.__init__(self, func_node, args, type_, call_count)
@@ -548,7 +575,7 @@ class StaticCall(Call):
         return [] # TODO
         # closure = None
         # yield cls(Load(Name("f"), Type.FUNC), [], Type.get('Int'), closure)
-        # yield cls(Load(Name("f"), Type.FUNC), [Literal._TEST_INT], Type.get('Int'), closure)
+        # yield cls(Load(Name("f"), Type.FUNC), [TEST_INT_LITERAL], Type.get('Int'), closure)
 
     @jit.unroll_safe
     def evaluate(self, frame):
@@ -576,7 +603,7 @@ class StaticCall(Call):
             if self.call_count == 3: # 4th call
                 if not frame.func:
                     pass # can't inline into global scope.
-                elif frame.func.body.weight > 60:
+                elif frame.func.body.weight > 40:
                     pass # this is getting silly.
                 # TODO handle recursive inlining separately?
                 else:
@@ -592,9 +619,12 @@ class StaticCall(Call):
 
     def inline_body(self, closure, closure_args, outer_scope):
         if isinstance(self.func_node, Load):
-            closure_name = self.func_node.name
+            fn = self.func_node
+            assert isinstance(fn, Load)
+            closure_name = fn.name
         else:
             closure_name = Name("closure")
+        assert isinstance(closure_name, Name)
         closure_node = Load(closure_name, Type.FUNC)
 
         # Transform closure-scope lookups in the body. source of much grief
@@ -631,7 +661,7 @@ class StaticCall(Call):
         func_node = self.func_node.copy()
         let = None
         if closure_node:
-            if isinstance(self.func_node, Load) and self.func_node.name == closure_node.name:
+            if isinstance(func_node, Load) and func_node.name == closure_node.name:
                 pass # don't include `let`.
             else:
                 let = Let(closure_node.name, func_node)
@@ -677,6 +707,9 @@ class StaticCall(Call):
 
 
 class InlinedStatic(StaticCall):
+    __slots__ = Node.__slots__ + ['cached_closure', 'body']
+    _immutable_fields_ = ['cached_closure', 'body']
+
     def __init__(self, func_node, args, type_, closure, body, call_count=0):
         Call.__init__(self, func_node, args, type_, call_count)
         assert isinstance(body, Sequence)
@@ -729,9 +762,9 @@ class FuncCall(Call):
 
     @classmethod
     def _test_cases(cls):
-        func = Lambda([], Sequence([Literal._TEST_INT]))
+        func = Lambda([], Sequence([TEST_INT_LITERAL]))
         yield cls(Load(Name("f"), Type.FUNC), [], Type.get('Int'), func)
-        yield cls(Load(Name("f"), Type.FUNC), [Literal._TEST_INT], Type.get('Int'), func)
+        yield cls(Load(Name("f"), Type.FUNC), [TEST_INT_LITERAL], Type.get('Int'), func)
 
     @jit.unroll_safe
     def evaluate(self, frame):
@@ -763,6 +796,9 @@ class GenericCall(Call):
 
 
 class ClosureLoad(Node):
+    __slots__ = Node.__slots__ + ['name', 'closure_node']
+    _immutable_fields_ = ['name', 'closure_node']
+
     """For inlining. Extracts a local variable from inside a Closure object."""
     def __init__(self, name, type_, closure_node):
         Node.__init__(self)
@@ -771,7 +807,7 @@ class ClosureLoad(Node):
         self.type = type_
         assert not closure_node._parent
         closure_node.set_parent(self)
-        self.closure_node = closure_node
+        self.closure_node = closure_node # TODO make this a `name`
 
         # self.index = index
         # self.depth = depth
@@ -849,6 +885,9 @@ class ClosureLoad(Node):
 
 
 class Return(Node):
+    __slots__ = Node.__slots__ + ['child']
+    _immutable_fields_ = ['child']
+
     def __init__(self, child):
         Node.__init__(self)
         self.child = child
@@ -871,6 +910,9 @@ class Return(Node):
 
 class GetAttr(Node):
     type = Generic.ALPHA
+    __slots__ = Node.__slots__ + ['symbol', 'record']
+    _immutable_fields_ = ['symbol', 'record']
+
     def __init__(self, symbol, record):
         Node.__init__(self)
         self.symbol = symbol
@@ -905,6 +947,9 @@ class GetAttr(Node):
 
 
 class SetAttr(Node):
+    __slots__ = Node.__slots__ + ['symbol', 'record', 'value']
+    _immutable_fields_ = ['symbol', 'record', 'value']
+
     def __init__(self, symbol, record, value):
         Node.__init__(self)
         self.symbol = symbol

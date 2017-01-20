@@ -306,7 +306,9 @@ class DefineMacro(Macro):
 
         # Define rule
         symbols, macro = self._macro(spec, func)
-        if values[0].word is Word.word('defprim'):
+        vw = values[0]
+        assert isinstance(vw, WordNode)
+        if vw.word is Word.word('defprim'):
             node, = body.nodes
             assert isinstance(node, Builtin)
             arg_indexes = []
@@ -320,7 +322,13 @@ class DefineMacro(Macro):
         grammar.add(type_, symbols, macro)
 
     def _macro(self, spec, func):
-        symbols = [(s.type if self._is_arg(s) else s.word) for s in spec]
+        symbols = []
+        for s in spec:
+            if self._is_arg(s):
+                symbols.append(s.type)
+            else:
+                assert isinstance(s, WordNode)
+                symbols.append(s.word)
         arg_indexes = [index for index, s in enumerate(spec) if self._is_arg(s)]
         return symbols, CallMacro(func, arg_indexes)
 
@@ -444,10 +452,12 @@ class LetMacro(Macro):
     def build(self, values, type_):
         value = values[6]
 
-        identifier = values[2].items
-        for v in identifier:
+        iden = values[2]
+        assert isinstance(iden, ListLiteral)
+        identifier = []
+        for v in iden.items:
             assert isinstance(v, WordNode)
-        identifier = [v.word for v in identifier]
+            identifier.append(v.word)
         name = ""
         for iden in identifier:
             name += iden.value
@@ -732,7 +742,7 @@ def add_builtin(cls):
 import builtins
 for name in dir(builtins):
     cls = getattr(builtins, name)
-    if name.replace("_", "").isupper():
+    if name.replace("_", "").isupper() and isinstance(cls, type):
         if cls is not Builtin and issubclass(cls, Builtin):
             add_builtin(cls)
 

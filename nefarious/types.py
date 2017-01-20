@@ -353,8 +353,7 @@ Type.VAR = Internal.get('Var')
 class Node(object):
     type = None
     #_immutable_fields_ = ['type'] #...
-    #__slots__ = ['type', '_parent']
-    # TODO make more memory-efficient
+    __slots__ = ['type', '_parent', 'weight']
 
     def __init__(self):
         self._parent = None
@@ -403,6 +402,9 @@ class Node(object):
 
 class WordNode(Node):
     type = Type.WORD
+    __slots__ = ['word']
+    _immutable_fields_ = ['word']
+
     def __init__(self, word):
         self.weight = 0
         self.word = word
@@ -416,6 +418,8 @@ class WordNode(Node):
 
 
 class Error(Node):
+    __slots__ = ['message']
+
     def __init__(self, message):
         self.message = message
 

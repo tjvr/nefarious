@@ -2,6 +2,7 @@
 - blocks @done
 - hot code inlining @done
 - dont inline forever @done
+- Node: slots? @done
 
 - nqueens: fix jit
 - binary: jit slows down for very short run.
@@ -19,7 +20,7 @@ Extensions:
 	- continuations
 
 Optimise:
-	- Node: slots?
+	- Cells inside Records?
 	- staticcall/inlinedclosure mess
 	- Record: slots for first N
 	- promote tree constants

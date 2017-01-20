@@ -17,7 +17,7 @@ while_driver = jit.JitDriver(
 
 class Builtin(Node):
     type = None
-    #__slots__ = ['type', '_parent']
+    __slots__ = Node.__slots__
 
     def __init__(self, args, type_):
         raise NotImplementedError
@@ -49,7 +49,9 @@ class Builtin(Node):
 
 
 class UnaryBuiltin(Builtin):
-    #__slots__ = ['type', '_parent', 'child']
+    __slots__ = Node.__slots__ + ['child']
+    _immutable_fields_ = ['child']
+
     def __init__(self, args, type_):
         Node.__init__(self)
         self.child, = args
@@ -64,7 +66,9 @@ class UnaryBuiltin(Builtin):
 
 
 class InfixBuiltin(Builtin):
-    #__slots__ = ['type', '_parent', 'left', 'right']
+    __slots__ = Node.__slots__ + ['left', 'right']
+    _immutable_fields_ = ['left', 'right']
+
     def __init__(self, args, type_):
         Node.__init__(self)
         self.left, self.right = args
@@ -393,6 +397,8 @@ _Line = Internal.get('Line')
 class IF_THEN_ELSE(Builtin):
     type = _a
     arg_types = [Bool, _a, _a]
+    __slots__ = Node.__slots__ + ['cond', 'tv', 'fv']
+    _immutable_fields_ = ['cond', 'tv', 'fv']
 
     def __init__(self, values, type_):
         Node.__init__(self)
@@ -437,6 +443,8 @@ class IF_THEN_ELSE(Builtin):
 class IF_THEN(Builtin):
     type = _Line
     arg_types = [Bool, _Block]
+    __slots__ = Node.__slots__ + ['cond', 'body']
+    _immutable_fields_ = ['cond', 'body']
 
     def __init__(self, values, type_):
         Node.__init__(self)
@@ -455,7 +463,7 @@ class IF_THEN(Builtin):
         if child is self.cond:
             self.cond = other
         elif child is self.body:
-            self.seq = other
+            self.body = other
         else:
             assert False
 
@@ -475,6 +483,8 @@ class IF_THEN(Builtin):
 class WHILE(Builtin):
     type = _Line
     arg_types = [Bool, _Block]
+    __slots__ = Node.__slots__ + ['cond', 'body']
+    _immutable_fields_ = ['cond', 'body']
 
     def __init__(self, values, type_):
         Node.__init__(self)

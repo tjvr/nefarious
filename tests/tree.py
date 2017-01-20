@@ -26,7 +26,10 @@ class CopyTests(unittest.TestCase):
     def _check_children(self, instance):
         children = instance.children()
         cls_name = instance.__class__.__name__
-        for name, child in instance.__dict__.items():
+        for name in dir(instance):
+            if name in ('type'):
+                continue
+            child = getattr(instance, name)
             if name != '_parent' and isinstance(child, Node):
                 if name not in ('cached_func',):
                     self.assertIn(child, children,
@@ -67,6 +70,11 @@ def test_module_node_classes(mod):
         if isinstance(cls, type) and issubclass(cls, Node):
             if cls in ignore_classes:
                 continue
+
+            if not hasattr(cls, '__slots__'):
+                print 'needs __slots__:', cls.__name__
+            if not hasattr(cls, '_immutable_fields_'):
+                print 'needs _immutable_fields_', cls.__name__
             if hasattr(cls, '_test_cases'):
                 create_test(cls)
             else:
