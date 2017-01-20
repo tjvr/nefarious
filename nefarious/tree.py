@@ -425,7 +425,7 @@ class Lambda(Node):
     def arg_names(self):
         return self.shape.names_list()[:self.arg_length]
 
-    def _copy(self, transform): return Lambda(self.arg_names(), self.original_body.copy(transform))
+    def _copy(self, transform): return Lambda(self.arg_names(), self.body.copy(transform))
     def children(self): return [self.body]
 
     def compile(self, stack):
