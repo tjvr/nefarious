@@ -306,6 +306,25 @@ class Let(Node):
         return "(let " + self.name.sexpr() + " " + self.value.sexpr() + ")"
 
 
+class LetRec(Let):
+    @classmethod
+    def _test_cases(cls):
+        yield cls(Name("f"), Lambda(FuncDef([], Sequence([Literal._TEST_INT]))))
+
+    def _copy(self, transform): return LetRec(self.name, self.value.copy(transform))
+
+    def compile(self, stack):
+        shape = stack.pop()
+        self.index, shape = shape.lookup_or_insert(self.name)
+        stack.append(shape)
+
+        self.value.compile(stack)
+
+    def sexpr(self):
+        return "(let-rec " + self.name.sexpr() + " " + self.value.sexpr() + ")"
+
+
+
 class NewCell(Node):
     type = Internal.get('Var')
 
@@ -400,44 +419,6 @@ class StoreCell(Node):
         value = self.value.evaluate(frame)
         if value is None: value = Value.NULL # TODO move this elsewhere
         cell.set(value)
-
-
-class Define(Node):
-    """A little like `let rec` I suppose"""
-    def __init__(self, name, func):
-        Node.__init__(self)
-        assert isinstance(name, Name)
-        self.name = name
-        #func.body.set_parent(self) # TODO: this is questionable
-        self.func = func
-        self.index = -1
-
-    def _copy(self, transform): return Define(self.name, FuncDef(self.func.shape.names_list(), self.func.body.copy(transform)))
-    def children(self): return [self.func.body]
-
-    @classmethod
-    def _test_cases(cls):
-        yield cls(Name("f"), FuncDef([], Sequence([Literal._TEST_INT])))
-
-    def compile(self, stack):
-        shape = stack.pop()
-        self.index, shape = shape.lookup_or_insert(self.name)
-        stack.append(shape)
-
-        shape = self.func.shape
-        stack.append(shape)
-        self.func.body.compile(stack)
-        self.func.shape = stack.pop()
-
-    def evaluate(self, frame):
-        closure = Closure(frame, self.func)
-        index = self.index
-        jit.promote(index)
-        frame.set(index, closure)
-        return None
-
-    def sexpr(self):
-        return "(define " + self.name.sexpr() + " " + self.func.sexpr() + ")"
 
 
 class Lambda(Node):
@@ -602,11 +583,12 @@ class StaticCall(Call):
             if self.call_count == 3: # 4th call
                 if not frame.func:
                     pass # can't inline into global scope.
-                elif frame.func.body.weight > 40:
+                elif frame.func.body.weight > 60:
                     pass # this is getting silly.
                 # TODO handle recursive inlining separately?
                 else:
                     self.inline_call(frame.func, frame, closure)
+                    print frame.func.body.sexpr()
 
         return self.evaluate_closure(frame, closure.scope, closure.func)
 

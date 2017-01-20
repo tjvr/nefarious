@@ -332,8 +332,7 @@ class DefineMacro(Macro):
         body = body.func.body
         assert isinstance(body, Sequence)
 
-        #return Let(name, Lambda(arg_names, body))
-        return Define(name, FuncDef(arg_names, body))
+        return LetRec(name, Lambda(FuncDef(arg_names, body)))
 
 
 class CallMacro(Macro):
