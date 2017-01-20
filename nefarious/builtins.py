@@ -406,8 +406,7 @@ class IF_THEN_ELSE(Builtin):
 
     @classmethod
     def _test_cases(cls):
-        # TODO test IF
-        return []
+        return [] # TODO test IF
 
     def replace_child(self, child, other):
         if child is self.cond:
@@ -441,47 +440,36 @@ class IF_THEN(Builtin):
 
     def __init__(self, values, type_):
         Node.__init__(self)
-        self.cond, block = values
+        self.cond, self.body = values
         self.cond.set_parent(self)
-        self.block = block
-        assert isinstance(block, Lambda)
-        seq = block.body
-        assert isinstance(seq, Sequence)
-        self.seq = seq
-        seq.set_parent(self)
+        self.body.set_parent(self)
 
     def _args(self):
-        return [self.cond, self.block]
-
-    def children(self):
-        # shares the Frame with the parent scope
-        # takes a Block, but sneakily looks inside it and EXTRACTS the Sequence.
-        return [self.cond, self.seq]
+        return [self.cond, self.body]
 
     @classmethod
     def _test_cases(cls):
-        # TODO test IF
-        return []
+        return [] # TODO test IF
 
     def replace_child(self, child, other):
         if child is self.cond:
             self.cond = other
-        elif child is self.seq:
-            # TODO copy block instead of modifying in-place?
-            self.seq = self.block.body = other
+        elif child is self.body:
+            self.seq = other
         else:
             assert False
 
     def sexpr(self):
-        return "(IF_THEN " + self.cond.sexpr() + " " + self.block.sexpr() + ")"
+        return "(IF_THEN " + self.cond.sexpr() + " " + self.body.sexpr() + ")"
 
     def evaluate(self, frame): # TODO OPT
-        block = self.block
-        jit.promote(self.cond)
-        jit.promote(block)
-        cond = self.cond.evaluate(frame)
+        cond = self.cond
+        jit.promote(cond)
+        cond = cond.evaluate(frame)
         if cond == Value.TRUE:
-            self.seq.evaluate(frame)
+            body = self.body
+            jit.promote(body)
+            body.evaluate(frame)
 
 
 class WHILE(Builtin):
@@ -490,56 +478,40 @@ class WHILE(Builtin):
 
     def __init__(self, values, type_):
         Node.__init__(self)
-        self.cond, block = values
+        self.cond, self.body = values
         assert isinstance(self.cond, Node)
         self.cond.set_parent(self)
-        self.block = block
-        assert isinstance(block, Lambda)
-        seq = block.body
-        assert isinstance(seq, Sequence)
-        self.seq = seq
-        seq.set_parent(self)
+        self.body.set_parent(self)
 
     def _args(self):
-        return [self.cond, self.block]
+        return [self.cond, self.body]
 
-    def children(self):
-        # WHILE takes a Block, but sneakily looks inside it and EXTRACTS the
-        # Sequence.
-        # It also shares the Frame with the parent scope, because ARGH.
-        return [self.cond, self.seq]
-
-        # TODO it is possible that defining new variables inside a WHILE loop
-        # is currently unsupported.
     @classmethod
     def _test_cases(cls):
-        # TODO test WHILE
-        return []
+        return [] # TODO test WHILE
         #yield WHILE([Literal(W_Bool.TRUE, Bool), Block], _Line)
 
-    # TODO replace_child ?
-
+    def replace_child(self, child, other):
+        if child is self.cond:
+            self.cond = child
+        elif child is self.body:
+            self.body = other
 
     def sexpr(self):
-        return "(WHILE " + self.cond.sexpr() + " " + self.seq.sexpr() + ")"
+        return "(WHILE " + self.cond.sexpr() + " " + self.body.sexpr() + ")"
 
     def evaluate(self, frame):
-        cond = self.cond
-        body = self.seq
-        # jit.promote(body) # ??? TODO
+        cond, body = self.cond, self.body
+        jit.promote(cond)
+        jit.promote(body)
 
         while True:
-            while_driver.jit_merge_point(self=self, cond=cond, body=body, frame=frame)
-
-            #cond_value = cond.evaluate(frame)
-
-            if cond.evaluate(frame) is Value.FALSE:
+            carry_on = cond.evaluate(frame)
+            jit.promote(carry_on)
+            if carry_on is Value.FALSE:
                 break
-            #assert cond_value is Value.TRUE
-
+            while_driver.jit_merge_point(self=self, cond=cond, body=body, frame=frame)
             body.evaluate(frame)
-
-            # jitdriver.can_enter_jit(self=self, frame=frame) # TODO
 
 
 _List = List.get(_a)

@@ -709,9 +709,14 @@ class BuiltinMacro(Macro):
         #assert issubclass(cls, Builtin)
         self.cls = cls
         self.arg_indexes = arg_indexes
-
+        
     def build(self, values, type_):
-        args = [values[i] for i in self.arg_indexes]
+        args = []
+        for i in self.arg_indexes:
+            value = values[i]
+            if isinstance(value, Lambda):
+                value = value.body
+            args.append(value)
         return self.cls(args, type_)
 
 def add_builtin(cls):
