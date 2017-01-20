@@ -1,0 +1,118 @@
+
+defprim Bool:a and Bool:b { BOOL_AND a b }
+defprim Bool:a or Bool:b { BOOL_OR a b }
+defprim not Bool:x { BOOL_NOT x }
+
+defprim print Any:x { PRINT x }
+defprim repr Any:x { REPR x }
+defprim Record:x is nil { IS_NIL x }
+
+defprim Int:a + Int:b { INT_ADD a b }
+defprim Int:a - Int:b { INT_SUB a b }
+defprim Int:a * Int:b { INT_MUL a b }
+defprim Int:a < Int:b { INT_LT a b }
+defprim Int:a = Int:b { INT_EQ a b }
+defprim random from Int:a to Int:b { INT_RANDOM a b }
+defprim float Int:a { INT_FLOAT a }
+define abs Int:x {
+    IF_THEN_ELSE (x < 0) (0 - x) x
+}
+
+defprim join (List Text):pieces { TEXT_JOIN pieces }
+defprim join (List Text):pieces with Text:sep { TEXT_JOIN_WITH pieces sep }
+defprim split Text:t { TEXT_SPLIT t }
+defprim split Text:text by Text:sep { TEXT_SPLIT_BY text sep }
+
+defprim add Any:x to (List Any):l { LIST_ADD l x }
+defprim length of (List Any):l { LIST_LEN l }
+defprim item Int:i of (List Any):l { LIST_GET l i }
+define last of (List Any):l { item length of l of l }
+define first of (List Any):l { item 1 of l }
+define second of (List Any):l { item 2 of l }
+
+define repeat Int:count Var:c Block:body {
+    c := count
+    WHILE (0 < c) {
+        run body
+        c := c - 1
+    }
+}
+
+define for Var:v in (List Any):l Block:body {
+    var i := 0
+    WHILE (i < length of l) {
+        v := item (i + 1) of l
+        run body
+        i := i + 1
+    }
+}
+
+define copy (List Any):list {
+    let out = []
+    var x
+    for x in list { add x to out }
+    out
+}
+
+define drop Int:n (List Any):list {
+    let out = []
+    var c := n
+    var x
+    for x in list {
+        IF_THEN (c = 0) { add x to out }
+        IF_THEN (not c = 0) { c := c - 1 }
+    }
+    out
+}
+
+define concat (List Any):left (List Any):right {
+    let out = copy left
+    var x
+    for x in right { add x to out }
+    out
+}
+
+define threatens Int:x Int:y Int:a Int:b {
+    (x = a) or (y = b) or (abs (x - a) = abs (y - b))
+}
+
+define check (List Int):board Int:current {
+    IF_THEN (length of board < current) { return yes }
+    IF_THEN (8 < item current of board) { return no }
+    IF_THEN (threatens current (item current of board) 1 (item 1 of board)) { return no }
+    return check board (current + 1)
+    no
+}
+
+define valid (List Int):board {
+    check board 2
+}
+
+
+define complete (List Int):board {
+    IF_THEN (length of board = 0) {
+        return complete [1]
+    }
+    IF_THEN (8 < first of board) {
+        return complete concat [second of board + 1] (drop 2 board)
+    }
+    IF_THEN (length of board = 8 and valid board) {
+        return board
+    }
+    IF_THEN (valid board) {
+        return complete concat [1] board
+    }
+    return (complete concat [first of board + 1] (drop 1 board))
+    []
+}
+
+define solve {
+    complete []
+}
+
+var i
+repeat 200 i {
+    solve
+}
+solve
+

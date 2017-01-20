@@ -1,14 +1,17 @@
 - Record types @done
 - blocks @done
 - hot code inlining @done
+- dont inline forever @done
 
+- nqueens: fix jit
+- binary: jit slows down for very short run.
 - add `apply`
-- dont inline forever
 - non-local return
 - imports, *please*
 - SourceSection
 
 Extensions:
+	- tail recursion?
 	- precedence groups
 	- custom parametric types
 	- type Funcs?
@@ -22,7 +25,7 @@ Optimise:
 	- audit ALL THE THINGS
 	- Call.evaluate_arguments ignores hint!
 	- Node memory efficiency
-
+	
 	- nested sequences
 	- avoid allocation of empty lists
 	- consider lowering builtins
@@ -31,10 +34,10 @@ Optimise:
 Benchmarks:
 	- fib @done
 	- @clg n-body @done
+	- @clg binary-trees @done
 	- nqueens
 	- richards?
 	
-	- @clg binary-trees @mp(sometimes)
 	- @clg mandelbrot @mp(nope)
 	- @clg reverse-complement @mp(nope)
 	- @clg spectral-norm @mp(yes)

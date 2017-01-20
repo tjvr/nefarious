@@ -463,7 +463,14 @@ class IF_THEN(Builtin):
         # TODO test IF
         return []
 
-    # TODO replace_child
+    def replace_child(self, child, other):
+        if child is self.cond:
+            self.cond = other
+        elif child is self.seq:
+            # TODO copy block instead of modifying in-place?
+            self.seq = self.block.func.body = other
+        else:
+            assert False
 
     def sexpr(self):
         return "(IF_THEN " + self.cond.sexpr() + " " + self.block.sexpr() + ")"
