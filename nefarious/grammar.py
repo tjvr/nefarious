@@ -172,7 +172,7 @@ grammar.add(Seq.get(Line), [Seq.get(Line), Internal.NLS, Line], ContinueList)
 # TODO allow newlines inside parens?
 
 def Block(nodes):
-    return Lambda(FuncDef([], Sequence(nodes)))
+    return Lambda([], Sequence(nodes))
 
 # Blocks
 @singleton
@@ -332,7 +332,7 @@ class DefineMacro(Macro):
         body = body.func.body
         assert isinstance(body, Sequence)
 
-        return Let(name, Lambda(FuncDef(arg_names, body)))
+        return Let(name, Lambda(arg_names, body))
 
 
 class CallMacro(Macro):
@@ -400,7 +400,7 @@ class LambdaMacro(Macro):
         assert isinstance(body, Lambda)
         body = body.func.body
         assert isinstance(body, Sequence)
-        return Lambda(FuncDef(arg_names, body))
+        return Lambda(arg_names, body)
 
 grammar.add(Type.FUNC, ws([
     Word.word("fun"), Seq.get(Arg), Type.BLOCK,

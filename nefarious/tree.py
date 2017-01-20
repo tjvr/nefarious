@@ -289,7 +289,7 @@ class Let(Node):
     @classmethod
     def _test_cases(cls):
         yield cls(Name("quxx"), Literal._TEST_INT)
-        yield cls(Name("f"), Lambda(FuncDef([], Sequence([Literal._TEST_INT]))))
+        yield cls(Name("f"), Lambda([], Sequence([Literal._TEST_INT])))
 
     def __repr__(self):
         return "Let({!r}, {!r})".format(self.name, self.value)
@@ -409,10 +409,10 @@ class StoreCell(Node):
 class Lambda(Node):
     type = Type.FUNC
 
-    def __init__(self, func):
+    def __init__(self, arg_names, body):
         Node.__init__(self)
-        assert isinstance(func, FuncDef)
-        self.func = func
+        # TODO replace FuncDef with Lambda.
+        self.func = FuncDef(arg_names, body)
 
     def compile(self, stack):
         shape = self.func.shape
@@ -423,12 +423,12 @@ class Lambda(Node):
     # The interaction between Lambda and FuncDef is unpleasant.
     # I'm not sure it really makes sense anymore for the body to be stored on the FuncDef!
     # TODO: revisit this
-    def _copy(self, transform): return Lambda(FuncDef(self.func.arg_names(), self.func.body.copy(transform)))
+    def _copy(self, transform): return Lambda(self.func.arg_names(), self.func.body.copy(transform))
     def children(self): return [self.func.body]
 
     @classmethod
     def _test_cases(cls):
-        yield cls(FuncDef([], Sequence([Literal._TEST_INT])))
+        yield cls([], Sequence([Literal._TEST_INT]))
 
     def evaluate(self, frame):
         jit.promote(self.func)
