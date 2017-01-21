@@ -8,6 +8,7 @@
 - TODO: Options.INLINING should be immutable! :-)
 - argv, *please*
 - nqueens: fix jit
+- optimise ClosureLoad ?
 - binary: jit slows down for very short run.
 - add `apply`
 - non-local return

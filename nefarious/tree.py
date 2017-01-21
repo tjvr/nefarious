@@ -111,12 +111,8 @@ class Sequence(Node):
     @jit.unroll_safe
     def evaluate(self, frame):
         # TODO: rewrite to remove nested Sequences
-
-        assert frame
         value = None
-        nodes = self.nodes
-        jit.promote(nodes) # assume replace_child won't happen in traced code
-        for node in nodes:
+        for node in self.nodes:
             value = node.evaluate(frame)
         return value
 
@@ -181,7 +177,6 @@ class ListLiteral(Node):
 
     @jit.unroll_safe
     def evaluate(self, frame):
-        jit.promote(self.items)
         return W_List([item.evaluate(frame) for item in self.items])
 
 
@@ -218,8 +213,6 @@ class RecordLiteral(Node):
 
     @jit.unroll_safe
     def evaluate(self, frame):
-        # Can't promote self.keys because it doesn't unify!
-        jit.promote(self.values)
         eval_values = [item.evaluate(frame) for item in self.values]
         return W_Record(self.keys, eval_values)
 
@@ -261,14 +254,9 @@ class Load(Node):
 
     @jit.unroll_safe
     def evaluate(self, frame):
-        depth = self.depth
-        jit.promote(depth)
-        for i in range(depth):
+        for i in range(self.depth):
             frame = frame.parent
-
-        index = self.index
-        jit.promote(index)
-        return frame.lookup(index)
+        return frame.lookup(self.index)
 
     def sexpr(self):
         return self.name.sexpr()
@@ -312,11 +300,8 @@ class Let(Node):
         self.value = other
 
     def evaluate(self, frame):
-        jit.promote(self.value)
         value = self.value.evaluate(frame)
-        index = self.index
-        jit.promote(index)
-        frame.set(index, value)
+        frame.set(self.index, value)
 
     def sexpr(self):
         return "(let " + self.name.sexpr() + " " + self.value.sexpr() + ")"
@@ -351,10 +336,8 @@ class NewCell(Node):
     def evaluate(self, frame):
         if self.index == -1:
             raise ValueError("NewCell was not compiled")
-        index = self.index
-        jit.promote(index)
         cell = W_Var(Value.NULL)
-        frame.set(index, cell)
+        frame.set(self.index, cell)
         return cell
 
 
@@ -380,7 +363,6 @@ class LoadCell(Node):
         return "(get " + self.cell.sexpr() + ")"
 
     def evaluate(self, frame):
-        jit.promote(self.cell)
         cell = self.cell.evaluate(frame)
         assert isinstance(cell, W_Var)
         value = cell.get()
@@ -418,10 +400,8 @@ class StoreCell(Node):
         return "(set " + self.cell.sexpr() + " " + self.value.sexpr() + ")"
 
     def evaluate(self, frame):
-        jit.promote(self.cell)
         cell = self.cell.evaluate(frame)
         assert isinstance(cell, W_Var)
-        jit.promote(self.value)
         value = self.value.evaluate(frame)
         if value is None: value = Value.NULL # TODO move this elsewhere
         cell.set(value)
@@ -515,7 +495,6 @@ class Call(Node):
         closure = func_node.evaluate(frame)
         assert isinstance(closure, Closure)
         func = closure.func
-        self.cached_closure = closure
 
         # fast transition
         call_count = self.call_count
@@ -579,15 +558,12 @@ class StaticCall(Call):
 
     @jit.unroll_safe
     def evaluate(self, frame):
-        func_node = self.func_node
-        jit.promote(func_node) # nb. this could of course change
-        closure = func_node.evaluate(frame)
+        closure = self.func_node.evaluate(frame)
         assert isinstance(closure, Closure)
 
         # guard: closure
-        cached_closure = self.cached_closure
-        jit.promote(cached_closure) # immutable
         jit.promote(closure)
+        cached_closure = self.cached_closure
         if closure is not cached_closure: # guard
             if closure.func is cached_closure.func:
                 new_call = FuncCall(self.func_node, self.args, self.type, closure.func, self.call_count)
@@ -598,7 +574,7 @@ class StaticCall(Call):
 
         # inlining
         allow_inlining = Options.INLINING
-        jit.promote(allow_inlining)
+        jit.promote(allow_inlining) # TODO make option immutable
         if allow_inlining:
             if self.call_count == 3: # 4th call
                 if not frame.func:
@@ -733,17 +709,13 @@ class InlinedStatic(StaticCall):
         return "(INLINE " + self.func_node.sexpr() + " " + self.body.sexpr() + ")"
 
     def evaluate(self, frame):
-        func_node = self.func_node
-        jit.promote(func_node) # nb. this could of course change
-        closure = func_node.evaluate(frame)
+        closure = self.func_node.evaluate(frame)
         assert isinstance(closure, Closure)
 
         # guard: closure
-        cached_closure = self.cached_closure
-        jit.promote(cached_closure) # immutable
         jit.promote(closure)
-        if closure is not cached_closure: # guard
-            if closure.func is cached_closure.func:
+        if closure is not self.cached_closure: # guard
+            if closure.func is self.cached_closure.func:
                 new_call = FuncCall(self.func_node, self.args, self.type, closure.func, self.call_count)
             else:
                 new_call = GenericCall(self.func_node, self.args, self.type, self.call_count)
@@ -772,18 +744,16 @@ class FuncCall(Call):
         assert isinstance(closure, Closure)
 
         # guard: func
-        cached_func = self.cached_func
-        jit.promote(cached_func) # immutable
         func = closure.func
         jit.promote(func) # this is most of the point
-        if func is not cached_func:
+        if func is not self.cached_func:
             new_call = GenericCall(self.func_node, self.args, self.type, self.call_count)
             self._replace(new_call)
             return new_call.evaluate_closure(frame, closure.scope, func)
 
         # TODO inline body?
 
-        return self.evaluate_closure(frame, closure.scope, cached_func)
+        return self.evaluate_closure(frame, closure.scope, self.cached_func)
 
 class GenericCall(Call):
     """A completely generic call"""
@@ -824,21 +794,17 @@ class ClosureLoad(Node):
 
     @jit.unroll_safe
     def evaluate(self, frame):
-        closure_node = self.closure_node
-        jit.promote(closure_node) # TODO insert similar jit.promote(self...) everywhere else
-        closure = closure_node.evaluate(frame)
+        closure = self.closure_node.evaluate(frame)
         assert isinstance(closure, Closure)
         scope = closure.scope
 
-        name = self.name
-        jit.promote(name)
         depth = 0
         while True:
-            index = scope.shape.lookup(name)
+            index = scope.shape.lookup(self.name)
             if index != -1:
                 return scope.lookup(index)
             if not scope.parent:
-                raise ValueError(name)
+                raise ValueError(self.name)
             scope = scope.parent
             depth += 1
 
