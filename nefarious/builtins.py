@@ -110,11 +110,8 @@ class BOOL_NOT(UnaryBuiltin):
     def evaluate(self, frame):
         jit.promote(self.child)
         child = self.child.evaluate(frame)
-        if child is Value.TRUE:
-            return Value.FALSE
-        elif child is Value.FALSE:
-            return Value.TRUE
-        assert False
+        assert isinstance(child, W_Bool)
+        return W_Bool.get(not child.prim)
 
 class BOOL_OR(InfixBuiltin):
     type = Bool
@@ -123,13 +120,13 @@ class BOOL_OR(InfixBuiltin):
         jit.promote(self.left)
         jit.promote(self.right)
         left = self.left.evaluate(frame)
-        if left is Value.TRUE:
+        assert isinstance(left, W_Bool)
+        if left.prim:
             return Value.TRUE
-        assert left is Value.FALSE
         right = self.right.evaluate(frame)
-        if right is Value.TRUE:
+        assert isinstance(right, W_Bool)
+        if right.prim:
             return Value.TRUE
-        assert right is Value.FALSE
         return Value.FALSE
 
 class BOOL_AND(InfixBuiltin):
@@ -139,13 +136,13 @@ class BOOL_AND(InfixBuiltin):
         jit.promote(self.left)
         jit.promote(self.right)
         left = self.left.evaluate(frame)
-        if left is Value.FALSE:
+        assert isinstance(left, W_Bool)
+        if not left.prim:
             return Value.FALSE
-        assert left is Value.TRUE
         right = self.right.evaluate(frame)
-        if right is Value.FALSE:
+        assert isinstance(right, W_Bool)
+        if not right.prim:
             return Value.FALSE
-        assert right is Value.TRUE
         return Value.TRUE
 
 class IS_NIL(UnaryBuiltin):
@@ -428,16 +425,12 @@ class IF_THEN_ELSE(Builtin):
         return "(IF_THEN_ELSE " + self.cond.sexpr() + " " + self.tv.sexpr() + " " + self.fv.sexpr() + ")"
 
     def evaluate(self, frame): # TODO OPT
-        tv, fv = self.tv, self.fv
-        jit.promote(self.cond)
-        jit.promote(tv)
-        jit.promote(fv)
         cond = self.cond.evaluate(frame)
-        if cond == Value.TRUE:
-            return tv.evaluate(frame)
-        elif cond == Value.FALSE:
-            return fv.evaluate(frame)
-        assert False
+        assert isinstance(cond, W_Bool)
+        if cond.prim:
+            return self.tv.evaluate(frame)
+        else:
+            return self.fv.evaluate(frame)
 
 
 class IF_THEN(Builtin):
@@ -474,7 +467,8 @@ class IF_THEN(Builtin):
         cond = self.cond
         jit.promote(cond)
         cond = cond.evaluate(frame)
-        if cond == Value.TRUE:
+        assert isinstance(cond, W_Bool)
+        if cond.prim:
             body = self.body
             jit.promote(body)
             body.evaluate(frame)
@@ -518,7 +512,8 @@ class WHILE(Builtin):
         while True:
             carry_on = cond.evaluate(frame)
             jit.promote(carry_on)
-            if carry_on is Value.FALSE:
+            assert isinstance(carry_on, W_Bool)
+            if not carry_on.prim:
                 break
             while_driver.jit_merge_point(self=self, cond=cond, body=body, frame=frame)
             body.evaluate(frame)

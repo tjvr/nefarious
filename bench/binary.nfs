@@ -59,7 +59,7 @@ define check Record:tree {
 }
 
 let min_depth = 4
-let max_depth = 14
+let max_depth = 16
 let stretch_depth = max_depth + 1
 
 let q = (check (tree 0 stretch_depth))

@@ -26,7 +26,7 @@ class Value:
 
 class W_Var(Value):
     """a mutable cell"""
-    # TODO can this be virtualized?
+    __slots__ = ['value']
 
     def __init__(self, value):
         self.value = value
@@ -48,8 +48,11 @@ class W_Var(Value):
 
 class W_Bool(Value):
     type = Type.get('Bool')
-    def __init__(self):
-        assert False
+    __slots__ = ['prim']
+    _immutable_fields_ = ['prim']
+
+    def __init__(self, value):
+        self.prim = value
 
     def __repr__(self):
         return 'W_Bool({})'.format(self.sexpr())
@@ -61,20 +64,20 @@ class W_Bool(Value):
 
 class W_True(W_Bool):
     value = True
-    def __init__(self): pass
     def sexpr(self): return 'yes'
 
 class W_False(W_Bool):
     value = False
-    def __init__(self): pass
     def sexpr(self): return 'no'
 
-Value.TRUE = W_True()
-Value.FALSE = W_False()
+Value.TRUE = W_True(True)
+Value.FALSE = W_False(False)
 
 
 # TODO ditch in favour of Options
 class W_Null(Value):
+    __slots__ = []
+    _immutable_fields_ = []
     # TODO type ??
     def __init__(self): pass
     def __repr__(self): return 'Value.NULL'
@@ -84,6 +87,8 @@ Value.NULL = W_Null()
 
 class W_Float(Value):
     type = Type.get('Float')
+    __slots__ = ['prim']
+    _immutable_fields_ = ['prim']
 
     def __init__(self, prim):
         assert isinstance(prim, float)
@@ -104,7 +109,8 @@ class W_Float(Value):
 
 class W_Int(Value):
     type = Type.get('Int')
-    _immutable_fields_ = ['value']
+    __slots__ = ['prim']
+    _immutable_fields_ = ['prim']
 
     def __init__(self, prim):
         assert isinstance(prim, rbigint)
@@ -134,7 +140,8 @@ class W_Int(Value):
 
 class W_Text(Value):
     type = Type.get('Text')
-    _immutable_fields_ = ['value']
+    __slots__ = ['prim']
+    _immutable_fields_ = ['prim']
 
     def __init__(self, prim):
         assert isinstance(prim, rope.StringNode)
@@ -177,6 +184,8 @@ class W_Text(Value):
 
 class W_List(Value):
     type = List.get(Generic.ALPHA)
+    __slots__ = ['prim']
+    _immutable_fields_ = ['prim']
 
     def __init__(self, items):
         assert isinstance(items, list)
@@ -197,6 +206,9 @@ class W_List(Value):
 
 class W_Type(Value):
     type = Type.TYPE
+    __slots__ = ['prim']
+    _immutable_fields_ = ['prim']
+
     def __init__(self, type_):
         self.prim = type_
 
@@ -211,11 +223,9 @@ class W_Type(Value):
 
 
 class Name:
-    _immutable_fields_ = ['name']
-
     """Symbol-like. Compared by identity, not value, so shadowing works."""
+    __slots__ = ['name']
     _immutable_fields_ = ['name']
-    #__slots__ = ['name']
 
     def __init__(self, name):
         assert isinstance(name, str)
@@ -260,15 +270,15 @@ class Symbol(Name):
 
 
 class Shape:
-    _immutable_fields_ = ['names', 'previous', 'size']
+    __slots__ = ['names', 'size', '_transitions']
+    _immutable_fields_ = ['names', 'size']
 
     # TODO consider names list instead of dict; might actually be better!
 
-    def __init__(self, names, previous=None):
+    def __init__(self, names):
         #assert isinstance(names, dict)
         self.names = names # {}
         self._transitions = {}
-        self.previous = previous
         self.size = len(self.names)
 
     @jit.elidable
@@ -285,7 +295,7 @@ class Shape:
             return self._transitions[new_name]
         names = self.names.copy()
         names[new_name] = len(names)
-        shape = self._transitions[new_name] = Shape(names, self)
+        shape = self._transitions[new_name] = Shape(names)
         return shape
 
     @jit.elidable
@@ -362,9 +372,9 @@ class W_Record(Value):
 
 
 class Frame:
+    __slots__ = ['parent', 'shape', '_values', 'func']
     _virtualizable_ = ['values[*]']
-    _immutable_fields_ = ['parent', 'shape']
-    # TODO consider making values immutable?
+    _immutable_fields_ = ['parent', 'shape', '_values', 'func']
 
     def __init__(self, parent, shape, func=None):
         # TODO Call.evaluate_arguments ignores this hint!
@@ -382,9 +392,6 @@ class Frame:
             from .tree import Lambda
             assert isinstance(func, Lambda)
         self.func = func
-
-        #self.stack = [] # for threading TODO
-        #self.calls = [] # for threading
 
     def set(self, index, value):
         # Can assign each slot exactly once.

@@ -3,21 +3,17 @@
 - hot code inlining @done
 - dont inline forever @done
 - Node: slots? @done
+- rewrite W_Bool @done
 
+- TODO: Options.INLINING should be immutable! :-)
+- argv, *please*
 - nqueens: fix jit
 - binary: jit slows down for very short run.
 - add `apply`
 - non-local return
 - imports, *please*
 - SourceSection
-
-Extensions:
-	- tail recursion?
-	- precedence groups
-	- custom parametric types
-	- type Funcs?
-	- type-checking: implement H-M / pt
-	- continuations
+- fix translation under PyPy
 
 Optimise:
 	- Cells inside Records?
@@ -31,6 +27,14 @@ Optimise:
 	- avoid allocation of empty lists
 	- consider lowering builtins
 	- promote array size when creating a W_List
+
+Extensions:
+	- tail recursion?
+	- precedence groups
+	- custom parametric types
+	- type Funcs?
+	- type-checking: implement H-M / pt
+	- continuations
 
 Benchmarks:
 	- fib @done
