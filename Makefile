@@ -82,10 +82,11 @@ pypy: pypy.zip
 	touch pypy
 
 clean:
-	rm nfs
+	rm nfs || echo
+	rm nfsj || echo
 reallyclean: clean
-	rm pypy.zip
-	rm -r pypy/
+	rm pypy.zip || echo
+	rm -r pypy/ || echo
 
 #------------------------------------------------------------------------------
 .PHONY: all nfs-interp test test-nfs clean reallyclean src
