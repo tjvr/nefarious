@@ -52,7 +52,7 @@ class W_Bool(Value):
     _immutable_fields_ = ['prim']
 
     def __init__(self, value):
-        self.prim = value
+        assert False
 
     def __repr__(self):
         return 'W_Bool({})'.format(self.sexpr())
@@ -64,10 +64,14 @@ class W_Bool(Value):
 
 class W_True(W_Bool):
     value = True
+    def __init__(self, value):
+        self.prim = value
     def sexpr(self): return 'yes'
 
 class W_False(W_Bool):
     value = False
+    def __init__(self, value):
+        self.prim = value
     def sexpr(self): return 'no'
 
 Value.TRUE = W_True(True)
