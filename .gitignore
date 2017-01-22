@@ -14,3 +14,6 @@ nfsj
 # Java
 *.class
 
+nfs-*
+nfsj-*
+logfile*

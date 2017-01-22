@@ -1,0 +1,19 @@
+
+let f = [:food "pizza"]
+f.food := "salad"
+
+define what Record:r {
+    r.food
+}
+
+what f
+
+let f2 = [:food "chocolate"]
+
+what f2
+
+PRINT "yay"
+
+let h = [:man 1 :food "duck"]
+
+what h

@@ -1,0 +1,84 @@
+
+defprim Bool:a and Bool:b { BOOL_AND a b }
+defprim Bool:a or Bool:b { BOOL_OR a b }
+defprim not Bool:x { BOOL_NOT x }
+
+defprim print Any:x { PRINT x }
+defprim repr Any:x { REPR x }
+defprim Record:x is nil { IS_NIL x }
+
+defprim Int:a + Int:b { INT_ADD a b }
+defprim Int:a - Int:b { INT_SUB a b }
+defprim Int:a * Int:b { INT_MUL a b }
+defprim Int:a < Int:b { INT_LT a b }
+defprim Int:a = Int:b { INT_EQ a b }
+defprim random from Int:a to Int:b { INT_RANDOM a b }
+defprim float Int:a { INT_FLOAT a }
+
+defprim join (List Text):pieces { TEXT_JOIN pieces }
+defprim join (List Text):pieces with Text:sep { TEXT_JOIN_WITH pieces sep }
+defprim split Text:t { TEXT_SPLIT t }
+defprim split Text:text by Text:sep { TEXT_SPLIT_BY text sep }
+
+defprim add Any:x to (List Any):l { LIST_ADD l x }
+defprim length of (List Any):l { LIST_LEN l }
+defprim item Int:i of (List Any):l { LIST_GET l i }
+define item last of (List Any):l { item length of l of l }
+define item first of (List Any):l { item 1 of l }
+
+define repeat Int:count Var:c Block:body {
+    c := count
+    WHILE (0 < c) {
+        run body
+        c := c - 1
+    }
+}
+
+define two ^ Int:n {
+    var out := 1
+    var i
+    repeat n i {
+        out := out * 2
+    }
+    out
+}
+
+
+define tree Int:item Int:depth {
+    IF_THEN_ELSE (0 < depth) [
+        :item item
+        :left (tree (item + 1) (depth - 1))
+        :right (tree (item) (depth - 1))
+    ] [
+        :item item :left nil :right nil
+    ]
+}
+
+define check Record:tree {
+    IF_THEN_ELSE (IS_NIL tree.left) tree.item ((check tree.left) - (check tree.right) + tree.item)
+}
+
+let min_depth = 4
+let max_depth = 20
+let stretch_depth = max_depth + 1
+
+let q = (check (tree 0 stretch_depth))
+print join ["stretch tree of depth " (repr stretch_depth) " check: " (repr q)]
+let long_lived = tree 0 max_depth
+
+let mmd = max_depth + min_depth
+var depth := min_depth
+WHILE (depth < stretch_depth) {
+    var iterations := two ^ (mmd - depth)
+    var d := 0
+    var i
+    repeat iterations i {
+        d := d + check (tree i depth)
+        d := d + check (tree (0 - i) depth)
+    }
+    print join [(repr iterations * 2) " trees of depth " (repr depth) " check " (repr d)]
+    depth := depth + 2
+}
+
+print join ["long lived tree of depth " (repr max_depth) " check: " (repr check long_lived)]
+

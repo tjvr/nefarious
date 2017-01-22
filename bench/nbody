@@ -1,0 +1,175 @@
+defprim Bool:a and Bool:b { BOOL_AND a b }
+defprim Bool:a or Bool:b { BOOL_OR a b }
+defprim not Bool:x { BOOL_NOT x }
+
+defprim Int:a \+ Int:b { INT_ADD a b }
+defprim Int:a \- Int:b { INT_SUB a b }
+defprim Int:a \< Int:b { INT_LT a b }
+defprim random from Int:a to Int:b { INT_RANDOM a b }
+defprim float Int:a { INT_FLOAT a }
+
+define - Float:x { FLOAT_SUB 0.0 x }
+defprim Float:a + Float:b { FLOAT_ADD a b }
+defprim Float:a - Float:b { FLOAT_SUB a b }
+defprim Float:a * Float:b { FLOAT_MUL a b }
+defprim Float:a / Float:b { FLOAT_DIV a b }
+defprim Float:a < Float:b { FLOAT_LT a b }
+define Float:a ^ Float:b { FLOAT_POW a b }
+defprim round Float:f { FLOAT_ROUND f }
+
+defprim join (List Text):pieces { TEXT_JOIN pieces }
+defprim join (List Text):pieces with Text:sep { TEXT_JOIN_WITH pieces sep }
+defprim split Text:t { TEXT_SPLIT t }
+defprim split Text:text by Text:sep { TEXT_SPLIT_BY text sep }
+
+defprim add Any:x to (List Any):l { LIST_ADD l x }
+defprim length of (List Any):l { LIST_LEN l }
+defprim item Int:i of (List Any):l { LIST_GET l i }
+define item last of (List Any):l { item length of l of l }
+define item first of (List Any):l { item 1 of l }
+
+define repeat Int:count Block:body {
+    var c := count
+    WHILE (0 \< c) {
+        run body
+        c := c \- 1
+    }
+}
+
+define vec Float:x , Float:y , Float:z {
+    [:x x :y y :z z]
+}
+
+define for Var:v in (List Any):l Block:body {
+    var i := 0
+    WHILE (i \< length of l) {
+        v := item (i \+ 1) of l
+        run body
+        i := i \+ 1
+    }
+}
+
+define range from Int:start to Int:stop {
+    var count := start
+    let result = []
+    WHILE (count \< (stop \+ 1)) {
+        add count to result
+        count := count \+ 1
+    }
+    result
+}
+
+
+
+
+let PI = 3.141592653589793
+let SOLAR_MASS = 4.0 * PI * PI
+let DAYS_PER_YEAR = 365.24
+
+let sun = [:pos vec 0.0, 0.0, 0.0 :vel vec 0.0, 0.0, 0.0 :mass SOLAR_MASS]
+let jupiter = [
+    :pos vec 4.84143144246472090e+00, -1.16032004402742839e+00, -1.03622044471123109e-01
+    :vel vec 1.66007664274403694e-03 * DAYS_PER_YEAR, 7.69901118419740425e-03 * DAYS_PER_YEAR, -6.90460016972063023e-05 * DAYS_PER_YEAR
+    :mass 9.54791938424326609e-04 * SOLAR_MASS
+]
+let saturn = [
+    :pos vec 8.34336671824457987e+00, 4.12479856412430479e+00, -4.03523417114321381e-01
+    :vel vec -2.76742510726862411e-03 * DAYS_PER_YEAR, 4.99852801234917238e-03 * DAYS_PER_YEAR, 2.30417297573763929e-05 * DAYS_PER_YEAR
+    :mass 2.85885980666130812e-04 * SOLAR_MASS
+]
+let uranus = [
+    :pos vec 1.28943695621391310e+01, -1.51111514016986312e+01, -2.23307578892655734e-01
+    :vel vec 2.96460137564761618e-03 * DAYS_PER_YEAR, 2.37847173959480950e-03 * DAYS_PER_YEAR, -2.96589568540237556e-05 * DAYS_PER_YEAR
+    :mass 4.36624404335156298e-05 * SOLAR_MASS
+]
+let neptune = [
+    :pos vec 1.53796971148509165e+01, -2.59193146099879641e+01, 1.79258772950371181e-01
+    :vel vec 2.68067772490389322e-03 * DAYS_PER_YEAR, 1.62824170038242295e-03 * DAYS_PER_YEAR, -9.51592254519715870e-05 * DAYS_PER_YEAR
+    :mass 5.15138902046611451e-05 * SOLAR_MASS
+]
+
+
+let bodies = [sun jupiter saturn uranus neptune]
+
+define combinations (List Any):bodies {
+    let pairs = []
+    var x
+    var y
+    for x in range from 1 to (length of bodies \- 1) {
+        for y in range from x \+ 1 to length of bodies {
+            add [:a (item x of bodies) :b (item y of bodies)] to pairs
+        }
+    }
+    pairs
+}
+
+combinations (split "sun jupiter saturn uranus neptune")
+let pairs = combinations bodies
+
+define report energy {
+    var e := 0.0
+    var pair
+    for pair in pairs {
+        let a = pair.a
+        let b = pair.b
+        let dx = a.pos.x - b.pos.x
+        let dy = a.pos.y - b.pos.y
+        let dz = a.pos.z - b.pos.z
+        e := e - ((a.mass * b.mass) / (((dx * dx) + (dy * dy) + (dz * dz)) ^ 0.5))
+    }
+    var body
+    for body in bodies {
+        let vel = body.vel
+        e := e + (body.mass * ((vel.x * vel.x) + (vel.y * vel.y) + (vel.z * vel.z)) / 2.0)
+    }
+    e
+}
+
+define offset momentum Record:ref {
+    let p = vec 0.0, 0.0, 0.0
+    var body
+    for body in bodies {
+        p.x := p.x - (body.vel.x * body.mass)
+        p.y := p.y - (body.vel.y * body.mass)
+        p.z := p.z - (body.vel.z * body.mass)
+    }
+    let m = ref.mass
+    ref.vel := vec p.x / m, p.y / m, p.z / m
+    yes
+}
+
+PRINT report energy
+offset momentum sun
+PRINT report energy
+
+define advance Float:dt {
+    var pair
+    for pair in pairs {
+        let a = pair.a
+        let b = pair.b
+        let dx = a.pos.x - b.pos.x
+        let dy = a.pos.y - b.pos.y
+        let dz = a.pos.z - b.pos.z
+        let mag = dt * (((dx * dx) + (dy * dy) + (dz * dz)) ^ -1.5)
+        let b1m = a.mass * mag
+        let b2m = b.mass * mag
+        a.vel.x := a.vel.x - (dx * b2m)
+        a.vel.y := a.vel.y - (dy * b2m)
+        a.vel.z := a.vel.z - (dz * b2m)
+        b.vel.x := b.vel.x + (dx * b1m)
+        b.vel.y := b.vel.y + (dy * b1m)
+        b.vel.z := b.vel.z + (dz * b1m)
+    }
+    var body
+    for body in bodies {
+        body.pos.x := body.pos.x + (dt * body.vel.x)
+        body.pos.y := body.pos.y + (dt * body.vel.y)
+        body.pos.z := body.pos.z + (dt * body.vel.z)
+    }
+}
+
+repeat 500000 {
+    advance 0.01
+}
+PRINT report energy
+
