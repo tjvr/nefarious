@@ -30,13 +30,11 @@ define item first of (List Any):l { item 1 of l }
 
 define repeat Int:count Block:body {
     var c := count
-    let result = []
     WHILE (0 \< c) {
-        add (call body) to result
+        run body
         c := c \- 1
 
     }
-    result
 }
 
 define vec Float:x , Float:y , Float:z {
@@ -47,7 +45,7 @@ define for Var:v in (List Any):l Block:body {
     var i := 0
     WHILE (i \< length of l) {
         v := item (i \+ 1) of l
-        call body
+        run body
         i := i \+ 1
     }
 }
