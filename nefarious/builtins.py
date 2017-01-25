@@ -90,6 +90,7 @@ class PRINT(UnaryBuiltin):
     arg_types = [Type.ANY]
     def evaluate(self, frame):
         value = self.child.evaluate(frame)
+        assert isinstance(value, Value) # might make compilation faster?
         print(value.sexpr()) # PRINT
 
 class REPR(UnaryBuiltin):
@@ -315,6 +316,7 @@ class TEXT_SPLIT(UnaryBuiltin):
     arg_types = [Text]
     def evaluate(self, frame):
         text = self.child.evaluate(frame)
+        assert isinstance(text, W_Text)
         return text.split()
 
 class TEXT_JOIN_WITH(InfixBuiltin):
@@ -330,6 +332,7 @@ class TEXT_SPLIT_BY(InfixBuiltin):
     arg_types = [Text, Text]
     def evaluate(self, frame):
         left = self.left.evaluate(frame)
+        assert isinstance(left, W_Text)
         right = self.right.evaluate(frame)
         return left.split_by(right)
 

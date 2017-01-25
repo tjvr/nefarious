@@ -8,16 +8,16 @@ ifeq ($(CPYTHON),)
 endif
 
 ifeq ($(PYPY_EXECUTABLE),)
-	TESTINTERP := $(CPYTHON)
+	INTERP := $(CPYTHON)
 	PYNAME := "CPython"
 else
-	TESTINTERP := $(PYPY_EXECUTABLE)
+	INTERP := $(PYPY_EXECUTABLE)
 	PYNAME := "PyPy"
 endif
 
 # translation is supposed to be faster under pypy
-# but on my Mac/Linux machines, nefarious translates faster under CPython!
-BUILDINTERP = $(CPYTHON)
+# on Mac/Linux nfs translates faster under CPython
+# nfsj translates fastest under PyPy
 
 #------------------------------------------------------------------------------
 
@@ -29,7 +29,7 @@ nfs: pypy src
 	@echo Using CPython: $(CPYTHON)
 	@echo Invoking RPython toolchain to build executable...
 	@echo
-	$(BUILDINTERP) pypy/rpython/bin/rpython --gc=incminimark --output=nfs goal.py
+	$(CPYTHON) pypy/rpython/bin/rpython --gc=incminimark --output=nfs goal.py
 	@echo
 	@echo "Wrote 'nfs'"
 	@echo ============================================================
@@ -37,10 +37,10 @@ nfs: pypy src
 
 nfsj: pypy src
 	@echo ============================================================
-	@echo Using CPython: $(CPYTHON)
+	@echo Using $(PYNAME): $(INTERP)
 	@echo Invoking RPython toolchain to build executable WITH JIT...
 	@echo
-	$(BUILDINTERP) pypy/rpython/bin/rpython --gc=incminimark --output=nfsj --translation-jit goal.py
+	$(INTERP) pypy/rpython/bin/rpython --gc=incminimark --output=nfsj --translation-jit goal.py
 	# -Ojit --jit-backend=x86 --translation-jit goal.py
 	@echo "Wrote 'nfsj'"
 	@echo ============================================================
@@ -57,18 +57,18 @@ src: pypy \
 	#@rem --cc=afl-clang
 
 nfs-interp:
-	$(TESTINTERP) -m nefarious bar.txt
+	$(INTERP) -m nefarious bar.txt
 
 test:
 	@echo Running tests \(using $(CPYTHON)\)...
-	$(BUILDINTERP) -m unittest --buffer tests
+	$(INTERP) -m unittest --buffer tests
 	@echo Tests passed!
 test-pypy:
 	@echo Running tests \(force PyPy\)...
 	$(PYPY_EXECUTABLE) -m unittest --buffer tests
 test-nfs:
 	@echo Testing compiled binary...
-	$(BUILDINTERP) -m unittest --buffer tests.compiled
+	$(INTERP) -m unittest --buffer tests.compiled
 
 # RPython toolchain is required to build nfs executable.
 pypy.zip:
