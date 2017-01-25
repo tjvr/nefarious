@@ -17,3 +17,5 @@ nfsj
 nfs-*
 nfsj-*
 logfile*
+
+benchmarks.py
