@@ -38,7 +38,7 @@ def get_location(self):
 call_driver = JitDriver(
     greens = ['self'],
     virtualizables = ['frame'],
-    reds = ['arguments', 'func', 'scope', 'frame'],
+    reds = ['func', 'scope', 'frame'],
     is_recursive = True,
     get_printable_location = get_location,
     should_unroll_one_iteration = lambda self: True, # may or may not be necessary?
@@ -489,7 +489,6 @@ class Call(Node):
                 return
         assert False, "child not found"
 
-    @jit.unroll_safe
     def evaluate(self, frame):
         func_node = self.func_node
         closure = func_node.evaluate(frame)
@@ -515,20 +514,22 @@ class Call(Node):
 
     @jit.unroll_safe
     def evaluate_closure(self, frame, scope, func):
-        assert len(self.args) == func.arg_length
-        arguments = [arg.evaluate(frame) for arg in self.args]
-        return self.evaluate_arguments(arguments, scope, func)
+        length = len(self.args)
+        jit.promote(length)
+        assert length == func.arg_length
 
-    @jit.unroll_safe
-    def evaluate_arguments(self, arguments, scope, func):
-        make_sure_not_resized(arguments)
+        inner = Frame(scope, func.shape, func)
+        for index in range(length):
+            arg = self.args[index]
+            value = arg.evaluate(frame)
+            inner.set(index, value)
+
+        return self.evaluate_arguments(inner, scope, func)
+
+    def evaluate_arguments(self, frame, scope, func):
         self.call_count += 1
 
-        frame = Frame(scope, func.shape, func)
-        for index, value in enumerate(arguments):
-            frame.set(index, value)
-
-        call_driver.jit_merge_point(self=self, frame=frame, scope=scope, func=func, arguments=arguments)
+        call_driver.jit_merge_point(self=self, frame=frame, scope=scope, func=func)
 
         body = func.body # no longer immutable...
         jit.promote(body)
