@@ -212,7 +212,7 @@ class RecordLiteral(Node):
     def sexpr(self):
         strings = []
         for i in range(len(self.keys)):
-            strings.append(self.keys[i].sexpr()) # Symbol
+            strings.append(":" + self.keys[i].sexpr()) # Symbol
             strings.append(self.values[i].sexpr()) # Node
         return "(record " + " ".join(strings) + ")"
 
@@ -282,6 +282,7 @@ class Let(Node):
     def __init__(self, name, value):
         Node.__init__(self)
         assert isinstance(name, Name)
+        assert not isinstance(name, Symbol), name
         self.name = name
 
         self.value = value
@@ -438,6 +439,8 @@ class Lambda(Node):
 
         self.shape = Shape.get(arg_names) # map for accessing locals in Frame
         self._arg_names = arg_names
+        for arg in arg_names:
+            assert isinstance(arg, Symbol)
 
         assert isinstance(body, Node)
         self.body = body
@@ -561,6 +564,57 @@ class Call(Node):
         except ReturnValue as ret: # TODO opt
             result = ret.value
         return result
+
+
+class Apply(Call):
+    __slots__ = Node.__slots__ + ['func_node', 'record_node', 'call_count']
+    _immutable_fields_ = ['func_node', 'record_node']
+
+    def __init__(self, func_node, record_node, type_):
+        Node.__init__(self)
+        assert isinstance(func_node, Node)
+        #assert func_node.type == Type.FUNC
+        self.func_node = func_node
+        self.record_node = record_node
+        self.type = type_
+        func_node.set_parent(self)
+        record_node.set_parent(self)
+        self.call_count = 0
+
+    @classmethod
+    def _test_cases(cls):
+        return [] # TODO
+
+    def _copy(self, transform): return Apply(self.func_node.copy(transform), self.record_node.copy(transform), self.type)
+    def children(self): return [self.func_node, self.record_node]
+
+    def sexpr(self):
+        return "(apply " + self.func_node.sexpr() + " " + self.record_node.sexpr() + ")"
+
+    def replace_child(self, child, other):
+        if child is self.func_node:
+            self.func_node = other
+        elif child is self.record_node:
+            self.record_node = other
+        assert False, "child not found"
+
+    @jit.unroll_safe
+    def evaluate(self, frame):
+        closure = self.func_node.evaluate(frame)
+        assert isinstance(closure, Closure)
+
+        record = self.record_node.evaluate(frame)
+        assert isinstance(record, W_Record)
+
+        func = closure.func
+        assert record.shape.size == func.arg_length()
+
+        # TODO: optimise Record -> Frame
+        inner = Frame(closure.scope, func.shape, func)
+        for index, symbol in enumerate(func.arg_names()):
+            inner.set(index, record.lookup(symbol))
+
+        return self.evaluate_arguments(inner, closure.scope, closure.func)
 
 
 class StaticCall(Call):
@@ -946,7 +1000,7 @@ class GetAttr(Node):
         return record.values[index]
 
     def sexpr(self):
-        return "(get-attr " + self.record.sexpr() + " " + self.symbol.sexpr() + ")"
+        return "(get-attr " + self.record.sexpr() + " :" + self.symbol.sexpr() + ")"
 
 
 class SetAttr(Node):
@@ -989,7 +1043,7 @@ class SetAttr(Node):
         record.values[index] = value
 
     def sexpr(self):
-        return "(set-attr " + self.record.sexpr() + " " + self.symbol.sexpr() + " " + self.value.sexpr() + ")"
+        return "(set-attr " + self.record.sexpr() + " :" + self.symbol.sexpr() + " " + self.value.sexpr() + ")"
 
 
 #------------------------------------------------------------------------------

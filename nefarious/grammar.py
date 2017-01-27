@@ -274,7 +274,7 @@ class DefineMacro(Macro):
         args = []
         for s in spec:
             if isinstance(s, ArgSpec):
-                arg = Name.from_word(s.word)
+                arg = Symbol.from_word(s.word)
                 type_ = self._arg_type(s)
                 grammar.add(type_, [s.word], LoadMacro(arg, type_))
                 args.append(arg)
@@ -391,7 +391,7 @@ class LambdaMacro(Macro):
         args = []
         for s in spec:
             assert isinstance(s, ArgSpec)
-            arg = Name.from_word(s.word)
+            arg = Symbol.from_word(s.word)
             if DefineMacro._arg_type(s) != s.type:
                 raise SyntaxError("lambda can't have Block or Uneval arguments")
             grammar.add(s.type, [s.word], LoadMacro(arg, s.type))
@@ -538,10 +538,7 @@ class DynamicCallMacro(Macro):
         func = values[2]
         if len(values) > 3:
             arg = values[6]
-            # TODO currently only unary functions are supported;
-            # calling a function with the wrong number of arguments will cause
-            # a crash at runtime.
-            return Call(func, [arg], type_)
+            return Apply(func, arg, type_)
         else:
             return Call(func, [], type_)
 
@@ -549,7 +546,7 @@ grammar.add(Generic.ALPHA, ws_not_null([
     Word.word("call"), Type.FUNC
 ]), DynamicCallMacro)
 grammar.add(Generic.ALPHA, ws_not_null([
-    Word.word("call"), Type.FUNC, Word.word("with"), Type.ANY
+    Word.word("call"), Type.FUNC, Word.word("with"), Type.get('Record')
 ]), DynamicCallMacro)
 
 grammar.add(Line, ws_not_null([
@@ -564,8 +561,6 @@ grammar.add(Line, ws_not_null([
 # grammar.add(Generic.ALPHA, ws_not_null([
 #     Word.word("apply"), Type.FUNC, Word.word("to"), List.get(Type.ANY)
 # ]), ApplyMacro)
-
-# TODO better syntax: call with Record
 
 
 # Records

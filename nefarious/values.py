@@ -253,6 +253,12 @@ class Symbol(Name):
     _cache = {}
 
     @staticmethod
+    def from_word(word):
+        from .lex import Word
+        assert isinstance(word, Word)
+        return Symbol.get(word.value)
+
+    @staticmethod
     @jit.elidable
     def get(name):
         assert isinstance(name, str), name
@@ -266,7 +272,7 @@ class Symbol(Name):
         return "Symbol({!r})".format(self.name)
 
     def sexpr(self):
-        return ":" + self.name.replace(" ", "_")
+        return self.name.replace(" ", "_")
 
 
 
