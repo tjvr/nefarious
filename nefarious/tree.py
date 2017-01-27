@@ -430,21 +430,26 @@ class StoreCell(Node):
 class Lambda(Node):
     type = Type.FUNC
 
-    __slots__ = Node.__slots__ + ['body', 'original_body', 'shape', 'arg_length']
-    _immutable_fields_ = ['body', 'original_body', 'shape', 'arg_length']
+    __slots__ = Node.__slots__ + ['body', 'original_body', 'shape', '_arg_names']
+    _immutable_fields_ = ['body', 'original_body', 'shape', '_arg_names']
 
     def __init__(self, arg_names, body):
         Node.__init__(self)
 
         self.shape = Shape.get(arg_names) # map for accessing locals in Frame
-        self.arg_length = len(arg_names)
+        self._arg_names = arg_names
 
         assert isinstance(body, Node)
         self.body = body
         self.original_body = None if body is None else body.copy()
 
+    @jit.elidable
+    def arg_length(self):
+        return len(self._arg_names)
+
+    @jit.elidable
     def arg_names(self):
-        return self.shape.names_list()[:self.arg_length]
+        return self._arg_names
 
     def _copy(self, transform): return Lambda(self.arg_names(), self.body.copy(transform))
     def children(self): return [self.body]
@@ -463,9 +468,7 @@ class Lambda(Node):
         return Closure(frame, self)
 
     def sexpr(self):
-        return "(fun " + " ".join([n.sexpr() for n in self.shape.names]) + " " + self.body.sexpr() + ")"
-
-
+        return "(fun " + " ".join([n.name for n in self.arg_names()]) + " " + self.body.sexpr() + ")"
 
 
 class Call(Node):
@@ -480,7 +483,6 @@ class Call(Node):
         self.args = args
         self.type = type_
         func_node.set_parent(self)
-        # nb. does this require jit.unroll_safe ?
         for arg in args:
             assert isinstance(arg, Node)
             arg.set_parent(self)
@@ -537,7 +539,7 @@ class Call(Node):
     def evaluate_closure(self, frame, scope, func):
         length = len(self.args)
         jit.promote(length)
-        assert length == func.arg_length
+        assert length == func.arg_length()
 
         inner = Frame(scope, func.shape, func)
         for index in range(length):
