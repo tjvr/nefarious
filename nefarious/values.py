@@ -473,3 +473,9 @@ class ReturnValue(Exception):
         assert isinstance(value, Value)
         self.value = value
 
+class TailCall(Exception):
+    def __init__(self, call):
+        from .tree import Call
+        assert isinstance(call, Call)
+        self.call = call
+

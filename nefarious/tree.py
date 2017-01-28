@@ -550,7 +550,12 @@ class Call(Node):
             value = arg.evaluate(frame)
             inner.set(index, value)
 
-        return self.evaluate_arguments(inner, scope, func)
+        try:
+            return self.evaluate_arguments(inner, scope, func)
+        except TailCall as tc:
+            # TODO this is shit
+            next_call = tc.call
+            return next_call.evaluate(inner)
 
     def evaluate_arguments(self, frame, scope, func):
         self.call_count += 1
@@ -561,7 +566,7 @@ class Call(Node):
         jit.promote(body)
         try:
             result = body.evaluate(frame)
-        except ReturnValue as ret: # TODO opt
+        except ReturnValue as ret:
             result = ret.value
         return result
 
@@ -958,7 +963,11 @@ class Return(Node):
         self.child = other
 
     def evaluate(self, frame):
-        value = self.child.evaluate(frame)
+        child = self.child
+        jit.promote(child)
+        if isinstance(child, Call):
+            raise TailCall(child)
+        value = child.evaluate(frame)
         raise ReturnValue(value)
 
     def sexpr(self):
