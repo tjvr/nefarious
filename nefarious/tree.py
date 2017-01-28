@@ -533,31 +533,29 @@ class Call(Node):
             else:
                 new_call = GenericCall(func_node, self.args, self.type, call_count)
             self._replace(new_call)
-            return new_call.evaluate_closure(frame, closure.scope, func)
+            return new_call.call_evaluate(frame, closure.scope, func)
 
         self.cached_closure = closure
-        return self.evaluate_closure(frame, closure.scope, closure.func)
+        return self.call_evaluate(frame, closure.scope, closure.func)
 
     @jit.unroll_safe
-    def evaluate_closure(self, frame, scope, func):
+    def call_evaluate_arguments(self, frame, scope, func):
         length = len(self.args)
         jit.promote(length)
         assert length == func.arg_length()
-
         inner = Frame(scope, func.shape, func)
+
         for index in range(length):
             arg = self.args[index]
             value = arg.evaluate(frame)
             inner.set(index, value)
+        return inner
 
-        try:
-            return self.evaluate_arguments(inner, scope, func)
-        except TailCall as tc:
-            # TODO this is shit
-            next_call = tc.call
-            return next_call.evaluate(inner)
+    def call_evaluate(self, frame, scope, func):
+        inner = self.call_evaluate_arguments(frame, scope, func)
+        return self.call_evaluate_body(inner, scope, func)
 
-    def evaluate_arguments(self, frame, scope, func):
+    def call_evaluate_body(self, frame, scope, func):
         self.call_count += 1
 
         call_driver.jit_merge_point(self=self, frame=frame, scope=scope, func=func)
@@ -568,6 +566,15 @@ class Call(Node):
             result = body.evaluate(frame)
         except ReturnValue as ret:
             result = ret.value
+        except TailCall as tc: # RPython stack was popped.
+            next_call = tc.call
+            closure = next_call.func_node.evaluate(frame)
+            assert isinstance(closure, Closure)
+            scope = closure.scope
+            func = closure.func
+            next_inner = next_call.call_evaluate_arguments(frame, scope, func)
+            del frame # drop ref to Frame.
+            return next_call.call_evaluate_body(next_inner, scope, func)
         return result
 
 
@@ -619,7 +626,7 @@ class Apply(Call):
         for index, symbol in enumerate(func.arg_names()):
             inner.set(index, record.lookup(symbol))
 
-        return self.evaluate_arguments(inner, closure.scope, closure.func)
+        return self.call_evaluate_body(inner, closure.scope, closure.func)
 
 
 class StaticCall(Call):
@@ -656,7 +663,7 @@ class StaticCall(Call):
             else:
                 new_call = GenericCall(self.func_node, self.args, self.type, self.call_count)
             self._replace(new_call)
-            return new_call.evaluate_closure(frame, closure.scope, closure.func)
+            return new_call.call_evaluate(frame, closure.scope, closure.func)
 
         # inlining
         allow_inlining = Options.INLINING
@@ -672,7 +679,7 @@ class StaticCall(Call):
                     self.inline_call(frame.func, frame, closure)
                     #print frame.func.body.sexpr()
 
-        return self.evaluate_closure(frame, closure.scope, closure.func)
+        return self.call_evaluate(frame, closure.scope, closure.func)
 
     def inline_arguments(self, closure_locals):
         args = self.args
@@ -810,7 +817,7 @@ class InlinedStatic(StaticCall):
             else:
                 new_call = GenericCall(self.func_node, self.args, self.type, self.call_count)
             self._replace(new_call)
-            return new_call.evaluate_closure(frame, closure.scope, closure.func)
+            return new_call.call_evaluate(frame, closure.scope, closure.func)
 
         return self.body.evaluate(frame)
 
@@ -841,11 +848,11 @@ class FuncCall(Call):
         if func is not cached_func:
             new_call = GenericCall(self.func_node, self.args, self.type, self.call_count)
             self._replace(new_call)
-            return new_call.evaluate_closure(frame, closure.scope, func)
+            return new_call.call_evaluate(frame, closure.scope, func)
 
         # TODO inline body?
 
-        return self.evaluate_closure(frame, closure.scope, cached_func)
+        return self.call_evaluate(frame, closure.scope, cached_func)
 
 class GenericCall(Call):
     """A completely generic call"""
@@ -854,7 +861,7 @@ class GenericCall(Call):
     def evaluate(self, frame):
         closure = self.func_node.evaluate(frame)
         assert isinstance(closure, Closure)
-        return self.evaluate_closure(frame, closure.scope, closure.func)
+        return self.call_evaluate(frame, closure.scope, closure.func)
 
 
 class ClosureLoad(Node):
