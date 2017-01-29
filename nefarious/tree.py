@@ -28,20 +28,20 @@ def jitpolicy(driver):
     return JitPolicy()
 
 
-def get_location(self):
+def get_location(call, func):
     #assert isinstance(self, Node)
-    return self.sexpr()
+    return call.sexpr()
 
 
 # greens: loop constants. identify loop.                eg. code object & instruction pointer
 # reds: everything else used in the execution loop.     eg. frame object & execution context
 call_driver = JitDriver(
-    greens = ['self'],
+    greens = ['call', 'func'],
     virtualizables = ['frame'],
-    reds = ['func', 'scope', 'frame'],
+    reds = ['frame', 'body'],
     is_recursive = True,
     get_printable_location = get_location,
-    should_unroll_one_iteration = lambda self: True, # may or may not be necessary?
+    should_unroll_one_iteration = lambda call, func: True, # may or may not be necessary?
 )
 
 
@@ -553,29 +553,35 @@ class Call(Node):
 
     def call_evaluate(self, frame, scope, func):
         inner = self.call_evaluate_arguments(frame, scope, func)
-        return self.call_evaluate_body(inner, scope, func)
+        return self.call_evaluate_body(inner, func)
 
-    def call_evaluate_body(self, frame, scope, func):
+    def call_evaluate_body(self, frame, func):
         self.call_count += 1
 
-        call_driver.jit_merge_point(self=self, frame=frame, scope=scope, func=func)
+        call = self
+        assert isinstance(call, Call)
+        while True:
+            body = func.body
 
-        body = func.body # no longer immutable...
-        jit.promote(body)
-        try:
-            result = body.evaluate(frame)
-        except ReturnValue as ret:
-            result = ret.value
-        except TailCall as tc: # RPython stack was popped.
-            next_call = tc.call
-            closure = next_call.func_node.evaluate(frame)
-            assert isinstance(closure, Closure)
-            scope = closure.scope
-            func = closure.func
-            next_inner = next_call.call_evaluate_arguments(frame, scope, func)
-            del frame # drop ref to Frame.
-            return next_call.call_evaluate_body(next_inner, scope, func)
-        return result
+            call_driver.jit_merge_point(call=call, frame=frame, func=func, body=body)
+
+            try:
+                return body.evaluate(frame)
+            except ReturnValue as ret:
+                return ret.value
+            except TailCall as tc: # RPython stack was popped.
+                next_call = tc.call
+                closure = next_call.func_node.evaluate(frame)
+                assert isinstance(closure, Closure)
+                scope = closure.scope
+                func = closure.func
+                next_frame = next_call.call_evaluate_arguments(frame, scope, func)
+                del frame # drop ref to Frame.
+                call = next_call
+                frame = next_frame
+
+                # Hint to the JIT that we're in a tail call loop
+                call_driver.can_enter_jit(call=call, frame=frame, func=func, body=body)
 
 
 class Apply(Call):
@@ -626,7 +632,7 @@ class Apply(Call):
         for index, symbol in enumerate(func.arg_names()):
             inner.set(index, record.lookup(symbol))
 
-        return self.call_evaluate_body(inner, closure.scope, closure.func)
+        return Call.call_evaluate_body(self, inner, func)
 
 
 class StaticCall(Call):
