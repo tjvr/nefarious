@@ -38,7 +38,7 @@ def get_location(call, func):
 call_driver = JitDriver(
     greens = ['call', 'func'],
     virtualizables = ['frame'],
-    reds = ['frame', 'body'],
+    reds = ['frame'],
     is_recursive = True,
     get_printable_location = get_location,
     should_unroll_one_iteration = lambda call, func: True, # may or may not be necessary?
@@ -561,12 +561,10 @@ class Call(Node):
         call = self
         assert isinstance(call, Call)
         while True:
-            body = func.body
-
-            call_driver.jit_merge_point(call=call, frame=frame, func=func, body=body)
+            call_driver.jit_merge_point(call=call, frame=frame, func=func)
 
             try:
-                return body.evaluate(frame)
+                return func.body.evaluate(frame)
             except ReturnValue as ret:
                 return ret.value
             except TailCall as tc: # RPython stack was popped.
@@ -581,7 +579,7 @@ class Call(Node):
                 frame = next_frame
 
                 # Hint to the JIT that we're in a tail call loop
-                call_driver.can_enter_jit(call=call, frame=frame, func=func, body=body)
+                call_driver.can_enter_jit(call=call, frame=frame, func=func)
 
 
 class Apply(Call):
