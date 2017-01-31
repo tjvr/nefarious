@@ -586,6 +586,7 @@ grammar.add(Seq.get(Pair), [Pair], StartList)
 grammar.add(Seq.get(Pair), [Seq.get(Pair), Internal.SEP, Pair], ContinueList)
 
 Record = Type.get('Record')
+
 @singleton
 class RecordMacro(Macro):
     def build(self, values, type_):
@@ -599,6 +600,12 @@ class RecordMacro(Macro):
             values.append(p.value)
         return RecordLiteral(keys, values, type_)
 grammar.add(Type.get('Record'), [Word.word("["), Internal.SEP, Seq.get(Pair), Internal.SEP, Word.word("]")], RecordMacro)
+
+@singleton
+class EmptyRecordMacro(Macro):
+    def build(self, values, type_):
+        return RecordLiteral([], [], type_)
+grammar.add(Type.get('Record'), [Word.word("["), Word.word(":"), Word.word("]")], EmptyRecordMacro)
 
 @singleton
 class AttrMacro(Macro):
