@@ -85,7 +85,7 @@ class W_Null(Value):
     # TODO type ??
     def __init__(self): pass
     def __repr__(self): return 'Value.NULL'
-    def sexpr(self): return 'null'
+    def sexpr(self): return 'nil'
 Value.NULL = W_Null()
 
 
