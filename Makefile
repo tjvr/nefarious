@@ -1,5 +1,5 @@
 
-PYPY_SOURCE := "pypy2-v5.4.1-src"
+PYPY_SOURCE := "b0a257824f6a"
 PYPY_EXECUTABLE := $(shell which pypy)
 
 CPYTHON := $(shell which python2)
@@ -72,13 +72,13 @@ test-nfs:
 
 # RPython toolchain is required to build nfs executable.
 pypy.zip:
-	@echo Downloading PyPy source $(PYPY_SOURCE)...
-	curl -L https://bitbucket.org/pypy/pypy/downloads/$(PYPY_SOURCE).zip > pypy.zip
+	@echo Downloading PyPy source `default` at $(PYPY_SOURCE)...
+	curl -L "https://bitbucket.org/pypy/pypy/get/$(PYPY_SOURCE).zip" > pypy.zip
 pypy: pypy.zip
-	@echo Unzipping $(PYPY_SOURCE)...
+	@echo Unzipping PyPy...
 	rm -rf pypy
 	unzip -qn pypy.zip
-	mv $(PYPY_SOURCE) pypy
+	mv pypy-pypy-$(PYPY_SOURCE) pypy
 	touch pypy
 
 clean:
