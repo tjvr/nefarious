@@ -87,6 +87,7 @@ ignore_classes = {
     Builtin,
     UnaryBuiltin,
     InfixBuiltin,
+    TernaryBuiltin,
     Lambda, # TODO figure out what this should do
 }
 

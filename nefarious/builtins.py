@@ -64,7 +64,6 @@ class UnaryBuiltin(Builtin):
         else:
             assert False
 
-
 class InfixBuiltin(Builtin):
     __slots__ = Node.__slots__ + ['left', 'right']
     _immutable_fields_ = ['left', 'right']
@@ -83,6 +82,29 @@ class InfixBuiltin(Builtin):
             self.right = other
         else:
             assert False
+
+class TernaryBuiltin(Builtin):
+    __slots__ = Node.__slots__ + ['one', 'two', 'three']
+    _immutable_fields_ = ['one', 'two', 'three']
+
+    def __init__(self, args, type_):
+        Node.__init__(self)
+        self.one, self.two, self.three = args
+        self.one.set_parent(self)
+        self.two.set_parent(self)
+        self.three.set_parent(self)
+    def _args(self):
+        return [self.one, self.two, self.three]
+    def replace_child(self, child, other):
+        if child is self.one:
+            self.one = other
+        elif child is self.two:
+            self.two = other
+        elif child is self.three:
+            self.three = other
+        else:
+            assert False
+
 
 
 class PRINT(UnaryBuiltin):
@@ -563,4 +585,22 @@ class LIST_LEN(UnaryBuiltin):
         list_ = self.child.evaluate(frame)
         assert isinstance(list_, W_List)
         return W_Int.fromint(len(list_.items()))
+
+class LIST_SET(TernaryBuiltin):
+    type = _Line
+    arg_types = [_List.get(_a), Int, _a]
+    @classmethod
+    def _test_cases(cls):
+        return [] # TODO test LIST_SET
+        #return [cls([W_List([W_Float(3.0)]), W_Int.fromint(1), W_Float(4.0)], _Line)]
+    def evaluate(self, frame):
+        list_ = self.one.evaluate(frame)
+        assert isinstance(list_, W_List)
+        int_ = self.two.evaluate(frame)
+        assert isinstance(int_, W_Int)
+        value = self.three.evaluate(frame)
+        index = int_.prim.toint()
+        if not 1 <= index <= len(list_.items()):
+            raise IndexError(index) # TODO error handling
+        list_.items()[index - 1] = value
 

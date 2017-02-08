@@ -71,6 +71,7 @@ syntax keyword prim TEXT_SPLIT_BY
 syntax keyword prim LIST_ADD
 syntax keyword prim LIST_LEN
 syntax keyword prim LIST_GET
+syntax keyword prim LIST_SET
 syntax keyword prim IF_THEN_ELSE
 syntax keyword prim IF_THEN
 syntax keyword prim WHILE
