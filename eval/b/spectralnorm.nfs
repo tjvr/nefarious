@@ -1,0 +1,131 @@
+defprim Bool:a and Bool:b { BOOL_AND a b }
+defprim Bool:a or Bool:b { BOOL_OR a b }
+defprim not Bool:x { BOOL_NOT x }
+
+defprim Int:a \+ Int:b { INT_ADD a b }
+defprim Int:a \- Int:b { INT_SUB a b }
+defprim Int:a \< Int:b { INT_LT a b }
+defprim random from Int:a to Int:b { INT_RANDOM a b }
+defprim float Int:a { INT_FLOAT a }
+
+defprim print Any:x { PRINT x }
+
+define - Float:x { FLOAT_SUB 0.0 x }
+defprim Float:a + Float:b { FLOAT_ADD a b }
+defprim Float:a - Float:b { FLOAT_SUB a b }
+defprim Float:a * Float:b { FLOAT_MUL a b }
+defprim Float:a / Float:b { FLOAT_DIV a b }
+defprim Float:a < Float:b { FLOAT_LT a b }
+define Float:a ^ Float:b { FLOAT_POW a b }
+defprim round Float:f { FLOAT_ROUND f }
+define sqrt Float:v { FLOAT_POW v 0.5 }
+
+defprim join (List Text):pieces { TEXT_JOIN pieces }
+defprim join (List Text):pieces with Text:sep { TEXT_JOIN_WITH pieces sep }
+defprim split Text:t { TEXT_SPLIT t }
+defprim split Text:text by Text:sep { TEXT_SPLIT_BY text sep }
+
+defprim add Any:x to (List Any):l { LIST_ADD l x }
+defprim length of (List Any):l { LIST_LEN l }
+defprim item Int:i of (List Any):l { LIST_GET l i }
+defprim replace Int:i of (List Any):l with Any:x { LIST_SET l i x }
+define item last of (List Any):l { item length of l of l }
+define item first of (List Any):l { item 1 of l }
+
+define repeat Int:count Block:body {
+    var c := count
+    WHILE (0 \< c) {
+        run body
+        c := c \- 1
+    }
+}
+
+define for Var:v in (List Any):l Block:body {
+    var i := 0
+    WHILE (i \< length of l) {
+        v := item (i \+ 1) of l
+        run body
+        i := i \+ 1
+    }
+}
+
+define for Var:count from Int:start to Int:stop Block:body {
+    count := start
+    WHILE (count \< (stop \+ 1)) {
+        run body
+        count := count \+ 1
+    }
+}
+
+define range from Int:start to Int:stop {
+    var count := start
+    let result = []
+    WHILE (count \< (stop \+ 1)) {
+        add count to result
+        count := count \+ 1
+    }
+    result
+}
+
+
+
+
+
+define A Float:i Float:j {
+    1.0 / (((i+j)*(i+j+1.0)/2.0)+i+1.0)
+}
+
+define Au (List Float):u (List Float):v {
+    var i
+    var j
+    for i from 1 to length of u {
+        var t := 0.0
+        for j from 1 to length of u {
+            t := t + ((A float (i \- 1) float (j \- 1)) * item j of u)
+        }
+        replace i of v with t
+    }
+}
+
+define Atu (List Float):u (List Float):v {
+    var i
+    var j
+    for i from 1 to length of u {
+        var t := 0.0
+        for j from 1 to length of u {
+            t := t + ((A float (j \- 1) float (i \- 1)) * item j of u)
+        }
+        replace i of v with t
+    }
+}
+
+define AtAu (List Float):u (List Float):v (List Float):w {
+    Au u w
+    Atu w v
+}
+
+define spectralnorm Int:n {
+    var i
+    let u = []
+    let v = []
+    let w = []
+    var vv := 0.0
+    var vBv := 0.0
+    repeat n {
+        add 1.0 to u
+        add 0.0 to v
+        add 0.0 to w
+    }
+    repeat 10 {
+        AtAu u v w
+        AtAu v u w
+    }
+    for i from 1 to n {
+        vBv := vBv + (item i of u * item i of v)
+        vv  := vv  + (item i of v * item i of v)
+    }
+    sqrt (vBv / vv)
+}
+
+spectralnorm (INT_ARG 1)
+

@@ -1,0 +1,63 @@
+
+defprim Bool:a and Bool:b { BOOL_AND a b }
+defprim Bool:a or Bool:b { BOOL_OR a b }
+defprim not Bool:x { BOOL_NOT x }
+
+defprim Int:a + Int:b { INT_ADD a b }
+defprim Int:a - Int:b { INT_SUB a b }
+defprim Int:a < Int:b { INT_LT a b }
+
+defprim Float:a .+ Float:b { FLOAT_ADD a b }
+defprim Float:a .- Float:b { FLOAT_SUB a b }
+defprim Float:a .< Float:b { FLOAT_LT a b }
+
+defprim join (List Text):pieces { TEXT_JOIN pieces }
+defprim join (List Text):pieces with Text:sep { TEXT_JOIN_WITH pieces sep }
+defprim split Text:t { TEXT_SPLIT t }
+defprim split Text:text by Text:sep { TEXT_SPLIT_BY text sep }
+
+defprim add Any:x to (List Any):l { LIST_ADD l x }
+defprim length of (List Any):l { LIST_LEN l }
+defprim item Int:i of (List Any):l { LIST_GET l i }
+define item last of (List Any):l { item length of l of l }
+
+define repeat Int:count Block:body {
+    var c := count
+    WHILE (0 < c) {
+        run body
+        c := c - 1
+    }
+}
+
+define range from Int:start to Int:stop {
+    var count := start
+    let result = []
+    WHILE (count < (stop + 1)) {
+        add count to result
+        count := count + 1
+    }
+    result
+}
+
+
+define fib Float:n {
+    IF_THEN_ELSE (n .< 2.0) 1.0 ((fib (n .- 1.0)) .+ (fib (n .- 2.0)))
+}
+
+define fastfib Int:n {
+    let seq = [1 1]
+    repeat (n - 1) {
+        let index = length of seq
+        let a = item index of seq
+        let b = item index - 1 of seq
+        add (a + b) to seq
+    }
+    item last of seq
+}
+
+var result
+repeat (INT_ARG 2) {
+    result := fastfib (INT_ARG 1)
+}
+result
+

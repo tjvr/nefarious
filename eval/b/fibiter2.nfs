@@ -1,0 +1,10 @@
+
+defprim Float:a + Float:b { FLOAT_ADD a b }
+defprim Float:a - Float:b { FLOAT_SUB a b }
+defprim Float:a < Float:b { FLOAT_LT a b }
+
+define fib Float:n {
+    IF_THEN_ELSE (n < 2.0) 1.0 ((fib (n - 1.0)) + (fib (n - 2.0)))
+}
+
+fib (INT_FLOAT INT_ARG 1)

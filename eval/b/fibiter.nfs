@@ -1,0 +1,11 @@
+
+defprim Int:a + Int:b { INT_ADD a b }
+defprim Int:a - Int:b { INT_SUB a b }
+defprim Int:a < Int:b { INT_LT a b }
+
+define fib Int:n {
+    IF_THEN_ELSE (n < 2) 1 ((fib (n - 1)) + (fib (n - 2)))
+}
+
+fib (INT_ARG 1)
+
